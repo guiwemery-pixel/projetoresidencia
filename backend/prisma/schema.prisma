@@ -1,0 +1,478 @@
+// Central de Estudos — modelo de dados
+//
+// Convenções:
+// - Todo dado de estudo pertence a um usuário (coluna userId) e é sempre
+//   consultado com filtro por userId no backend (ver docs/ARQUITETURA.md).
+// - Colunas "...On" são datas locais do usuário (@db.Date, sem horário).
+// - Nomes de tabelas em snake_case via @@map para facilitar SQL manual.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── Enums ───────────────────────────────
+
+enum StudyMethod {
+  TEORIA
+  QUESTOES
+  FLASHCARDS
+  RECALL
+  REVISAO
+  AULA
+  VIDEO
+  LEITURA
+  RESUMO
+  SIMULADO
+  OUTRO
+}
+
+enum SubjectSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum ReviewStatus {
+  PENDING
+  DONE
+  SKIPPED
+}
+
+enum GroupRole {
+  OWNER
+  MEMBER
+}
+
+enum GoalMetric {
+  QUESTIONS
+  CORRECT_ANSWERS
+  STUDY_MINUTES
+  STUDY_SESSIONS
+  STUDY_DAYS
+  REVIEWS_DONE
+  MOCK_EXAMS
+  CLEAR_OVERDUE
+  CUSTOM
+}
+
+enum GoalPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  ARCHIVED
+}
+
+enum MockExamStatus {
+  PLANNED
+  DONE
+}
+
+// ───────────────────────────── Usuários ──────────────────────────────
+
+model User {
+  id                     String   @id @default(cuid())
+  name                   String
+  email                  String   @unique
+  passwordHash           String   @map("password_hash")
+  avatar                 String?
+  timezone               String   @default("America/Sao_Paulo")
+  domain                 String   @default("medicina")
+  shareProgress          Boolean  @default(true) @map("share_progress")
+  weeklyStudyHoursTarget Int      @default(20) @map("weekly_study_hours_target")
+  weeklyStudyDaysTarget  Int      @default(5) @map("weekly_study_days_target")
+  dailyQuestionsTarget   Int      @default(30) @map("daily_questions_target")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  sessions         Session[]
+  memberships      GroupMember[]
+  areas            Area[]
+  subjects         Subject[]
+  studySessions    StudySession[]
+  questionSessions QuestionSession[]
+  learningStates   LearningState[]
+  reviews          Review[]
+  goals            Goal[]
+  mockExams        MockExam[]
+  boards           Board[]
+  exams            Exam[]
+  examAttempts     ExamAttempt[]
+  notifications    Notification[]
+  groupsCreated    Group[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  tokenHash  String   @unique @map("token_hash")
+  userAgent  String?  @map("user_agent")
+  expiresAt  DateTime @map("expires_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ────────────────────────────── Grupos ───────────────────────────────
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  inviteCode  String   @unique @map("invite_code")
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Se o criador excluir a conta o grupo continua existindo para os demais
+  createdBy User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  members   GroupMember[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  groupId  String    @map("group_id")
+  userId   String    @map("user_id")
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now()) @map("joined_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+// ───────────────────── Áreas → Subáreas → Assuntos ────────────────────
+
+model Area {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  parentId  String?  @map("parent_id")
+  name      String
+  color     String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent      Area?                @relation("AreaTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Area[]               @relation("AreaTree")
+  subjects    Subject[]
+  goals       Goal[]
+  mockResults MockExamAreaResult[]
+
+  @@index([userId, parentId])
+  @@map("areas")
+}
+
+model Subject {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  areaId    String      @map("area_id")
+  name      String
+  size      SubjectSize @default(MEDIUM)
+  notes     String?
+  tags      String[]    @default([])
+  archived  Boolean     @default(false)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  area             Area              @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  studySessions    StudySession[]
+  questionSessions QuestionSession[]
+  reviews          Review[]
+  learningState    LearningState?
+  goals            Goal[]
+
+  @@index([userId, areaId])
+  @@index([userId, name])
+  @@map("subjects")
+}
+
+// ───────────────────────── Registro de estudos ────────────────────────
+
+model StudySession {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  subjectId       String        @map("subject_id")
+  studiedOn       DateTime      @map("studied_on") @db.Date
+  durationMinutes Int           @default(0) @map("duration_minutes")
+  methods         StudyMethod[]
+  // 1 = Esqueci praticamente tudo … 5 = Dominei
+  quality         Int?
+  // 1 = fácil, 2 = médio, 3 = difícil
+  difficulty      Int?
+  notes           String?
+  // Primeiro contato com o assunto (D0)
+  isFirstContact  Boolean       @default(false) @map("is_first_contact")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject          Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  questionSessions QuestionSession[]
+  completedReview  Review?           @relation("ReviewCompletion")
+
+  @@index([userId, studiedOn])
+  @@index([subjectId, studiedOn])
+  @@map("study_sessions")
+}
+
+model QuestionSession {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  subjectId        String   @map("subject_id")
+  studySessionId   String?  @map("study_session_id")
+  doneOn           DateTime @map("done_on") @db.Date
+  total            Int
+  correct          Int
+  // Derivados (gravados para facilitar agregações): wrong = total - correct
+  wrong            Int
+  accuracy         Float
+  board            String?
+  examName         String?  @map("exam_name")
+  difficulty       Int?
+  timeSpentMinutes Int?     @map("time_spent_minutes")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject      Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  studySession StudySession? @relation(fields: [studySessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, doneOn])
+  @@index([subjectId, doneOn])
+  @@map("question_sessions")
+}
+
+// ────────────────────────── Revisão espaçada ─────────────────────────
+
+// Estado de aprendizagem por assunto (1:1). Mantido pelo motor de revisão.
+model LearningState {
+  subjectId        String   @id @map("subject_id")
+  userId           String   @map("user_id")
+  // Posição na escada de intervalos (0 → próximo é D1, 1 → D7, 2 → D21 …)
+  stage            Int      @default(0)
+  // Fator de facilidade individual do assunto (aprende com o histórico)
+  ease             Float    @default(1.0)
+  intervalDays     Int      @default(1) @map("interval_days")
+  lastContactOn    DateTime @map("last_contact_on") @db.Date
+  lastScore        Float?   @map("last_score")
+  contacts         Int      @default(1)
+  lapses           Int      @default(0)
+  algorithmVersion String   @map("algorithm_version")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("learning_states")
+}
+
+model Review {
+  id                  String        @id @default(cuid())
+  userId              String        @map("user_id")
+  subjectId           String        @map("subject_id")
+  stage               Int
+  scheduledFor        DateTime      @map("scheduled_for") @db.Date
+  originalScheduledOn DateTime?     @map("original_scheduled_on") @db.Date
+  intervalDays        Int           @map("interval_days")
+  status              ReviewStatus  @default(PENDING)
+  completedOn         DateTime?     @map("completed_on") @db.Date
+  elapsedDays         Int?          @map("elapsed_days")
+  performance         Float?
+  quality             Int?
+  score               Float?
+  nextIntervalDays    Int?          @map("next_interval_days")
+  suggestedMethods    StudyMethod[] @map("suggested_methods")
+  suggestedQuestions  Int?          @map("suggested_questions")
+  suggestTheory       Boolean       @default(false) @map("suggest_theory")
+  // Explicação completa de por que a revisão foi agendada (entradas, regras e modificadores)
+  explanation         Json?
+  studySessionId      String?       @unique @map("study_session_id")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject      Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  studySession StudySession? @relation("ReviewCompletion", fields: [studySessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, scheduledFor])
+  @@index([subjectId, status])
+  @@map("reviews")
+}
+
+// Parâmetros do algoritmo, ajustáveis sem recompilar (ver src/modules/scheduler)
+model AlgorithmConfig {
+  key       String   @id
+  version   Int      @default(1)
+  config    Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("algorithm_configs")
+}
+
+// ─────────────────────────────── Metas ───────────────────────────────
+
+model Goal {
+  id             String     @id @default(cuid())
+  userId         String     @map("user_id")
+  title          String
+  description    String?
+  metric         GoalMetric
+  period         GoalPeriod
+  target         Float
+  manualProgress Float      @default(0) @map("manual_progress")
+  areaId         String?    @map("area_id")
+  subjectId      String?    @map("subject_id")
+  startDate      DateTime   @map("start_date") @db.Date
+  dueDate        DateTime?  @map("due_date") @db.Date
+  status         GoalStatus @default(ACTIVE)
+  completedAt    DateTime?  @map("completed_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  area    Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@map("goals")
+}
+
+// ───────────────────────────── Simulados ─────────────────────────────
+
+model MockExam {
+  id              String         @id @default(cuid())
+  userId          String         @map("user_id")
+  examId          String?        @map("exam_id")
+  name            String
+  board           String?
+  examName        String?        @map("exam_name")
+  year            Int?
+  takenOn         DateTime       @map("taken_on") @db.Date
+  status          MockExamStatus @default(DONE)
+  totalQuestions  Int?           @map("total_questions")
+  correct         Int?
+  accuracy        Float?
+  durationMinutes Int?           @map("duration_minutes")
+  notes           String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exam        Exam?                @relation(fields: [examId], references: [id], onDelete: SetNull)
+  areaResults MockExamAreaResult[]
+
+  @@index([userId, takenOn])
+  @@map("mock_exams")
+}
+
+model MockExamAreaResult {
+  id         String @id @default(cuid())
+  mockExamId String @map("mock_exam_id")
+  areaId     String @map("area_id")
+  total      Int
+  correct    Int
+
+  mockExam MockExam @relation(fields: [mockExamId], references: [id], onDelete: Cascade)
+  area     Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@index([mockExamId])
+  @@map("mock_exam_area_results")
+}
+
+// ─────────────────────────── Banco de provas ─────────────────────────
+
+model Board {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exams Exam[]
+
+  @@unique([userId, name])
+  @@map("boards")
+}
+
+model Exam {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  boardId        String   @map("board_id")
+  name           String
+  year           Int?
+  totalQuestions Int?     @map("total_questions")
+  // Link externo para o arquivo (upload próprio fica para uma próxima fase)
+  fileUrl        String?  @map("file_url")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board     Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  attempts  ExamAttempt[]
+  mockExams MockExam[]
+
+  @@index([userId, boardId])
+  @@map("exams")
+}
+
+model ExamAttempt {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  examId          String   @map("exam_id")
+  takenOn         DateTime @map("taken_on") @db.Date
+  totalQuestions  Int      @map("total_questions")
+  correct         Int
+  accuracy        Float
+  durationMinutes Int?     @map("duration_minutes")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([userId, takenOn])
+  @@map("exam_attempts")
+}
+
+// ──────────────────────────── Notificações ───────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  type      String
+  title     String
+  body      String?
+  link      String?
+  // Evita notificações duplicadas geradas pelo job (ex.: "reviews-due:2026-09-23")
+  dedupeKey String?   @map("dedupe_key")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
