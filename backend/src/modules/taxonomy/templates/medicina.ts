@@ -2,13 +2,14 @@ import type { Template } from './index.js';
 
 // Estrutura inicial para residência médica. O usuário pode renomear, excluir e
 // criar áreas/subáreas/assuntos livremente — isto é só um ponto de partida.
+// Cores: paleta categórica validada para daltonismo (ver frontend/src/lib/palette.ts).
 export const medicina: Template = {
   key: 'medicina',
   label: 'Medicina (residência / ENAMED)',
   areas: [
     {
       name: 'Clínica Médica',
-      color: '#3b82f6',
+      color: '#2a78d6',
       children: [
         'Cardiologia',
         'Pneumologia',
@@ -26,7 +27,7 @@ export const medicina: Template = {
     },
     {
       name: 'Cirurgia',
-      color: '#8b5cf6',
+      color: '#eb6834',
       children: [
         'Cirurgia do Aparelho Digestivo',
         'Vias Biliares',
@@ -40,17 +41,17 @@ export const medicina: Template = {
     },
     {
       name: 'Pediatria',
-      color: '#06b6d4',
+      color: '#1baf7a',
       children: ['Neonatologia', 'Puericultura', 'Infectologia Pediátrica', 'Emergências Pediátricas'],
     },
     {
       name: 'Ginecologia e Obstetrícia',
-      color: '#ec4899',
+      color: '#eda100',
       children: ['Obstetrícia', 'Ginecologia', 'Mastologia'],
     },
     {
       name: 'Medicina Preventiva',
-      color: '#6366f1',
+      color: '#e87ba4',
       children: ['Epidemiologia', 'Bioestatística', 'SUS e Políticas de Saúde', 'Medicina de Família', 'Ética Médica'],
     },
   ],

@@ -115,7 +115,7 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
       rule: '80–89%: aumentar o intervalo moderadamente',
       stageDelta: 1,
       factor: 1.0,
-      easeDelta: 0,
+      easeDelta: 0.02,
       growth: true,
     },
     {

@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { env } from './config/env.js';
+import { env, isProduction } from './config/env.js';
 import { requireAuth } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { originCheck } from './middleware/origin-check.js';
@@ -26,6 +26,7 @@ import { invalidateProgressCache } from './modules/progress/public-summary.js';
 export function createApp() {
   const app = express();
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
+  const secureCookies = env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : isProduction;
 
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -38,6 +39,8 @@ export function createApp() {
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
           connectSrc: ["'self'"],
+          // Só força HTTPS quando o deploy usa HTTPS (cookie seguro)
+          upgradeInsecureRequests: secureCookies ? [] : null,
         },
       },
     }),

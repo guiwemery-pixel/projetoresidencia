@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { addDays, diffDays, fromDb, minDate, maxDate, toDb } from '../../lib/dates.js';
-import { clamp, percent, round, sum } from '../../lib/math.js';
+import { br, clamp, percent, round, sum } from '../../lib/math.js';
 import { loadActivity, reviewStatus } from '../metrics/metrics.service.js';
 import { evaluateGoal } from '../goals/goals.service.js';
 
@@ -169,7 +169,7 @@ export async function computeProgress(userId: string, today: string) {
   const estudos = component(
     'estudos',
     everSessions === 0 ? null : 100 * (0.5 * regularity + 0.5 * volume),
-    `50% regularidade (${days14} de ${daysTarget14} dias nas últimas 2 semanas) + 50% volume (${round(minutes7 / 60, 1)} h de ${user.weeklyStudyHoursTarget} h nos últimos 7 dias).`,
+    `50% regularidade (${days14} de ${daysTarget14} dias nas últimas 2 semanas) + 50% volume (${br(minutes7 / 60)} h de ${user.weeklyStudyHoursTarget} h nos últimos 7 dias).`,
     { diasEstudados14: days14, metaDias14: daysTarget14, horas7: round(minutes7 / 60, 1), metaHoras7: user.weeklyStudyHoursTarget },
   );
 
@@ -186,7 +186,7 @@ export async function computeProgress(userId: string, today: string) {
   const questoes = component(
     'questoes',
     everQuestions === 0 && qTotal30 === 0 ? null : 100 * (0.7 * accScore + 0.3 * qVolume),
-    `70% taxa de acerto em 30 dias (${acc30 ?? '—'}%; 50% vale 0 e 85% ou mais vale o máximo) + 30% volume (${q14} de ${expected14} questões esperadas em 2 semanas).`,
+    `70% taxa de acerto em 30 dias (${br(acc30)}%; 50% vale 0 e 85% ou mais vale o máximo) + 30% volume (${q14} de ${expected14} questões esperadas em 2 semanas).`,
     { acerto30: acc30, questoes30: qTotal30, questoes14: q14, esperado14: expected14 },
   );
 

@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Tokens de cor. Claro e escuro são escolhidos (não invertidos automaticamente).
+ * O tema segue o sistema, a menos que o usuário escolha um em <html data-theme>.
+ */
+:root {
+  color-scheme: light;
+  --page: #f6f6f3;
+  --surface: #fcfcfb;
+  --subtle: #f0efec;
+  --border: rgba(11, 11, 11, 0.1);
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #7a7873;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+
+  --accent: #2a78d6;
+  --accent-strong: #1c5cab;
+  --accent-wash: #e6f0fc;
+  --on-accent: #ffffff;
+
+  /* Status — reservado para estados (sempre com ícone + rótulo) */
+  --good: #0ca30c;
+  --warn: #fab219;
+  --serious: #ec835a;
+  --crit: #d03b3b;
+  --good-wash: #e7f6e7;
+  --warn-wash: #fff5dc;
+  --serious-wash: #fdeee7;
+  --crit-wash: #fbeaea;
+  --good-text: #006300;
+  --crit-text: #b02a2a;
+
+  /* Séries de gráfico (paleta categórica validada) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --subtle: #242422;
+    --border: rgba(255, 255, 255, 0.1);
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #9a9890;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --accent: #3987e5;
+    --accent-strong: #6da7ec;
+    --accent-wash: #16263b;
+    --good-wash: #122612;
+    --warn-wash: #2c2410;
+    --serious-wash: #2e1c14;
+    --crit-wash: #2e1515;
+    --good-text: #0ca30c;
+    --crit-text: #e66767;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --subtle: #242422;
+  --border: rgba(255, 255, 255, 0.1);
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #9a9890;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --accent: #3987e5;
+  --accent-strong: #6da7ec;
+  --accent-wash: #16263b;
+  --good-wash: #122612;
+  --warn-wash: #2c2410;
+  --serious-wash: #2e1c14;
+  --crit-wash: #2e1515;
+  --good-text: #0ca30c;
+  --crit-text: #e66767;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+  .input {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent focus:ring-2 focus:ring-accent-wash;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium text-ink2;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-sm transition;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Recharts: foco visível e sem contorno padrão */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

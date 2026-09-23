@@ -16,7 +16,7 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 export function sessionCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
-    secure: isProduction,
+    secure: env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : isProduction,
     sameSite: 'lax',
     path: '/',
     maxAge: env.SESSION_TTL_DAYS * 86_400_000,

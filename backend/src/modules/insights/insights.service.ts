@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { addDays, fromDb, toDb } from '../../lib/dates.js';
-import { percent, round, sum } from '../../lib/math.js';
+import { br, percent, round, sum } from '../../lib/math.js';
 import { getAreaMap } from '../taxonomy/taxonomy.service.js';
 import { loadActivity } from '../metrics/metrics.service.js';
 import { computeScore, type Difficulty, type Quality } from '../scheduler/index.js';
@@ -90,7 +90,7 @@ export async function computeInsights(userId: string, today: string) {
           id: `area-drop:${areaId}`,
           kind: 'warning',
           text: `Você está errando mais questões de ${name} do que nas últimas semanas.`,
-          detail: `${percent(prev.correct, prev.total)}% → ${percent(cur.correct, cur.total)}% de acertos`,
+          detail: `${br(percent(prev.correct, prev.total))}% → ${br(percent(cur.correct, cur.total))}% de acertos`,
           action: { label: 'Ver métricas', to: '/metricas' },
         });
       } else if (delta >= AREA_DELTA_PP) {
@@ -98,7 +98,7 @@ export async function computeInsights(userId: string, today: string) {
           id: `area-up:${areaId}`,
           kind: 'positive',
           text: `Seu desempenho em ${name} melhorou ${round(delta, 0)} pontos percentuais.`,
-          detail: `${percent(prev.correct, prev.total)}% → ${percent(cur.correct, cur.total)}% de acertos`,
+          detail: `${br(percent(prev.correct, prev.total))}% → ${br(percent(cur.correct, cur.total))}% de acertos`,
         });
       }
     }
@@ -195,14 +195,14 @@ export async function computeInsights(userId: string, today: string) {
           id: 'cmp-time',
           kind: 'positive',
           text: 'Você está estudando mais do que na semana passada.',
-          detail: `${round(minutes / 60, 1)} h vs. ${round(prevMinutes / 60, 1)} h`,
+          detail: `${br(minutes / 60)} h vs. ${br(prevMinutes / 60)} h`,
         });
       else if (change <= -0.1)
         comparisons.push({
           id: 'cmp-time',
           kind: 'info',
           text: 'Você estudou menos do que na semana passada.',
-          detail: `${round(minutes / 60, 1)} h vs. ${round(prevMinutes / 60, 1)} h`,
+          detail: `${br(minutes / 60)} h vs. ${br(prevMinutes / 60)} h`,
         });
       else comparisons.push({ id: 'cmp-time', kind: 'info', text: 'Seu tempo de estudo está estável em relação à semana passada.' });
     }
@@ -216,14 +216,14 @@ export async function computeInsights(userId: string, today: string) {
         id: 'cmp-acc',
         kind: 'positive',
         text: 'Seu desempenho em questões aumentou.',
-        detail: `${percent(pq.c, pq.t)}% → ${percent(wq.c, wq.t)}%`,
+        detail: `${br(percent(pq.c, pq.t))}% → ${br(percent(wq.c, wq.t))}%`,
       });
     else if (diff <= -3)
       comparisons.push({
         id: 'cmp-acc',
         kind: 'warning',
         text: 'Seu desempenho em questões caiu em relação à semana passada.',
-        detail: `${percent(pq.c, pq.t)}% → ${percent(wq.c, wq.t)}%`,
+        detail: `${br(percent(pq.c, pq.t))}% → ${br(percent(wq.c, wq.t))}%`,
       });
   }
   if (wq.t > 0 && pq.t > 0 && wq.t >= pq.t * 1.2) {

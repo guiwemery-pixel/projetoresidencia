@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { addDays, fromDb, todayIn, toDb } from '../../lib/dates.js';
 
@@ -13,12 +12,8 @@ export interface NotificationInput {
 
 /** Cria uma notificação (ignorada silenciosamente se a dedupeKey já existir). */
 export async function notify(userId: string, n: NotificationInput) {
-  try {
-    await prisma.notification.create({ data: { userId, ...n } });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return;
-    throw err;
-  }
+  // INSERT … ON CONFLICT DO NOTHING (userId + dedupeKey)
+  await prisma.notification.createMany({ data: [{ userId, ...n }], skipDuplicates: true });
 }
 
 export async function listNotifications(userId: string, opts: { unreadOnly?: boolean; limit?: number }) {

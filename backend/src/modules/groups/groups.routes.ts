@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { optionalText, parse } from '../../lib/validation.js';
 import { currentUser } from '../../middleware/auth.js';
@@ -17,7 +18,17 @@ groupsRouter.post('/', async (req, res) => {
   res.status(201).json(await svc.createGroup(currentUser(req).id, input));
 });
 
-groupsRouter.post('/join', async (req, res) => {
+// Limita tentativas de código de convite (evita força bruta)
+const joinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  message: { error: 'Muitas tentativas. Aguarde alguns minutos.' },
+});
+
+groupsRouter.post('/join', joinLimiter, async (req, res) => {
   const { code } = parse(z.object({ code: z.string().trim().min(4).max(16) }), req.body);
   const group = await svc.joinGroupByCode(currentUser(req).id, code);
   res.status(201).json({ id: group.id, name: group.name });

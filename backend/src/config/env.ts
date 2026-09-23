@@ -7,6 +7,8 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   NOTIFICATIONS_JOB_MINUTES: z.coerce.number().int().min(0).default(60),
+  // Cookie "Secure" (só HTTPS). Padrão: ligado em produção.
+  COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   // Diretório do build do frontend servido em produção (opcional)
   FRONTEND_DIST: z.string().optional(),
 });

@@ -9,4 +9,8 @@ export const percent = (num: number, den: number, digits = 1) => (den > 0 ? roun
 
 export const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
+/** Número formatado em pt-BR (vírgula decimal). */
+export const br = (n: number | null | undefined, digits = 1) =>
+  n === null || n === undefined ? '—' : n.toLocaleString('pt-BR', { maximumFractionDigits: digits });
+
 export const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
