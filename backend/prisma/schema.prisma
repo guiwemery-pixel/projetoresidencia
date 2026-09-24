@@ -315,7 +315,10 @@ model Review {
   suggestTheory       Boolean       @default(false) @map("suggest_theory")
   // Verificação com questões após um contato só de estudo/leitura
   checkup             Boolean       @default(false)
-  // Explicação completa de por que a revisão foi agendada (entradas, regras e modificadores)
+  // Explicação completa de por que a revisão foi agendada (entradas, regras e
+  // modificadores), gravada comprimida — ver reviews/explanation-codec.ts
+  explanationPacked   Bytes?        @map("explanation_packed")
+  // Formato antigo (JSON sem compressão): só em linhas ainda não convertidas
   explanation         Json?
   studySessionId      String?       @unique @map("study_session_id")
   createdAt           DateTime      @default(now()) @map("created_at")

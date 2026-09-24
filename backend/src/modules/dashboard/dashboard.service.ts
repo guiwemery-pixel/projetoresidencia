@@ -8,10 +8,14 @@ import { computeProgress } from '../progress/progress.service.js';
 import { computeInsights } from '../insights/insights.service.js';
 import { overview } from '../metrics/metrics.service.js';
 import { generateNotifications } from '../notifications/notifications.service.js';
+import { tidyUpUser } from '../maintenance/maintenance.service.js';
 
 export async function dashboard(userId: string, today: string) {
-  // Notificações de rotina são geradas de forma preguiçosa ao abrir o app
-  await generateNotifications(userId, today).catch((err) => console.error(err));
+  // Notificações de rotina e faxina do banco rodam de forma preguiçosa ao abrir o app
+  await Promise.all([
+    generateNotifications(userId, today).catch((err) => console.error(err)),
+    tidyUpUser(userId).catch((err) => console.error(err)),
+  ]);
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },

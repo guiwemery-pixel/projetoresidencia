@@ -15,6 +15,7 @@ import {
   type SchedulerConfig,
 } from '../scheduler/index.js';
 import { getSchedulerConfig } from './algorithm-config.js';
+import { packExplanation, readExplanation } from './explanation-codec.js';
 
 // Ponte entre o banco e o motor de revisão (que é puro).
 //
@@ -117,7 +118,7 @@ function pendingReviewData(userId: string, subjectId: string, r: ScheduleResult)
     suggestedQuestions: Math.round((r.suggestedQuestions.min + r.suggestedQuestions.max) / 2),
     suggestTheory: r.suggestTheory,
     checkup: r.checkup,
-    explanation: r.explanation as unknown as Prisma.InputJsonValue,
+    explanationPacked: packExplanation(r.explanation),
   };
 }
 
@@ -313,6 +314,6 @@ export function serializeReview(r: Review) {
     suggestedQuestions: r.suggestedQuestions,
     suggestTheory: r.suggestTheory,
     checkup: r.checkup,
-    explanation: r.explanation,
+    explanation: readExplanation(r),
   };
 }

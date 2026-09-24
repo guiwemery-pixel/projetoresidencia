@@ -25,6 +25,8 @@ export function sessionCookieOptions(): CookieOptions {
 
 export async function createSession(userId: string, userAgent?: string) {
   const token = randomBytes(32).toString('base64url');
+  // Sessões vencidas do usuário não servem para nada: aproveita para apagá-las
+  await prisma.session.deleteMany({ where: { userId, expiresAt: { lt: new Date() } } });
   await prisma.session.create({
     data: {
       userId,

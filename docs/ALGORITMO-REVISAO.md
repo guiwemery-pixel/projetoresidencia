@@ -143,7 +143,7 @@ assunto — as próximas subidas serão mais cautelosas. Também gera a notifica
 
 ## 6. Transparência (“Por quê?”)
 
-Cada revisão agendada guarda, em `reviews.explanation`, as entradas e cada passo do cálculo:
+Cada revisão agendada guarda (comprimido em `reviews.explanation_packed`, ver `reviews/explanation-codec.ts`) as entradas e cada passo do cálculo:
 último desempenho, desempenho anterior, tendência, último contato, intervalo anterior, novo
 intervalo, faixa, mudança de etapa, modificadores e facilidade. A interface mostra isso ao clicar
 em **Por quê?** — no registro do estudo, no cartão da revisão e na página do assunto.

@@ -1,5 +1,6 @@
 import type { User } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
+import { readExplanation } from '../reviews/explanation-codec.js';
 
 /** Dados do próprio usuário (nunca inclui o hash da senha). */
 export function toPrivateUser(user: User) {
@@ -57,7 +58,7 @@ export async function exportUserData(userId: string) {
     studySessions,
     questionSessions,
     learningStates,
-    reviews,
+    reviews: reviews.map(({ explanationPacked, ...r }) => ({ ...r, explanation: readExplanation({ ...r, explanationPacked }) })),
     goals,
     mockExams,
     boards,

@@ -23,6 +23,7 @@ import { searchRouter } from './modules/search/search.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { invalidateProgressCache } from './modules/progress/public-summary.js';
 import { runNotificationJob } from './modules/notifications/notifications.service.js';
+import { runMaintenance } from './modules/maintenance/maintenance.service.js';
 
 export function createApp() {
   const app = express();
@@ -55,7 +56,7 @@ export function createApp() {
     res.json({ ok: true });
   });
 
-  // Job de notificações disparado por agendador externo (ex.: Vercel Cron).
+  // Job de notificações + faxina do banco disparados por agendador externo (ex.: Vercel Cron).
   // Em servidor tradicional o job roda por setInterval (ver index.ts).
   app.get('/api/cron/notifications', async (req, res) => {
     if (!env.CRON_SECRET || env.CRON_SECRET.length < 16 || req.get('authorization') !== `Bearer ${env.CRON_SECRET}`) {
@@ -63,6 +64,7 @@ export function createApp() {
       return;
     }
     await runNotificationJob();
+    await runMaintenance().catch((err) => console.error('Faxina do banco falhou', err));
     res.json({ ok: true });
   });
 

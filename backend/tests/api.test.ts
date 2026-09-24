@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app, firstArea, resetDb, signup } from './helpers.js';
 import { todayIn, addDays } from '../src/lib/dates.js';
+import { prisma } from '../src/lib/prisma.js';
+import { runMaintenance } from '../src/modules/maintenance/maintenance.service.js';
 
 const today = todayIn('America/Sao_Paulo');
 
@@ -167,6 +169,77 @@ describe('fluxo principal: estudo → revisão → reagendamento', () => {
       questions: { total: 5, correct: 6 },
     });
     expect(invalid.status).toBe(400);
+  });
+});
+
+describe('armazenamento compacto', () => {
+  async function studyWithReview() {
+    const { agent, user } = await signup('Compacto');
+    const cirurgia = await firstArea(agent);
+    const res = await agent.post('/api/studies').send({
+      newSubject: { areaId: cirurgia.children[0].id, name: 'Pancreatite aguda', size: 'MEDIUM' },
+      date: today,
+      durationMinutes: 60,
+      methods: ['QUESTOES'],
+      quality: 4,
+      questions: { total: 20, correct: 15 },
+    });
+    expect(res.status).toBe(201);
+    const subject = await prisma.subject.findFirstOrThrow({ where: { userId: user.id, name: 'Pancreatite aguda' } });
+    return { agent, user, schedule: res.body.schedule, subjectId: subject.id };
+  }
+
+  it('grava o "Por quê?" comprimido e devolve exatamente o mesmo conteúdo', async () => {
+    const { agent, schedule, subjectId } = await studyWithReview();
+    const row = await prisma.review.findFirstOrThrow({ where: { subjectId } });
+    expect(row.explanation).toBeNull();
+    expect(row.explanationPacked!.length).toBeLessThan(JSON.stringify(schedule.explanation).length / 3);
+
+    const pending = await agent.get('/api/reviews?status=PENDING');
+    expect(pending.body[0].explanation).toEqual(schedule.explanation);
+    const subject = await agent.get(`/api/subjects/${subjectId}`);
+    expect(subject.body.timeline.reviews[0].explanation).toEqual(schedule.explanation);
+    const exported = await agent.get('/api/me/export');
+    expect(exported.body.reviews[0].explanation).toEqual(schedule.explanation);
+    expect(exported.body.reviews[0]).not.toHaveProperty('explanationPacked');
+  });
+
+  it('converte explicações antigas (JSON) ao abrir o app, sem mudar o que aparece', async () => {
+    const { agent, schedule, subjectId } = await studyWithReview();
+    const row = await prisma.review.findFirstOrThrow({ where: { subjectId } });
+    // Simula uma linha gravada antes da compressão
+    const legacy = await prisma.review.update({
+      where: { id: row.id },
+      data: { explanation: schedule.explanation, explanationPacked: null },
+    });
+    expect((await agent.get('/api/reviews?status=PENDING')).body[0].explanation).toEqual(schedule.explanation);
+
+    expect((await agent.get('/api/dashboard')).status).toBe(200);
+    const converted = await prisma.review.findUniqueOrThrow({ where: { id: row.id } });
+    expect(converted.explanation).toBeNull();
+    expect(converted.explanationPacked).not.toBeNull();
+    expect(converted.updatedAt).toEqual(legacy.updatedAt);
+    expect((await agent.get('/api/reviews?status=PENDING')).body[0].explanation).toEqual(schedule.explanation);
+  });
+
+  it('a faxina apaga só sessões vencidas', async () => {
+    const { agent, user } = await signup('Sessoes');
+    await prisma.session.create({
+      data: { userId: user.id, tokenHash: 'vencida', expiresAt: new Date(Date.now() - 86_400_000) },
+    });
+    const result = await runMaintenance();
+    expect(result.expiredSessions).toBe(1);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(1);
+    expect((await agent.get('/api/auth/me')).status).toBe(200);
+  });
+
+  it('ao entrar, apaga as sessões vencidas do próprio usuário', async () => {
+    const { user, email } = await signup('Login');
+    await prisma.session.create({
+      data: { userId: user.id, tokenHash: 'vencida-2', expiresAt: new Date(Date.now() - 86_400_000) },
+    });
+    expect((await request(app).post('/api/auth/login').send({ email, password: 'senha-segura-123' })).status).toBe(200);
+    expect(await prisma.session.count({ where: { userId: user.id, expiresAt: { lt: new Date() } } })).toBe(0);
   });
 });
 

@@ -109,7 +109,7 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 | `study_sessions` | Data, duração, métodos (vários), autoavaliação, dificuldade. |
 | `question_sessions` | Total, acertos, erros, %, banca, prova, dificuldade, tempo. |
 | `learning_states` | Estado de aprendizagem por assunto (etapa, facilidade, último contato, quedas). |
-| `reviews` | Cada revisão: prevista, realizada, intervalo, desempenho, qualidade, próximo intervalo e **explicação** (JSON). |
+| `reviews` | Cada revisão: prevista, realizada, intervalo, desempenho, qualidade, próximo intervalo e **explicação** (comprimida, ver abaixo). |
 | `algorithm_configs` | Parâmetros do algoritmo ajustáveis sem novo deploy. |
 | `goals` | Metas (métrica, período, alvo, área/assunto opcionais, prazo, status). |
 | `mock_exams`, `mock_exam_area_results` | Simulados e resultado por área. |
@@ -118,6 +118,13 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 
 Datas “de calendário” (dia do estudo, dia previsto da revisão) usam colunas `DATE` e são calculadas
 no fuso do usuário, evitando o clássico bug do “estudei às 23h e contou para o dia seguinte”.
+
+**Economia de espaço.** A explicação do “Por quê?” era ~85% de cada linha de `reviews`. Ela é gravada
+em `explanation_packed` (BYTEA) com deflate + um dicionário fixo de explicações típicas
+(`reviews/explanation-codec.ts`): ~0,13 KB em vez de ~1,4 KB, sem perda — a API devolve exatamente
+o mesmo JSON. Linhas antigas (coluna `explanation`, JSON) continuam legíveis e são convertidas quando
+o usuário abre o app e pelo job diário, que também apaga sessões de login vencidas
+(`modules/maintenance`). O dicionário v1 nunca pode mudar; um teste confere o hash.
 
 ## Frontend
 
