@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { badRequest, unauthorized } from '../../lib/errors.js';
@@ -30,6 +31,15 @@ const isValidTimeZone = (tz: string) => {
   }
 };
 
+// Organização da página inicial (ids dos "balões" definidos pelo frontend)
+const widgetId = z.string().regex(/^[a-z][a-z-]{0,29}$/);
+const dashboardLayoutSchema = z
+  .object({ main: z.array(widgetId).max(30), side: z.array(widgetId).max(30), hidden: z.array(widgetId).max(30) })
+  .refine((l) => {
+    const all = [...l.main, ...l.side, ...l.hidden];
+    return new Set(all).size === all.length && all.length <= 30;
+  }, 'Organização inválida');
+
 const profileSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   avatar: avatarSchema.optional(),
@@ -38,11 +48,18 @@ const profileSchema = z.object({
   weeklyStudyHoursTarget: z.number().int().min(1).max(100).optional(),
   weeklyStudyDaysTarget: z.number().int().min(1).max(7).optional(),
   dailyQuestionsTarget: z.number().int().min(0).max(1000).optional(),
+  dashboardLayout: dashboardLayoutSchema.nullable().optional(),
 });
 
 usersRouter.patch('/', async (req, res) => {
-  const data = parse(profileSchema, req.body);
-  const user = await prisma.user.update({ where: { id: currentUser(req).id }, data });
+  const { dashboardLayout, ...rest } = parse(profileSchema, req.body);
+  const user = await prisma.user.update({
+    where: { id: currentUser(req).id },
+    data: {
+      ...rest,
+      ...(dashboardLayout !== undefined ? { dashboardLayout: dashboardLayout ?? Prisma.DbNull } : {}),
+    },
+  });
   res.json({ user: toPrivateUser(user) });
 });
 

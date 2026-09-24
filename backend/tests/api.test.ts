@@ -33,6 +33,18 @@ describe('autenticação', () => {
     expect((await request(app).get('/api/cron/notifications')).status).toBe(401);
   });
 
+  it('salva a organização da página inicial', async () => {
+    const { agent } = await signup('Layout');
+    const layout = { main: ['hoje', 'revisoes'], side: ['progresso'], hidden: ['metas'] };
+    const ok = await agent.patch('/api/me').send({ dashboardLayout: layout });
+    expect(ok.status).toBe(200);
+    expect((await agent.get('/api/auth/me')).body.user.dashboardLayout).toEqual(layout);
+    const dup = await agent.patch('/api/me').send({ dashboardLayout: { main: ['hoje'], side: ['hoje'], hidden: [] } });
+    expect(dup.status).toBe(400);
+    const reset = await agent.patch('/api/me').send({ dashboardLayout: null });
+    expect(reset.body.user.dashboardLayout).toBeNull();
+  });
+
   it('não expõe o hash da senha', async () => {
     const { agent } = await signup('Maria');
     const me = await agent.get('/api/auth/me');

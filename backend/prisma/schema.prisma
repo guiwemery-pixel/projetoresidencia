@@ -95,6 +95,8 @@ model User {
   weeklyStudyHoursTarget Int      @default(20) @map("weekly_study_hours_target")
   weeklyStudyDaysTarget  Int      @default(5) @map("weekly_study_days_target")
   dailyQuestionsTarget   Int      @default(30) @map("daily_questions_target")
+  // Organização da página inicial: { main: [...], side: [...], hidden: [...] }
+  dashboardLayout        Json?    @map("dashboard_layout")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 

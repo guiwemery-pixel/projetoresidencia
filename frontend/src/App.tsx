@@ -20,6 +20,7 @@ const ExamsPage = lazy(() => import('./pages/Exams'));
 const GroupPage = lazy(() => import('./pages/Group'));
 const ProfilePage = lazy(() => import('./pages/Profile'));
 const SearchPage = lazy(() => import('./pages/Search'));
+const PrintWeekPage = lazy(() => import('./pages/PrintWeek'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -41,6 +42,17 @@ export function App() {
     <Routes>
       <Route path="/entrar" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/cadastro" element={<PublicOnly><RegisterPage /></PublicOnly>} />
+      {/* Folha de impressão: sem menu lateral */}
+      <Route
+        path="/calendario/imprimir"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<Loading />}>
+              <PrintWeekPage />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
       <Route
         element={
           <RequireAuth>

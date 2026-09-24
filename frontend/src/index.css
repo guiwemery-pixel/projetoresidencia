@@ -136,6 +136,49 @@ body {
   outline: none;
 }
 
+/* Tokens claros forçados (folha de impressão fica clara mesmo no modo escuro) */
+.force-light {
+  color-scheme: light;
+  --page: #ffffff;
+  --surface: #ffffff;
+  --subtle: #f0efec;
+  --border: rgba(11, 11, 11, 0.1);
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #7a7873;
+  --accent: #2a78d6;
+  --accent-wash: #e6f0fc;
+}
+
+/* Impressão: A4, sem a barra de ações, sem quebrar um dia no meio */
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  :root,
+  :root[data-theme='dark'] {
+    color-scheme: light !important;
+    --page: #ffffff;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-sheet {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

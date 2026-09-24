@@ -27,6 +27,8 @@ export interface User {
   weeklyStudyHoursTarget: number;
   weeklyStudyDaysTarget: number;
   dailyQuestionsTarget: number;
+  /** Organização da página inicial (ids dos balões por coluna) */
+  dashboardLayout?: { main: string[]; side: string[]; hidden: string[] } | null;
   createdAt: string;
 }
 

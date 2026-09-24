@@ -43,6 +43,12 @@ export function diffDaysStr(from: string, to: string): number {
   return Math.round((parseDay(to).getTime() - parseDay(from).getTime()) / 86_400_000);
 }
 
+/** Segunda-feira da semana de `d`. */
+export function startOfWeekStr(d: string): string {
+  const day = parseDay(d).getDay(); // 0 = domingo
+  return addDaysStr(d, day === 0 ? -6 : 1 - day);
+}
+
 /** "em 3 dias", "amanhã", "hoje", "há 2 dias" */
 export function relativeDay(d: string, today = todayLocal()): string {
   const n = diffDaysStr(today, d);

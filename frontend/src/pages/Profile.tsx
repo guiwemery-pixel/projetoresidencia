@@ -8,7 +8,7 @@ import { useProgress } from '../hooks/api';
 import { useAuth } from '../hooks/useAuth';
 import { LEVELS } from '../lib/constants';
 import { Avatar, Button, Card, Input, LevelBadge, Loading, Modal, NumberInput, PageHeader, ProgressBar, useToast } from '../components/ui';
-import { ProgressOverview } from './Dashboard';
+import { ProgressOverview } from '../components/dashboard/shared';
 
 /** Reduz a imagem para 128×128 (JPEG) no navegador antes de enviar. */
 async function resizeImage(file: File): Promise<string> {
