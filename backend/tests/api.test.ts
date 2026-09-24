@@ -230,6 +230,16 @@ describe('privacidade entre usuários', () => {
     expect(guilherme).toEqual({ userId: a.user.id, name: 'Guilherme', avatar: null, shared: false, role: 'OWNER', isMe: false });
   });
 
+  it('fixa o grupo na página inicial só para quem é integrante', async () => {
+    const { a, b, outsider, groupId } = await setup();
+    expect((await b.agent.put(`/api/groups/${groupId}/favorite`).send({ favorite: true })).status).toBe(200);
+    expect((await b.agent.get('/api/groups')).body[0]).toMatchObject({ id: groupId, favorite: true });
+    expect((await b.agent.get(`/api/groups/${groupId}`)).body.favorite).toBe(true);
+    // A preferência é pessoal: para o dono do grupo nada muda
+    expect((await a.agent.get('/api/groups')).body[0].favorite).toBe(false);
+    expect((await outsider.agent.put(`/api/groups/${groupId}/favorite`).send({ favorite: true })).status).toBe(404);
+  });
+
   it('o próprio usuário vê o cálculo detalhado do indicador', async () => {
     const { a } = await setup();
     const progress = await a.agent.get('/api/me/progress');

@@ -1,20 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, EyeOff, Lock, LogOut, Minus, RefreshCw, TrendingDown, TrendingUp, UserMinus, UserPlus, Users } from 'lucide-react';
+import { Copy, EyeOff, Lock, LogOut, Minus, RefreshCw, Star, TrendingDown, TrendingUp, UserMinus, UserPlus, Users } from 'lucide-react';
 import { api } from '../api/client';
 import type { GroupMember } from '../api/types';
-import { useGroup, useGroups } from '../hooks/api';
-import { LEVELS } from '../lib/constants';
+import { useGroup, useGroups, useToggleFavoriteGroup } from '../hooks/api';
+import { GROUP_INDICATORS as INDICATORS, LEVELS } from '../lib/constants';
 import { Avatar, Button, Card, ConfirmDialog, EmptyState, ErrorState, IconButton, Input, LevelBadge, Loading, Modal, PageHeader, ProgressBar, cx, useToast } from '../components/ui';
-
-const INDICATORS = [
-  { key: 'estudos', label: 'Estudos', emoji: '📚' },
-  { key: 'questoes', label: 'Questões', emoji: '📝' },
-  { key: 'revisoes', label: 'Revisões', emoji: '🔄' },
-  { key: 'metas', label: 'Metas', emoji: '🎯' },
-  { key: 'simulados', label: 'Simulados', emoji: '🏁' },
-] as const;
 
 function MemberCard({ m, canRemove, onRemove }: { m: GroupMember; canRemove: boolean; onRemove: () => void }) {
   const trend = m.trend === 'up' ? { icon: TrendingUp, label: 'evoluindo', color: 'var(--good)' } : m.trend === 'down' ? { icon: TrendingDown, label: 'em queda', color: 'var(--crit)' } : { icon: Minus, label: 'estável', color: 'var(--muted)' };
@@ -146,6 +138,7 @@ export default function GroupPage() {
   const [joinOpen, setJoinOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; message: string; run: () => Promise<unknown> } | null>(null);
   const [busy, setBusy] = useState(false);
+  const toggleFavorite = useToggleFavoriteGroup();
   const regen = useMutation({
     mutationFn: () => api.post(`/groups/${groupId}/invite`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['group', groupId] }),
@@ -197,10 +190,30 @@ export default function GroupPage() {
               <select className="input w-auto" value={groupId} onChange={(e) => navigate(`/grupo/${e.target.value}`)} aria-label="Escolher grupo">
                 {groups.data.map((g) => (
                   <option key={g.id} value={g.id}>
+                    {g.favorite ? '★ ' : ''}
                     {g.name}
                   </option>
                 ))}
               </select>
+            )}
+            {data && (
+              <Button
+                variant={data.favorite ? 'primary' : 'secondary'}
+                aria-pressed={data.favorite}
+                loading={toggleFavorite.isPending}
+                icon={<Star className="h-4 w-4" fill={data.favorite ? 'currentColor' : 'none'} />}
+                onClick={() =>
+                  toggleFavorite.mutate(
+                    { id: data.id, favorite: !data.favorite },
+                    {
+                      onSuccess: () => toast.success(data.favorite ? 'Grupo removido da página inicial.' : 'Grupo fixado na página inicial.'),
+                      onError: toast.error,
+                    },
+                  )
+                }
+              >
+                {data.favorite ? 'Fixado no início' : 'Fixar no início'}
+              </Button>
             )}
             <Button variant="secondary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setJoinOpen(true)}>
               Outro grupo

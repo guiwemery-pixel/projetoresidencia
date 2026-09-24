@@ -72,6 +72,16 @@ export const useNotifications = () =>
 export const useStudies = (params: { subjectId?: string; limit?: number; from?: string; to?: string } = {}) =>
   useQuery({ queryKey: keys.studies(params), queryFn: () => api.get<Study[]>('/studies', params) });
 
+/** Fixa/desafixa um grupo na página inicial (preferência pessoal). */
+export function useToggleFavoriteGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, favorite }: { id: string; favorite: boolean }) => api.put(`/groups/${id}/favorite`, { favorite }),
+    onSuccess: (_data, { id }) =>
+      Promise.all([qc.invalidateQueries({ queryKey: keys.groups }), qc.invalidateQueries({ queryKey: keys.group(id) })]),
+  });
+}
+
 export function useRescheduleReview() {
   const invalidate = useInvalidateStudyData();
   return useMutation({

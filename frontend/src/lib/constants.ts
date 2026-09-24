@@ -45,6 +45,15 @@ export const LEVELS: Record<Level, { label: string; icon: string; color: string;
   'sem-dados': { label: 'Sem dados', icon: '○', color: 'var(--muted)', wash: 'var(--subtle)' },
 };
 
+/** Indicadores públicos exibidos para o grupo (sempre com emoji + status). */
+export const GROUP_INDICATORS = [
+  { key: 'estudos', label: 'Estudos', emoji: '📚' },
+  { key: 'questoes', label: 'Questões', emoji: '📝' },
+  { key: 'revisoes', label: 'Revisões', emoji: '🔄' },
+  { key: 'metas', label: 'Metas', emoji: '🎯' },
+  { key: 'simulados', label: 'Simulados', emoji: '🏁' },
+] as const;
+
 export const levelForPercent = (p: number | null | undefined): Level =>
   p === null || p === undefined ? 'sem-dados' : p >= 80 ? 'bom' : p >= 65 ? 'atencao' : p >= 50 ? 'melhorar' : 'critico';
 

@@ -153,6 +153,8 @@ model GroupMember {
   groupId  String    @map("group_id")
   userId   String    @map("user_id")
   role     GroupRole @default(MEMBER)
+  // Preferência pessoal: mostrar este grupo na página inicial de quem participa
+  favorite Boolean   @default(false)
   joinedAt DateTime  @default(now()) @map("joined_at")
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)

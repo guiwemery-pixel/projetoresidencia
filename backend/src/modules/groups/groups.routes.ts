@@ -43,6 +43,11 @@ groupsRouter.patch('/:id', async (req, res) => {
   res.json(await svc.updateGroup(currentUser(req).id, req.params.id, input));
 });
 
+groupsRouter.put('/:id/favorite', async (req, res) => {
+  const { favorite } = parse(z.object({ favorite: z.boolean() }), req.body);
+  res.json(await svc.setFavorite(currentUser(req).id, req.params.id, favorite));
+});
+
 groupsRouter.post('/:id/invite', async (req, res) => {
   const g = await svc.regenerateInvite(currentUser(req).id, req.params.id);
   res.json({ inviteCode: g.inviteCode });

@@ -425,6 +425,7 @@ export interface GroupListItem {
   name: string;
   description: string | null;
   role: 'OWNER' | 'MEMBER';
+  favorite: boolean;
   memberCount: number;
   inviteCode: string;
   joinedAt: string;
@@ -455,6 +456,7 @@ export interface GroupBoard {
   description: string | null;
   inviteCode: string;
   myRole: 'OWNER' | 'MEMBER';
+  favorite: boolean;
   members: GroupMember[];
 }
 

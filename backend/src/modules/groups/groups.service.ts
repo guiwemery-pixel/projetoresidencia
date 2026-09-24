@@ -30,17 +30,25 @@ export async function listMyGroups(userId: string) {
   const memberships = await prisma.groupMember.findMany({
     where: { userId },
     include: { group: { include: { _count: { select: { members: true } } } } },
-    orderBy: { joinedAt: 'asc' },
+    orderBy: [{ favorite: 'desc' }, { joinedAt: 'asc' }],
   });
   return memberships.map((m) => ({
     id: m.group.id,
     name: m.group.name,
     description: m.group.description,
     role: m.role,
+    favorite: m.favorite,
     memberCount: m.group._count.members,
     inviteCode: m.group.inviteCode,
     joinedAt: m.joinedAt,
   }));
+}
+
+/** Fixa (ou desafixa) o grupo na página inicial do próprio usuário. */
+export async function setFavorite(userId: string, groupId: string, favorite: boolean) {
+  await requireMembership(userId, groupId);
+  await prisma.groupMember.update({ where: { groupId_userId: { groupId, userId } }, data: { favorite } });
+  return { id: groupId, favorite };
 }
 
 export async function createGroup(userId: string, input: { name: string; description?: string | null }) {
@@ -126,6 +134,7 @@ export async function groupBoard(userId: string, groupId: string) {
     description: group.description,
     inviteCode: group.inviteCode,
     myRole: membership.role,
+    favorite: membership.favorite,
     members: summaries
       .map((s) => ({ ...s, role: roleBy.get(s.userId)!, isMe: s.userId === userId }))
       .sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.name.localeCompare(b.name, 'pt-BR')),

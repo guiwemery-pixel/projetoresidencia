@@ -8,6 +8,7 @@ import { duration, fmtLong, fmtShort, fmtWeekday, pct, plural, relativeDay, toda
 import { Button, Card, EmptyState, ErrorState, LevelBadge, Loading, ProgressBar, cx, useToast } from '../components/ui';
 import { ReviewCard } from '../components/study/ReviewCard';
 import { useStudyDialog } from '../components/study/StudyDialog';
+import { FavoriteGroups } from '../components/groups/FavoriteGroups';
 
 function TodayTile({ icon, value, label, tone, to }: { icon: React.ReactNode; value: React.ReactNode; label: string; tone?: 'crit'; to: string }) {
   return (
@@ -300,6 +301,8 @@ export function DashboardPage() {
           >
             <ProgressOverview progress={data.progress} compact />
           </Card>
+
+          <FavoriteGroups />
 
           {data.insights.length > 0 && (
             <Card title="Recomendações">
