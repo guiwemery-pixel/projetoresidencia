@@ -209,8 +209,8 @@ export function AppLayout() {
       {/* Barra lateral (desktop) */}
       <aside className="sticky top-0 hidden h-screen flex-col gap-4 border-r border-line bg-surface px-3 py-4 lg:flex">
         <NavLink to="/" className="flex items-center gap-2 px-2">
-          <img src="/favicon.svg" alt="" className="h-8 w-8" />
-          <span className="font-semibold text-ink">Central de Estudos</span>
+          <img src="/icons/mark-128.png" alt="" className="h-8 w-8 rounded-lg" />
+          <span className="font-semibold text-ink">Projeto Residente</span>
         </NavLink>
         <button
           onClick={() => openStudy()}
@@ -235,8 +235,8 @@ export function AppLayout() {
           <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setDrawer(true)}>
             <Menu className="h-5 w-5" />
           </IconButton>
-          <NavLink to="/" className="flex items-center gap-2 lg:hidden">
-            <img src="/favicon.svg" alt="" className="h-7 w-7" />
+          <NavLink to="/" className="flex items-center gap-2 lg:hidden" aria-label="Projeto Residente — início">
+            <img src="/icons/mark-128.png" alt="" className="h-7 w-7 rounded-lg" />
           </NavLink>
           <GlobalSearch className="hidden max-w-md flex-1 sm:block" />
           <div className="ml-auto flex items-center gap-1">
@@ -285,7 +285,9 @@ export function AppLayout() {
         <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setDrawer(false)}>
           <div className="flex h-full w-72 flex-col gap-4 overflow-y-auto bg-surface p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-ink">Central de Estudos</span>
+              <span className="flex items-center gap-2 font-semibold text-ink">
+                <img src="/icons/mark-128.png" alt="" className="h-7 w-7 rounded-lg" /> Projeto Residente
+              </span>
               <IconButton label="Fechar menu" onClick={() => setDrawer(false)}>
                 <X className="h-5 w-5" />
               </IconButton>

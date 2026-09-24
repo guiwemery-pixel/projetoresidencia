@@ -10,7 +10,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <img src="/favicon.svg" alt="" className="mb-3 h-12 w-12" />
+          <img src="/icons/icon-192.png" alt="Projeto Residente" width={112} height={112} className="mb-4 h-28 w-28 rounded-3xl shadow-card" />
           <h1 className="text-xl font-semibold text-ink">{title}</h1>
           <p className="mt-1 text-sm text-ink2">{subtitle}</p>
         </div>
@@ -45,7 +45,7 @@ export function LoginPage() {
   }
 
   return (
-    <AuthShell title="Central de Estudos" subtitle="Organize seus estudos, revise no momento certo e acompanhe o grupo.">
+    <AuthShell title="Entrar" subtitle="Organize seus estudos, revise no momento certo e acompanhe o grupo.">
       <form onSubmit={submit} className="space-y-4">
         <Input label="E-mail" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input label="Senha" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />

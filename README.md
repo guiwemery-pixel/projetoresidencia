@@ -1,4 +1,4 @@
-# Central de Estudos
+# Projeto Residente
 
 Plataforma web colaborativa de estudos com **revisão espaçada adaptativa**, feita inicialmente para
 estudantes de Medicina (residência / ENAMED), mas com arquitetura pronta para outras áreas.
