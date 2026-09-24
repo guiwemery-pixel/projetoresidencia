@@ -6,7 +6,7 @@ import { round } from '../../lib/math.js';
 import { areaWithDescendants, createSubject, findOwnedSubject, getAreaMap } from '../taxonomy/taxonomy.service.js';
 import { processContact, rebuildSubject, type ContactOutcome } from '../reviews/learning.service.js';
 import { getSchedulerConfig } from '../reviews/algorithm-config.js';
-import { stageLabel, stagePhase, suggestedMethods, suggestedQuestions } from '../scheduler/index.js';
+import { reviewPlan, suggestedQuestions } from '../scheduler/index.js';
 import { notify } from '../notifications/notifications.service.js';
 import { refreshGoals } from '../goals/goals.service.js';
 
@@ -60,6 +60,7 @@ function scheduleView(outcome: ContactOutcome) {
     dueOn: r.dueOn,
     intervalDays: r.intervalDays,
     stageLabel: r.stageLabel,
+    checkup: r.checkup,
     phase: r.phase,
     band: r.band,
     score: r.score,
@@ -266,14 +267,19 @@ export async function studySuggestion(userId: string, subjectId: string) {
       pendingReview: null,
     };
   }
-  const stage = pending?.stage ?? state.stage;
-  const theory = pending?.suggestTheory ?? false;
+  const plan = reviewPlan(
+    pending?.stage ?? state.stage,
+    subject.size,
+    { theory: pending?.suggestTheory ?? false, checkup: pending?.checkup ?? false },
+    config,
+  );
   return {
     isNew: false,
-    stageLabel: stageLabel(stage, config),
-    phase: stagePhase(stage, config),
-    methods: suggestedMethods(stage, theory, config),
-    questions: suggestedQuestions(stage, subject.size, theory, config),
+    checkup: pending?.checkup ?? false,
+    stageLabel: plan.label,
+    phase: plan.phase,
+    methods: plan.methods,
+    questions: plan.questions,
     pendingReview: pending ? { id: pending.id, scheduledFor: fromDb(pending.scheduledFor) } : null,
   };
 }

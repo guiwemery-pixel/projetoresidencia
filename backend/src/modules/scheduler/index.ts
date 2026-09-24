@@ -12,6 +12,10 @@ export {
   stagePhase,
   suggestedMethods,
   suggestedQuestions,
+  reviewPlan,
+  firstReviewTableText,
+  isPassiveOnly,
+  measuredScore,
   isActiveRecall,
   accuracyOf,
 } from './engine.js';

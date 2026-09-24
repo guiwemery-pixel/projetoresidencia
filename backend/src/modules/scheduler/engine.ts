@@ -94,6 +94,36 @@ function capBand(band: BandRule, cap: BandKey, config: SchedulerConfig): BandRul
   return band.min > capRule.min ? capRule : band;
 }
 
+/** Contato só de estudo/leitura: nenhum método de recuperação ativa e nenhuma questão. */
+export function isPassiveOnly(
+  contact: Pick<ContactEvidence, 'methods' | 'questions'>,
+  config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG,
+) {
+  return !isActiveRecall(contact.methods, config) && !(contact.questions && contact.questions.total > 0);
+}
+
+/** Pontuação que conta como desempenho medido (leitura pura não conta). */
+export function measuredScore(
+  contact: Pick<ContactEvidence, 'methods' | 'questions' | 'quality'>,
+  config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG,
+): number | null {
+  return isPassiveOnly(contact, config) ? null : computeScore(contact, config).score;
+}
+
+const mid = (r: { min: number; max: number }) => Math.round((r.min + r.max) / 2);
+
+/** "< 60% → 3 dias · 60–65% → 10 · …" (texto da tabela da 1ª revisão) */
+export function firstReviewTableText(config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
+  const tiers = [...config.firstReview.tiers].sort((a, b) => a.min - b.min);
+  return tiers
+    .map((t, i) => {
+      const next = tiers[i + 1];
+      const range = i === 0 ? `< ${next?.min ?? 100}%` : next ? `${t.min}–${next.min - 1}%` : `≥ ${t.min}%`;
+      return `${range} → ${t.days} ${t.days === 1 ? 'dia' : 'dias'}`;
+    })
+    .join(' · ');
+}
+
 export function computeTrend(current: number | null, history: HistoryPoint[], config: SchedulerConfig): {
   trend: Trend;
   previousScore: number | null;
@@ -131,6 +161,38 @@ export function suggestedMethods(stage: number, theory: boolean, config: Schedul
   return table[Math.min(stage, table.length - 1)];
 }
 
+/**
+ * O que fazer na próxima revisão: rótulo, fase, métodos e faixa de questões.
+ * `checkup` = verificação após contato só de estudo/leitura (mais questões).
+ */
+export function reviewPlan(
+  stage: number,
+  size: SubjectSize,
+  opts: { theory?: boolean; checkup?: boolean },
+  config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG,
+) {
+  if (opts.checkup) {
+    const f = config.passiveFollowUp;
+    const base = suggestedQuestions(stage, size, false, config);
+    const [nMin, nMax] = config.newSubjectQuestions[size];
+    return {
+      label: f.label,
+      phase: f.phase,
+      methods: f.methods,
+      questions: {
+        min: Math.max(nMin, Math.round(base.min * f.questionsMultiplier)),
+        max: Math.max(nMax, Math.round(base.max * f.questionsMultiplier)),
+      },
+    };
+  }
+  return {
+    label: stageLabel(stage, config),
+    phase: stagePhase(stage, config),
+    methods: suggestedMethods(stage, !!opts.theory, config),
+    questions: suggestedQuestions(stage, size, !!opts.theory, config),
+  };
+}
+
 const TREND_LABEL: Record<Trend, string> = {
   melhora: 'melhora',
   estavel: 'estável',
@@ -149,11 +211,15 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   const modifiers: Modifier[] = [];
 
   const accuracy = accuracyOf(contact.questions);
-  const active = isActiveRecall(contact.methods, config);
-  const { score, formula } = computeScore(contact, config);
+  const passiveOnly = isPassiveOnly(contact, config);
+  // Só leitura/estudo não mede retenção: a autoavaliação é registrada, mas não pontua
+  const { score, formula } = passiveOnly ? { score: null, formula: null } : computeScore(contact, config);
   const { trend, previousScore, reference } = computeTrend(score, history, config);
 
   const qualityLabel = contact.quality ? config.score.qualityLabels[String(contact.quality)] : null;
+  const expectedQuestions =
+    input.expectedQuestions ??
+    (state ? mid(suggestedQuestions(state.stage, size, false, config)) : mid(suggestedQuestions(0, size, true, config)));
   const elapsedDays = state ? diffDays(state.lastContactOn, contact.date) : null;
   const scheduledFor = input.scheduledFor ?? null;
   let timing: Timing | null = null;
@@ -172,25 +238,22 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   if (qualityLabel) {
     steps.push({
       label: 'Autoavaliação',
-      detail: `${qualityLabel} (${config.score.qualityScores[String(contact.quality)]} pontos)`,
+      detail: passiveOnly
+        ? `${qualityLabel} (registrada, mas sem questões ela não define o intervalo)`
+        : `${qualityLabel} (${config.score.qualityScores[String(contact.quality)]} pontos)`,
     });
   }
   if (formula && accuracy !== null && contact.quality) {
     steps.push({ label: 'Pontuação combinada', detail: formula });
   }
 
+  // Primeiro contato com desempenho medido (D0, ou a verificação após um D0 só de leitura)
+  const firstMeasure = !passiveOnly && (!state || state.lastScore === null);
+  const questionCount = contact.questions?.total ?? 0;
+  const hasPercentual = accuracy !== null && questionCount >= config.firstReview.minQuestions;
+
   // ── 2. Faixa de desempenho ─────────────────────────────────────────────
   let band: BandRule | null = score === null ? null : bandFor(score, config);
-  if (band && !active) {
-    const capped = capBand(band, config.passive.maxBand, config);
-    if (capped !== band) {
-      steps.push({
-        label: 'Sem recuperação ativa',
-        detail: `Apenas métodos passivos: a faixa máxima considerada é "${capped.label}".`,
-      });
-      band = capped;
-    }
-  }
   if (band && !contact.quality && contact.questions && contact.questions.total < config.score.minQuestionsForExcellent) {
     const capped = capBand(band, 'bom', config);
     if (capped !== band) {
@@ -201,8 +264,9 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       band = capped;
     }
   }
-  if (band) steps.push({ label: `Faixa: ${band.label}`, detail: band.rule });
-  else steps.push({ label: 'Sem medida de desempenho', detail: 'Nenhuma questão nem autoavaliação registrada neste contato.' });
+  // Na 1ª revisão a data vem da tabela de percentual, não da regra da faixa
+  if (band && !(firstMeasure && hasPercentual)) steps.push({ label: `Faixa: ${band.label}`, detail: band.rule });
+  else if (!passiveOnly) steps.push({ label: 'Sem medida de desempenho', detail: 'Nenhuma questão nem autoavaliação registrada neste contato.' });
 
   // ── 3. Movimento na escada ─────────────────────────────────────────────
   const easeFrom = state?.ease ?? config.ease.initial;
@@ -212,31 +276,61 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   let growth: boolean;
   let isLapse = false;
   let suggestTheory = false;
+  // Sem percentual confiável no 1º contato, ou só leitura → verificação com questões amanhã
+  const checkup = passiveOnly || (firstMeasure && !hasPercentual);
 
-  if (!state) {
-    // Primeiro contato (D0 — aprender)
-    const canSkip =
-      band !== null &&
-      band.min >= config.firstContact.skipFirstReviewMinScore &&
-      active &&
-      (contact.questions?.total ?? 0) >= config.firstContact.minQuestionsToSkip;
-    stage = canSkip ? 1 : 0;
-    growth = canSkip;
+  if (checkup) {
+    stage = state ? state.stage : 0;
+    growth = false;
+    baseInterval = config.passiveFollowUp.intervalDays;
+    const plan = reviewPlan(stage, size, { checkup: true }, config);
+    const next = `${plan.questions.min}–${plan.questions.max} questões`;
+    if (passiveOnly) {
+      steps.push({
+        label: state ? 'Revisão só de estudo/leitura' : 'Primeiro contato só com estudo/leitura',
+        detail:
+          `Estudo sem questões não mede quanto você lembra. A próxima revisão fica para o dia seguinte, com ${next}` +
+          (firstMeasure
+            ? '; o percentual dessas questões define a data da 1ª revisão.'
+            : `; a etapa ${stageLabel(stage, config)} é mantida até o resultado das questões.`),
+      });
+    } else {
+      steps.push({
+        label: questionCount ? 'Poucas questões para medir' : 'Sem percentual de acertos',
+        detail:
+          (questionCount
+            ? `Com ${questionCount} ${questionCount === 1 ? 'questão' : 'questões'} o percentual ainda não é confiável. `
+            : 'A 1ª revisão é definida pelo percentual em questões. ') +
+          `Amanhã faça ${next} para definir a data da 1ª revisão.`,
+      });
+    }
+  } else if (firstMeasure) {
+    // 1ª revisão: data definida pela tabela de percentual de acertos
+    const tiers = [...config.firstReview.tiers].sort((a, b) => b.min - a.min);
+    const tier = tiers.find((t) => accuracy! >= t.min) ?? tiers[tiers.length - 1];
+    stage = tier.stage;
+    growth = false;
+    baseInterval = tier.days;
     suggestTheory = band?.suggestTheory ?? false;
     ease = clamp(easeFrom + (band?.easeDelta ?? 0), config.ease.min, config.ease.max);
-    baseInterval = stageInterval(stage, config);
     steps.push({
-      label: 'Primeiro contato (D0)',
-      detail: canSkip
-        ? `Desempenho ≥ ${config.firstContact.skipFirstReviewMinScore}% com questões já no D0: pula o D1 e agenda o ${stageLabel(stage, config)}.`
-        : `Agenda o ${stageLabel(0, config)} para evitar o esquecimento precoce.`,
+      label: '1ª revisão pelo percentual de acertos',
+      detail: `${pct(accuracy!)} de acertos → ${tier.days} ${tier.days === 1 ? 'dia' : 'dias'} (${firstReviewTableText(config)}).`,
     });
-    if (canSkip && band!.factor !== 1) {
-      modifiers.push({ key: 'faixa', label: `Faixa ${band!.label}`, factor: band!.factor });
+    // Mais questões que o sugerido para um assunto novo → intervalo maior (exceto na faixa mais baixa)
+    const lowest = tiers[tiers.length - 1];
+    const expected = input.expectedQuestions ?? mid(suggestedQuestions(0, size, true, config));
+    if (tier !== lowest && expected > 0) {
+      const ratio = questionCount / expected;
+      const vt = [...config.volume.tiers].sort((a, b) => b.ratio - a.ratio).find((t) => ratio >= t.ratio);
+      if (vt) {
+        modifiers.push({ key: 'volume', label: `Volume de questões (${questionCount} de ~${expected} sugeridas)`, factor: vt.factor });
+      }
     }
   } else if (!band) {
-    // Contato sem medida (ex.: só leitura): mantém a etapa
-    stage = state.stage;
+    // Contato ativo sem medida (ex.: flashcards sem autoavaliação): mantém a etapa
+    // (aqui sempre há estado: o primeiro contato é tratado acima)
+    stage = state!.stage;
     growth = false;
     baseInterval = stageInterval(stage, config);
     steps.push({
@@ -244,7 +338,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       detail: `Sem desempenho medido, a etapa ${stageLabel(stage, config)} é mantida.`,
     });
   } else {
-    const from = state.stage;
+    const from = state!.stage;
     stage = band.resetToStage ?? Math.max(0, from + band.stageDelta);
     growth = band.growth;
     suggestTheory = band.suggestTheory ?? false;
@@ -272,7 +366,17 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       const name = ['', 'fácil', 'média', 'difícil'][contact.difficulty];
       if (f !== 1) modifiers.push({ key: 'dificuldade', label: `Dificuldade percebida ${name}`, factor: f });
     }
-    if (!active) modifiers.push({ key: 'passivo', label: 'Somente métodos passivos', factor: config.passive.factor });
+    if (contact.questions && contact.questions.total > 0 && expectedQuestions > 0) {
+      const ratio = contact.questions.total / expectedQuestions;
+      const tier = [...config.volume.tiers].sort((a, b) => b.ratio - a.ratio).find((t) => ratio >= t.ratio);
+      if (tier) {
+        modifiers.push({
+          key: 'volume',
+          label: `Volume de questões (${contact.questions.total} de ~${expectedQuestions} sugeridas)`,
+          factor: tier.factor,
+        });
+      }
+    }
   } else if (state && band) {
     steps.push({
       label: 'Sem bônus',
@@ -339,10 +443,11 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     lapses,
   };
 
-  const label = stageLabel(stage, config);
+  const plan = reviewPlan(stage, size, { theory: suggestTheory, checkup }, config);
+  const label = plan.label;
   const explanation: Explanation = {
     algorithm: config.version,
-    summary: `Próxima revisão em ${intervalDays} ${intervalDays === 1 ? 'dia' : 'dias'} (${label} — ${stagePhase(stage, config).toLowerCase()})`,
+    summary: `Próxima revisão em ${intervalDays} ${intervalDays === 1 ? 'dia' : 'dias'} (${label} — ${plan.phase.toLowerCase()})`,
     inputs: {
       accuracy: accuracy === null ? null : Math.round(accuracy * 10) / 10,
       questions: contact.questions,
@@ -350,7 +455,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       qualityLabel,
       difficulty: contact.difficulty,
       methods: contact.methods,
-      activeRecall: active,
+      activeRecall: !passiveOnly,
       previousScore,
       trend,
       lastContactOn: state?.lastContactOn ?? null,
@@ -360,7 +465,9 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       timing,
       reviewsDone,
       lapses,
+      expectedQuestions,
     },
+    checkup,
     score: score === null ? null : Math.round(score * 10) / 10,
     band: band ? { key: band.key, label: band.label, rule: band.rule } : null,
     stage: {
@@ -382,14 +489,15 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     intervalDays,
     dueOn,
     stageLabel: label,
-    phase: stagePhase(stage, config),
+    phase: plan.phase,
     band: band?.key ?? null,
     score: explanation.score,
     accuracy: explanation.inputs.accuracy,
     isLapse,
+    checkup,
     suggestTheory,
-    suggestedMethods: suggestedMethods(stage, suggestTheory, config),
-    suggestedQuestions: suggestedQuestions(stage, size, suggestTheory, config),
+    suggestedMethods: plan.methods,
+    suggestedQuestions: plan.questions,
     explanation,
   };
 }

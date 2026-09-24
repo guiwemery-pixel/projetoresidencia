@@ -12,7 +12,21 @@ export const fmtMonth = (d: string) => format(parseDay(d), "MMMM 'de' yyyy", { l
 export const fmtRelative = (iso: string) =>
   formatDistanceToNowStrict(new Date(iso), { locale: ptBR, addSuffix: true });
 
+// "Hoje" segue o fuso do perfil do usuário (o mesmo que o servidor usa),
+// não o do aparelho — evita datas "no futuro" com o celular em outro fuso.
+let appTimeZone: string | undefined;
+export function setAppTimeZone(timeZone?: string | null) {
+  appTimeZone = timeZone ?? undefined;
+}
+
 export function todayLocal(): string {
+  if (appTimeZone) {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: appTimeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    } catch {
+      /* fuso inválido: usa o do aparelho */
+    }
+  }
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;

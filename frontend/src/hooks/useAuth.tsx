@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
+import { setAppTimeZone } from '../lib/format';
 
 interface AuthState {
   user: User | null;
@@ -27,6 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60_000,
     retry: false,
   });
+
+  // Datas do app ("hoje") no fuso do perfil
+  setAppTimeZone(data?.timezone);
 
   const value: AuthState = {
     user: data ?? null,

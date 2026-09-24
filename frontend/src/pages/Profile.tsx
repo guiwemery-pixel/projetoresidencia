@@ -53,6 +53,18 @@ const DETAIL_LABEL: Record<string, string> = {
   evolucao: 'Evolução',
 };
 
+/** "< 60% → 3 dias · 60–65% → 10 dias · …" */
+function firstReviewText(tiers: { min: number; days: number }[]) {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  return sorted
+    .map((t, i) => {
+      const next = sorted[i + 1];
+      const range = i === 0 ? `< ${next?.min ?? 100}%` : next ? `${t.min}–${next.min - 1}%` : `≥ ${t.min}%`;
+      return `${range} → ${t.days} ${t.days === 1 ? 'dia' : 'dias'}`;
+    })
+    .join(' · ');
+}
+
 interface AlgorithmConfig {
   version: string;
   ladder: number[];
@@ -61,7 +73,7 @@ interface AlgorithmConfig {
   maxIntervalDays: number;
   bands: { key: string; min: number; label: string; rule: string; factor: number }[];
   score: { accuracyWeight: number; qualityWeight: number; qualityScores: Record<string, number>; qualityLabels: Record<string, string> };
-  firstContact: { skipFirstReviewMinScore: number };
+  firstReview: { minQuestions: number; tiers: { min: number; days: number; stage: number }[] };
 }
 
 export default function ProfilePage() {
@@ -261,8 +273,10 @@ export default function ProfilePage() {
                 .reverse()
                 .map(([k, label]) => `${label} = ${algorithm.data!.score.qualityScores[k]}`)
                 .join(', ')}
-              ). No primeiro contato, desempenho ≥ {algorithm.data.firstContact.skipFirstReviewMinScore}% em questões pula o D1 e agenda o D7. Nas faixas de crescimento, o intervalo ainda é ajustado pela
-              facilidade individual do assunto, tendência, dificuldade percebida e tipo de método.
+              ). A 1ª revisão sai do percentual de acertos do primeiro contato (mínimo de {algorithm.data.firstReview.minQuestions} questões):{' '}
+              {firstReviewText(algorithm.data.firstReview.tiers)}. Contato só de estudo/leitura
+              (sem questões) agenda uma verificação com questões no dia seguinte, com mais questões que o normal, e mantém a etapa. Nas faixas de crescimento, o intervalo
+              ainda é ajustado pela facilidade individual do assunto, tendência, dificuldade percebida e volume: fazer 1,5× ou 2× as questões sugeridas aumenta o intervalo.
             </p>
           </div>
         </Card>

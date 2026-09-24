@@ -311,6 +311,8 @@ model Review {
   suggestedMethods    StudyMethod[] @map("suggested_methods")
   suggestedQuestions  Int?          @map("suggested_questions")
   suggestTheory       Boolean       @default(false) @map("suggest_theory")
+  // Verificação com questões após um contato só de estudo/leitura
+  checkup             Boolean       @default(false)
   // Explicação completa de por que a revisão foi agendada (entradas, regras e modificadores)
   explanation         Json?
   studySessionId      String?       @unique @map("study_session_id")

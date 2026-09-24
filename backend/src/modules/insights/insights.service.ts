@@ -3,7 +3,7 @@ import { addDays, fromDb, toDb } from '../../lib/dates.js';
 import { br, percent, round, sum } from '../../lib/math.js';
 import { getAreaMap } from '../taxonomy/taxonomy.service.js';
 import { loadActivity } from '../metrics/metrics.service.js';
-import { computeScore, type Difficulty, type Quality } from '../scheduler/index.js';
+import { measuredScore, type Difficulty, type Quality } from '../scheduler/index.js';
 import { getSchedulerConfig } from '../reviews/algorithm-config.js';
 import { groupContacts } from '../reviews/learning.service.js';
 
@@ -135,7 +135,7 @@ export async function computeInsights(userId: string, today: string) {
     const contacts = groupContacts(
       sessions.map((s) => ({ ...s, quality: s.quality as Quality | null, difficulty: s.difficulty as Difficulty | null })),
     );
-    const scores = contacts.map((c) => computeScore(c.evidence, config).score).filter((v): v is number => v !== null);
+    const scores = contacts.map((c) => measuredScore(c.evidence, config)).filter((v): v is number => v !== null);
     if (scores.length < 2) continue;
     const last3 = scores.slice(-3);
     const [prev, last] = scores.slice(-2);

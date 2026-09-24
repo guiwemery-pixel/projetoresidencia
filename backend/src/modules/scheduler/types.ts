@@ -63,6 +63,8 @@ export interface ScheduleInput {
   /** Data para a qual a revisão concluída por este contato estava prevista */
   scheduledFor?: string | null;
   subjectSize?: SubjectSize;
+  /** Quantidade de referência de questões para o bônus de volume (padrão: sugestão normal da etapa) */
+  expectedQuestions?: number | null;
 }
 
 export interface Modifier {
@@ -96,7 +98,10 @@ export interface Explanation {
     timing: Timing | null;
     reviewsDone: number;
     lapses: number;
+    expectedQuestions: number | null;
   };
+  /** Revisão de verificação (após contato só de estudo/leitura) */
+  checkup: boolean;
   score: number | null;
   band: { key: BandKey; label: string; rule: string } | null;
   stage: { from: number | null; to: number; fromLabel: string; toLabel: string };
@@ -118,6 +123,8 @@ export interface ScheduleResult {
   score: number | null;
   accuracy: number | null;
   isLapse: boolean;
+  /** Próxima revisão é uma verificação com questões (contato foi só estudo/leitura) */
+  checkup: boolean;
   suggestTheory: boolean;
   suggestedMethods: Method[];
   suggestedQuestions: { min: number; max: number };

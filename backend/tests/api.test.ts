@@ -57,7 +57,7 @@ describe('autenticação', () => {
 });
 
 describe('fluxo principal: estudo → revisão → reagendamento', () => {
-  it('registra estudo com questões e agenda a revisão (16/20 → D7)', async () => {
+  it('registra estudo com questões e agenda a 1ª revisão (16/20 → 20 dias)', async () => {
     const { agent } = await signup('Guilherme');
     const cirurgia = await firstArea(agent);
     const vias = cirurgia.children.find((c) => c.name === 'Vias Biliares')!;
@@ -73,8 +73,8 @@ describe('fluxo principal: estudo → revisão → reagendamento', () => {
     expect(res.status).toBe(201);
     expect(res.body.isFirstContact).toBe(true);
     expect(res.body.session.questions).toMatchObject({ total: 20, correct: 16, wrong: 4, accuracy: 80 });
-    expect(res.body.schedule.stageLabel).toBe('D7');
-    expect(res.body.schedule.dueOn).toBe(addDays(today, 7));
+    expect(res.body.schedule.intervalDays).toBe(20);
+    expect(res.body.schedule.dueOn).toBe(addDays(today, 20));
     expect(res.body.schedule.explanation.steps.length).toBeGreaterThan(0);
 
     const pending = await agent.get('/api/reviews?status=PENDING');
@@ -83,15 +83,15 @@ describe('fluxo principal: estudo → revisão → reagendamento', () => {
     expect(pending.body[0].subject.area.path).toBe('Cirurgia › Vias Biliares');
 
     // Adiar a revisão
-    const moved = await agent.patch(`/api/reviews/${pending.body[0].id}/reschedule`).send({ date: addDays(today, 9) });
+    const moved = await agent.patch(`/api/reviews/${pending.body[0].id}/reschedule`).send({ date: addDays(today, 22) });
     expect(moved.status).toBe(200);
-    expect(moved.body.scheduledFor).toBe(addDays(today, 9));
-    expect(moved.body.originalScheduledOn).toBe(addDays(today, 7));
+    expect(moved.body.scheduledFor).toBe(addDays(today, 22));
+    expect(moved.body.originalScheduledOn).toBe(addDays(today, 20));
 
     // Calendário do mês da revisão
-    const month = addDays(today, 9).slice(0, 7);
+    const month = addDays(today, 22).slice(0, 7);
     const cal = await agent.get(`/api/reviews/calendar?month=${month}`);
-    expect(cal.body.days.some((d: { date: string }) => d.date === addDays(today, 9))).toBe(true);
+    expect(cal.body.days.some((d: { date: string }) => d.date === addDays(today, 22))).toBe(true);
   });
 
   it('agrega sessões do mesmo dia e reprocessa ao excluir', async () => {

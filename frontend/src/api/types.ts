@@ -97,7 +97,9 @@ export interface Explanation {
     timing: 'no-prazo' | 'antecipada' | 'atrasada' | null;
     reviewsDone: number;
     lapses: number;
+    expectedQuestions?: number | null;
   };
+  checkup?: boolean;
   score: number | null;
   band: { key: string; label: string; rule: string } | null;
   stage: { from: number | null; to: number; fromLabel: string; toLabel: string };
@@ -128,6 +130,8 @@ export interface Review {
   suggestedMethods: StudyMethod[];
   suggestedQuestions: number | null;
   suggestTheory: boolean;
+  /** Verificação com questões após um contato só de estudo/leitura */
+  checkup: boolean;
   explanation: Explanation | null;
   subject: { id: string; name: string; size: SubjectSize; area: AreaInfo | null };
 }
@@ -168,6 +172,7 @@ export interface ScheduleView {
   score: number | null;
   accuracy: number | null;
   suggestTheory: boolean;
+  checkup: boolean;
   suggestedMethods: StudyMethod[];
   suggestedQuestions: { min: number; max: number };
   explanation: Explanation;
@@ -182,6 +187,7 @@ export interface StudyResult {
 
 export interface StudySuggestion {
   isNew: boolean;
+  checkup?: boolean;
   stageLabel: string;
   phase: string;
   methods: StudyMethod[];

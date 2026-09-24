@@ -2,7 +2,7 @@ import type { LearningState, Prisma, Review, StudyMethod } from '@prisma/client'
 import { prisma, type Tx } from '../../lib/prisma.js';
 import { fromDb, toDb } from '../../lib/dates.js';
 import {
-  computeScore,
+  measuredScore,
   accuracyOf,
   diffDays,
   scheduleNext,
@@ -88,7 +88,7 @@ async function loadContacts(tx: Tx, userId: string, subjectId: string): Promise<
 function historyPoint(contact: DayContact, config: SchedulerConfig): HistoryPoint {
   return {
     date: contact.date,
-    score: computeScore(contact.evidence, config).score,
+    score: measuredScore(contact.evidence, config),
     accuracy: accuracyOf(contact.evidence.questions),
   };
 }
@@ -116,6 +116,7 @@ function pendingReviewData(userId: string, subjectId: string, r: ScheduleResult)
     suggestedMethods: r.suggestedMethods as StudyMethod[],
     suggestedQuestions: Math.round((r.suggestedQuestions.min + r.suggestedQuestions.max) / 2),
     suggestTheory: r.suggestTheory,
+    checkup: r.checkup,
     explanation: r.explanation as unknown as Prisma.InputJsonValue,
   };
 }
@@ -169,7 +170,13 @@ export async function rebuildSubject(tx: Tx, userId: string, subjectId: string):
 
   for (const contact of contacts) {
     const result = scheduleNext(
-      { state, contact: contact.evidence, history: [...history], scheduledFor: pending?.dueOn ?? null, subjectSize: subject.size },
+      {
+        state,
+        contact: contact.evidence,
+        history: [...history],
+        scheduledFor: pending?.dueOn ?? null,
+        subjectSize: subject.size,
+      },
       config,
     );
     if (state && pending) {
@@ -271,7 +278,7 @@ export async function subjectTimeline(userId: string, subjectId: string) {
         }
       : null,
     contacts: contacts.map((c, i) => {
-      const { score } = computeScore(c.evidence, config);
+      const score = measuredScore(c.evidence, config);
       return {
         date: c.date,
         label: i === 0 ? 'D0' : `Contato ${i + 1}`,
@@ -305,6 +312,7 @@ export function serializeReview(r: Review) {
     suggestedMethods: r.suggestedMethods,
     suggestedQuestions: r.suggestedQuestions,
     suggestTheory: r.suggestTheory,
+    checkup: r.checkup,
     explanation: r.explanation,
   };
 }

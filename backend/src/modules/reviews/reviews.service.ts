@@ -3,11 +3,20 @@ import { prisma } from '../../lib/prisma.js';
 import { addDays, endOfMonth, fromDb, toDb } from '../../lib/dates.js';
 import { badRequest, notFound } from '../../lib/errors.js';
 import { getAreaMap } from '../taxonomy/taxonomy.service.js';
-import { stageLabel, stagePhase } from '../scheduler/index.js';
+import { reviewPlan } from '../scheduler/index.js';
 import { getSchedulerConfig } from './algorithm-config.js';
 import { serializeReview } from './learning.service.js';
 
 export type ReviewView = Awaited<ReturnType<typeof listReviews>>[number];
+
+/** Rótulo (D1, D7…) e fase da revisão; verificações após leitura aparecem como D1. */
+function labels(
+  r: { stage: number; checkup: boolean; suggestTheory: boolean; subject: { size: import('@prisma/client').SubjectSize } },
+  config: Awaited<ReturnType<typeof getSchedulerConfig>>,
+) {
+  const plan = reviewPlan(r.stage, r.subject.size, { checkup: r.checkup, theory: r.suggestTheory }, config);
+  return { stageLabel: plan.label, phase: plan.phase };
+}
 
 export async function listReviews(
   userId: string,
@@ -35,8 +44,7 @@ export async function listReviews(
   ]);
   return reviews.map((r) => ({
     ...serializeReview(r),
-    stageLabel: stageLabel(r.stage, config),
-    phase: stagePhase(r.stage, config),
+    ...labels(r, config),
     subject: { id: r.subject.id, name: r.subject.name, size: r.subject.size, area: areaMap.get(r.subject.areaId) ?? null },
   }));
 }
@@ -93,8 +101,7 @@ async function listReviewsByIds(userId: string, ids: string[]) {
   ]);
   return reviews.map((r) => ({
     ...serializeReview(r),
-    stageLabel: stageLabel(r.stage, config),
-    phase: stagePhase(r.stage, config),
+    ...labels(r, config),
     subject: { id: r.subject.id, name: r.subject.name, size: r.subject.size, area: areaMap.get(r.subject.areaId) ?? null },
   }));
 }

@@ -165,8 +165,10 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                   <Lightbulb className="h-4 w-4 text-accent" /> Para a próxima revisão
                 </p>
                 <p className="mt-1 text-ink2">
+                  {s.checkup && 'Como foi só estudo/leitura, amanhã meça a retenção com questões. '}
                   {s.suggestTheory && 'Volte ao conteúdo teórico e depois faça questões. '}
                   Sugerido: {s.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')} · {s.suggestedQuestions.min}–{s.suggestedQuestions.max} questões.
+                  {' '}Quanto mais questões (com bom desempenho), maior o próximo intervalo.
                 </p>
               </div>
               <button type="button" onClick={() => setShowWhy((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-accent" aria-expanded={showWhy}>
@@ -211,7 +213,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
           {newSuggestion && (
             <p className="mt-2 flex items-start gap-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">
               <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-              Assunto novo (D0 — aprender): sugerimos teoria + {newSuggestion} questões.
+              Assunto novo (D0 — aprender): sugerimos teoria + {newSuggestion} questões. Seu percentual de acertos define a data da 1ª revisão.
             </p>
           )}
         </section>
@@ -351,9 +353,13 @@ function DifficultyPicker({ value, onChange }: { value: number | null; onChange:
 function SuggestionBox({ suggestion: s }: { suggestion: StudySuggestion }) {
   const text = useMemo(() => {
     const methods = s.methods.map((m) => METHOD_LABEL[m]).join(', ');
-    if (s.isNew) return `Assunto novo (D0 — aprender): sugerimos teoria + ${s.questions.min}–${s.questions.max} questões.`;
+    if (s.isNew)
+      return `Assunto novo (D0 — aprender): sugerimos teoria + ${s.questions.min}–${s.questions.max} questões. Seu percentual de acertos define a data da 1ª revisão.`;
     const when = s.pendingReview ? ` prevista ${relativeDay(s.pendingReview.scheduledFor)}` : '';
-    return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões.`;
+    if (s.checkup) {
+      return `Verificação${when}: o último contato foi só estudo/leitura. Faça ${s.questions.min}–${s.questions.max} questões — acertando bem, o próximo intervalo cresce.`;
+    }
+    return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões. Fazer mais questões que o sugerido, com bom desempenho, aumenta o próximo intervalo.`;
   }, [s]);
   return (
     <p className="mt-2 flex items-start gap-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">

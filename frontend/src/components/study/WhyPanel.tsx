@@ -47,6 +47,7 @@ export function WhyPanel({ explanation: e }: { explanation: Explanation }) {
         {e.band && <span className="rounded-full border border-line px-2 py-0.5">Faixa: {e.band.label}</span>}
         {i.timing && <span className="rounded-full border border-line px-2 py-0.5">Revisão {TIMING[i.timing]}</span>}
         <span className="rounded-full border border-line px-2 py-0.5">Revisões feitas: {i.reviewsDone}</span>
+        {e.checkup && <span className="rounded-full border border-line px-2 py-0.5">Próxima: verificação com questões</span>}
       </div>
 
       <ol className="space-y-2 border-l-2 border-line pl-4">

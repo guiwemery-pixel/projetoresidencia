@@ -12,6 +12,8 @@ import { useStudyDialog } from '../components/study/StudyDialog';
 import { WhyDialog } from '../components/study/ReviewCard';
 
 const LADDER = ['D1', 'D7', 'D21', 'D60', 'D90', 'D90+'];
+/** Rótulo da revisão: verificações após estudo/leitura são sempre "D1". */
+const labelOf = (r: { stage: number; checkup?: boolean }) => (r.checkup ? 'D1' : LADDER[Math.min(r.stage, LADDER.length - 1)]);
 
 export default function SubjectDetailPage() {
   const { id } = useParams();
@@ -28,7 +30,7 @@ export default function SubjectDetailPage() {
   const chart = timeline.contacts.map((c) => ({ date: c.date, score: c.score === null ? null : Math.round(c.score), accuracy: c.accuracy === null ? null : Math.round(c.accuracy) }));
   const toReview = (r: (typeof timeline.reviews)[number]): Review => ({
     ...r,
-    stageLabel: LADDER[Math.min(r.stage, LADDER.length - 1)],
+    stageLabel: labelOf(r),
     phase: '',
     subject: { id: data.id, name: data.name, size: data.size, area: data.area },
   });
@@ -62,7 +64,7 @@ export default function SubjectDetailPage() {
         <StatTile
           label="Próxima revisão"
           value={pending ? relativeDay(pending.scheduledFor) : '—'}
-          sub={pending ? `${LADDER[Math.min(pending.stage, LADDER.length - 1)]} · ${fmtShort(pending.scheduledFor)}` : undefined}
+          sub={pending ? `${labelOf(pending)}${pending.checkup ? ' (com questões)' : ''} · ${fmtShort(pending.scheduledFor)}` : undefined}
         />
       </div>
 
@@ -127,7 +129,7 @@ export default function SubjectDetailPage() {
                   <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2" style={{ background: 'var(--surface)', borderColor: 'var(--accent)' }} aria-hidden />
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="font-medium text-ink">
-                      {i === 0 ? 'D0 — primeiro contato' : `Revisão ${review ? LADDER[Math.min(review.stage, LADDER.length - 1)] : ''}`}
+                      {i === 0 ? 'D0 — primeiro contato' : `Revisão ${review ? labelOf(review) : ''}${review?.checkup ? ' (verificação)' : ''}`}
                       <span className="ml-2 text-sm font-normal text-ink2">{fmtShort(c.date)}</span>
                     </p>
                     {c.questions && (
@@ -151,7 +153,8 @@ export default function SubjectDetailPage() {
               <li>
                 <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full" style={{ background: 'var(--accent)' }} aria-hidden />
                 <p className="font-medium text-ink">
-                  Próxima: {LADDER[Math.min(pending.stage, LADDER.length - 1)]} <span className="text-sm font-normal text-ink2">{fmtShort(pending.scheduledFor)}</span>
+                  Próxima: {labelOf(pending)}
+                  {pending.checkup && ' — verificação com questões'} <span className="text-sm font-normal text-ink2">{fmtShort(pending.scheduledFor)}</span>
                 </p>
                 <p className="text-xs text-muted">
                   Sugerido: {pending.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')}

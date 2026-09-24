@@ -46,16 +46,23 @@ export interface SchedulerConfig {
     qualityLabels: Record<string, string>;
   };
   bands: BandRule[];
-  firstContact: {
-    /** No D0, pontuação mínima (com recuperação ativa) para pular o D1 e ir direto ao D7 */
-    skipFirstReviewMinScore: number;
-    minQuestionsToSkip: number;
-  };
+  /**
+   * 1ª revisão: a data sai do percentual de acertos do primeiro contato medido
+   * (D0 com questões, ou a verificação com questões após um D0 só de leitura).
+   * `stage` posiciona o assunto na escada para as revisões seguintes.
+   */
+  firstReview: { minQuestions: number; tiers: { min: number; days: number; stage: number }[] };
   ease: { initial: number; min: number; max: number };
   difficultyFactors: Record<string, number>;
   trend: { window: number; threshold: number; improvingFactor: number; decliningFactor: number };
-  /** Contato só com métodos passivos (leitura, vídeo…) mede menos a retenção */
-  passive: { factor: number; maxBand: BandKey };
+  /**
+   * Contato só de estudo/leitura (sem questões nem recuperação ativa) não mede
+   * a retenção: agenda uma verificação com questões (mais questões que o normal)
+   * e mantém a etapa do assunto.
+   */
+  passiveFollowUp: { intervalDays: number; questionsMultiplier: number; methods: Method[]; label: string; phase: string };
+  /** Bônus no intervalo quando a pessoa faz bem mais questões que o sugerido (e vai bem) */
+  volume: { tiers: { ratio: number; factor: number }[] };
   /** Se a revisão foi feita atrasada e o desempenho foi bom, o intervalo real conta a favor */
   lateCredit: { enabled: boolean; minGrowth: Partial<Record<BandKey, number>> };
   activeMethods: Method[];
@@ -151,11 +158,32 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
       suggestTheory: true,
     },
   ],
-  firstContact: { skipFirstReviewMinScore: 80, minQuestionsToSkip: 5 },
+  firstReview: {
+    minQuestions: 5,
+    tiers: [
+      { min: 81, days: 23, stage: 2 },
+      { min: 71, days: 20, stage: 2 },
+      { min: 66, days: 13, stage: 1 },
+      { min: 60, days: 10, stage: 1 },
+      { min: 0, days: 3, stage: 0 },
+    ],
+  },
   ease: { initial: 1.0, min: 0.6, max: 1.4 },
   difficultyFactors: { '1': 1.1, '2': 1.0, '3': 0.85 },
   trend: { window: 3, threshold: 10, improvingFactor: 1.1, decliningFactor: 0.85 },
-  passive: { factor: 0.9, maxBand: 'bom' },
+  passiveFollowUp: {
+    intervalDays: 1,
+    questionsMultiplier: 1.5,
+    methods: ['QUESTOES'],
+    label: 'D1',
+    phase: 'Verificar com questões',
+  },
+  volume: {
+    tiers: [
+      { ratio: 2, factor: 1.2 },
+      { ratio: 1.5, factor: 1.1 },
+    ],
+  },
   lateCredit: { enabled: true, minGrowth: { excelente: 1.5, bom: 1.2, medio: 1.0 } },
   activeMethods: ['QUESTOES', 'FLASHCARDS', 'RECALL', 'SIMULADO'],
   suggestedMethodsByStage: [
