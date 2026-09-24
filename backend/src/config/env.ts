@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveDatabaseUrl } from './database-url.js';
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -14,6 +15,10 @@ const schema = z.object({
   // Segredo do agendador (Vercel Cron envia "Authorization: Bearer <CRON_SECRET>")
   CRON_SECRET: z.string().optional(),
 });
+
+// Aceita a URL do banco com outros nomes/prefixos (integrações do Vercel)
+const database = resolveDatabaseUrl();
+if (database && !process.env.DATABASE_URL) process.env.DATABASE_URL = database.value;
 
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {

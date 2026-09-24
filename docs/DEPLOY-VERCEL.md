@@ -15,11 +15,13 @@ O projeto já vem configurado para o Vercel (`vercel.json`):
 2. **Importar:** *Add New… → Project* → escolha `projetoresidencia` → *Import*.
    - **Root Directory:** deixe na raiz do repositório (`./`). **Não** escolha `frontend`.
    - Não altere *Framework*, *Build Command* nem *Output Directory*: o `vercel.json` já define tudo.
-   - Clique em *Deploy*. **O primeiro deploy vai falhar** com “defina DATABASE_URL” — é esperado,
-     porque o banco ainda não existe.
+   - Se aparecerem variáveis detectadas em *Environment Variables*, **apague todas** (são valores de exemplo).
+   - Clique em *Deploy*. **O primeiro deploy vai falhar** com “❌ BANCO DE DADOS NÃO CONFIGURADO” —
+     é esperado, porque o banco ainda não existe.
 3. **Banco de dados:** no projeto, aba *Storage* → *Create Database* → **Neon** (Postgres) →
    aceite o plano gratuito → *Connect* ao projeto marcando **todos os ambientes**.
-   Isso cria as variáveis `DATABASE_URL` e `DATABASE_URL_UNPOOLED` automaticamente.
+   Isso cria as variáveis `DATABASE_URL` e `DATABASE_URL_UNPOOLED` automaticamente
+   (nomes com prefixo, como `STORAGE_DATABASE_URL`, também funcionam).
 4. *(Opcional)* **Notificações diárias:** *Settings → Environment Variables* → adicione
    `CRON_SECRET` com um texto aleatório de pelo menos 16 caracteres.
 5. **Publicar de novo:** aba *Deployments* → no último deploy, menu *⋯* → *Redeploy*.
@@ -38,7 +40,9 @@ funciona. Corrija em *Settings → Build and Deployment → Root Directory*: apa
 
 | Sintoma | Causa provável |
 |---|---|
-| Build falha com “defina DATABASE_URL” | Banco não conectado ao projeto (passo 3) ou não marcado para o ambiente do deploy. |
+| Build falha com “❌ BANCO DE DADOS NÃO CONFIGURADO” | Banco não conectado ao projeto (passo 3) ou não marcado para o ambiente do deploy. |
+| Build falha com “aponta para localhost” | Sobrou uma variável de exemplo: apague-a em *Settings → Environment Variables*. |
+| Onde ver o motivo da falha | Na página do deploy, em *Deploy Logs*, role a caixa de logs até o fim: a última linha com ❌ explica. |
 | Site abre, mas login/cadastro dá erro | *Root Directory* apontando para `frontend`, ou deploy anterior ao banco (faça *Redeploy*). |
 | Erro 500 na API | Veja *Deployments → (deploy) → Logs/Functions*; a mensagem de erro aparece ali. |
 

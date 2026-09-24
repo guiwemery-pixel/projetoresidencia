@@ -1,11 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import { resolveDatabaseUrl } from '../config/database-url.js';
 
 /**
  * Conexões via pooler (PgBouncer em modo transação — ex.: Neon "-pooler", usado
  * no Vercel) precisam de `pgbouncer=true` para o Prisma não usar prepared
  * statements. Acrescenta o parâmetro automaticamente quando necessário.
  */
-export function datasourceUrl(raw = process.env.DATABASE_URL): string | undefined {
+export function datasourceUrl(raw = resolveDatabaseUrl()?.value): string | undefined {
   if (!raw) return raw;
   try {
     const url = new URL(raw);
