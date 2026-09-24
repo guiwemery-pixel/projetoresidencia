@@ -9,7 +9,7 @@ import { serializeReview } from './learning.service.js';
 
 export type ReviewView = Awaited<ReturnType<typeof listReviews>>[number];
 
-/** Rótulo (D1, D7…) e fase da revisão; verificações após leitura aparecem como D1. */
+/** Rótulo (D10, D21…) e fase da revisão; verificações após leitura aparecem como D1. */
 function labels(
   r: { stage: number; checkup: boolean; suggestTheory: boolean; subject: { size: import('@prisma/client').SubjectSize } },
   config: Awaited<ReturnType<typeof getSchedulerConfig>>,

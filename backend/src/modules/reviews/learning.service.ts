@@ -5,7 +5,9 @@ import {
   measuredScore,
   accuracyOf,
   diffDays,
+  reviewLabel,
   scheduleNext,
+  stageLabel,
   type ContactEvidence,
   type Difficulty,
   type HistoryPoint,
@@ -291,7 +293,9 @@ export async function subjectTimeline(userId: string, subjectId: string) {
         score,
       };
     }),
-    reviews: reviews.map(serializeReview),
+    /** Etapas da escada, para a trilha da tela do assunto (ex.: D3 · D10 · D21 · D60 · D90 · D90+) */
+    ladder: [...config.ladderLabels, stageLabel(config.ladderLabels.length, config)],
+    reviews: reviews.map((r) => ({ ...serializeReview(r), stageLabel: reviewLabel(r.stage, r.checkup, config) })),
   };
 }
 

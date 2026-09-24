@@ -11,10 +11,6 @@ import { ChartCard, TrendLine } from '../components/charts';
 import { useStudyDialog } from '../components/study/StudyDialog';
 import { WhyDialog } from '../components/study/ReviewCard';
 
-const LADDER = ['D1', 'D7', 'D21', 'D60', 'D90', 'D90+'];
-/** Rótulo da revisão: verificações após estudo/leitura são sempre "D1". */
-const labelOf = (r: { stage: number; checkup?: boolean }) => (r.checkup ? 'D1' : LADDER[Math.min(r.stage, LADDER.length - 1)]);
-
 export default function SubjectDetailPage() {
   const { id } = useParams();
   const openStudy = useStudyDialog();
@@ -24,13 +20,13 @@ export default function SubjectDetailPage() {
   if (error || !data) return <ErrorState error={error} />;
 
   const { timeline } = data;
+  const { ladder } = timeline;
   const state = timeline.state;
   const pending = timeline.reviews.find((r) => r.status === 'PENDING');
   const done = timeline.reviews.filter((r) => r.status === 'DONE');
   const chart = timeline.contacts.map((c) => ({ date: c.date, score: c.score === null ? null : Math.round(c.score), accuracy: c.accuracy === null ? null : Math.round(c.accuracy) }));
   const toReview = (r: (typeof timeline.reviews)[number]): Review => ({
     ...r,
-    stageLabel: labelOf(r),
     phase: '',
     subject: { id: data.id, name: data.name, size: data.size, area: data.area },
   });
@@ -64,18 +60,19 @@ export default function SubjectDetailPage() {
         <StatTile
           label="Próxima revisão"
           value={pending ? relativeDay(pending.scheduledFor) : '—'}
-          sub={pending ? `${labelOf(pending)}${pending.checkup ? ' (com questões)' : ''} · ${fmtShort(pending.scheduledFor)}` : undefined}
+          sub={pending ? `${pending.stageLabel}${pending.checkup ? ' (com questões)' : ''} · ${fmtShort(pending.scheduledFor)}` : undefined}
         />
       </div>
 
       {state && (
         <Card title="Estado de aprendizagem" subtitle="Cada assunto tem seu próprio histórico: o algoritmo aprende com ele.">
           <div className="flex flex-wrap items-center gap-1.5">
-            {LADDER.map((l, i) => (
+            {ladder.map((l, i) => (
               <span
                 key={l}
+                title={i === 0 ? 'Reforço: volta em 3 dias quando o desempenho fica abaixo de 60%' : undefined}
                 className="rounded-lg px-2.5 py-1 text-xs font-semibold"
-                style={i === Math.min(state.stage, LADDER.length - 1) ? { background: 'var(--accent)', color: 'white' } : { background: 'var(--subtle)', color: i < state.stage ? 'var(--ink)' : 'var(--muted)' }}
+                style={i === Math.min(state.stage, ladder.length - 1) ? { background: 'var(--accent)', color: 'white' } : { background: 'var(--subtle)', color: i < state.stage ? 'var(--ink)' : 'var(--muted)' }}
               >
                 {l}
               </span>
@@ -129,7 +126,7 @@ export default function SubjectDetailPage() {
                   <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2" style={{ background: 'var(--surface)', borderColor: 'var(--accent)' }} aria-hidden />
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="font-medium text-ink">
-                      {i === 0 ? 'D0 — primeiro contato' : `Revisão ${review ? labelOf(review) : ''}${review?.checkup ? ' (verificação)' : ''}`}
+                      {i === 0 ? 'D0 — primeiro contato' : `Revisão ${review ? review.stageLabel : ''}${review?.checkup ? ' (verificação)' : ''}`}
                       <span className="ml-2 text-sm font-normal text-ink2">{fmtShort(c.date)}</span>
                     </p>
                     {c.questions && (
@@ -153,7 +150,7 @@ export default function SubjectDetailPage() {
               <li>
                 <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full" style={{ background: 'var(--accent)' }} aria-hidden />
                 <p className="font-medium text-ink">
-                  Próxima: {labelOf(pending)}
+                  Próxima: {pending.stageLabel}
                   {pending.checkup && ' — verificação com questões'} <span className="text-sm font-normal text-ink2">{fmtShort(pending.scheduledFor)}</span>
                 </p>
                 <p className="text-xs text-muted">

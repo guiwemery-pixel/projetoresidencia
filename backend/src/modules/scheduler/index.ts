@@ -9,6 +9,7 @@ export {
   computeTrend,
   stageInterval,
   stageLabel,
+  reviewLabel,
   stagePhase,
   suggestedMethods,
   suggestedQuestions,

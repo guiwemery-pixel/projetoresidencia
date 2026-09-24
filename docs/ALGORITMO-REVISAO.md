@@ -1,4 +1,4 @@
-# Algoritmo de revisão espaçada — `adaptive-ladder-v1`
+# Algoritmo de revisão espaçada — `adaptive-ladder-v2`
 
 Código: `backend/src/modules/scheduler/` (puro e testado em `engine.test.ts`).
 Parâmetros: `config.ts` + sobrescritas na tabela `algorithm_configs`.
@@ -21,14 +21,19 @@ Sessões do mesmo dia são somadas num único contato (ex.: teoria de manhã e q
 | Etapa | Intervalo-base | Fase | Métodos sugeridos | Questões sugeridas* |
 |---|---|---|---|---|
 | D0 | — | Aprender | Teoria + questões | pequeno 10–15 · médio 15–25 · grande 20–30 |
-| D1 | 1 dia | Evitar esquecimento precoce | Flashcards, recall ativo, perguntas rápidas | 5–10 |
-| D7 | 7 dias | Consolidar | Questões, flashcards, recall | 10–20 |
-| D21 | 21 dias | Recuperação após intervalo maior | Questões | 15–25 |
-| D60 | 60 dias | Manutenção | Questões, flashcards | 15–25 |
-| D90+ | 90 dias, depois ×1,5 (máx. 180) | Manutenção de longo prazo | Questões, simulados, recall | 20–30 |
+| D10 | 10 dias (pode ser mais, conforme o desempenho) | Consolidar | Questões + flashcards | 10–20 |
+| D21 | 21–30 dias (pode ser mais, conforme o desempenho) | Recuperação após intervalo maior | Questões | 15–25 |
+| D60 | 60 dias | Manutenção | Questões + flashcards | 15–25 |
+| D90+ | 90 dias, depois ×1,5 (máx. 180) | Manutenção de longo prazo | Questões / simulados | 20–30 |
+| D3 | 3 dias | Reforço — rever os erros (só quando o desempenho fica baixo) | Questões + revisão | 10–15 |
 
 \* para assunto médio; pequeno ×0,75 e grande ×1,25. Os D são **intervalos desde o último
 contato**, porque as datas reais se deslocam com a adaptação.
+
+Não há mais D1 nem D7 na escada. O **D3** não é uma etapa do caminho normal: é o reforço de quem
+fica abaixo de 60% na 1ª revisão, vai mal (“fraco”) no D10 ou tem resultado crítico (< 50%) em
+qualquer revisão. O rótulo **D1** só aparece na verificação com questões depois de um estudo só de
+leitura (regra abaixo).
 
 ## 2. Pontuação do contato (0–100)
 
@@ -59,8 +64,11 @@ Exemplos da especificação: 90% + Dominei = 93 · 70% + Razoável = 70 · 50% +
 | ≥ 90 | Excelente | avança 1 | base da nova etapa × **1,2** + modificadores | +0,05 |
 | 80–89 | Bom | avança 1 | base da nova etapa + modificadores | +0,02 |
 | 70–79 | Mediano | mantém | base da mesma etapa × **1,2** + modificadores | −0,05 |
-| 50–69 | Fraco | **volta 1** | base da etapa anterior (sem bônus) | −0,15 |
-| < 50 | Crítico | **reinicia (D1)** | 1 dia + sugestão de voltar à teoria | −0,20 |
+| 50–69 | Fraco | **volta 1** | base da etapa anterior (sem bônus); do D10 volta ao reforço D3 | −0,15 |
+| < 50 | Crítico | **reinicia (D3)** | 3 dias + sugestão de voltar à teoria | −0,20 |
+
+Nas faixas de crescimento (≥ 70%) o intervalo **nunca fica abaixo do intervalo-base da etapa**:
+D10 ≥ 10 dias, D21 ≥ 21, D60 ≥ 60, D90 ≥ 90. O desempenho só aumenta esse prazo.
 
 Trava de segurança: com menos de 5 questões e sem autoavaliação, a faixa máxima é “Bom”.
 
@@ -77,9 +85,9 @@ feita depois de um D0 só de leitura):
 
 | Acertos | 1ª revisão em | Posição na escada |
 |---|---|---|
-| abaixo de 60% | 3 dias | D1 |
-| 60–65% | 10 dias | D7 |
-| 66–70% | 13 dias | D7 |
+| abaixo de 60% | 3 dias | D3 (reforço) |
+| 60–65% | 10 dias | D10 |
+| 66–70% | 13 dias | D10 |
 | 71–80% | 20 dias | D21 |
 | 81% ou mais | 23 dias | D21 |
 
@@ -97,6 +105,7 @@ em diante, valem as faixas acima. A tabela é configurável (`firstReview.tiers`
 | **Dificuldade percebida** | fácil ×1,1 · média ×1,0 · difícil ×0,85 |
 | **Volume de questões** (vs. a sugestão normal da etapa) | ≥ 1,5× o sugerido → ×1,1 · ≥ 2× → ×1,2 |
 | **Crédito pelo intervalo real** | Revisão feita atrasada e bem: o novo intervalo não fica abaixo de dias decorridos × 1,5 (excelente), × 1,2 (bom) ou × 1,0 (mediano). |
+| **Mínimo da etapa** | O resultado final não fica abaixo do intervalo-base da etapa (ex.: facilidade baixa reduz o bônus, mas o D21 continua com pelo menos 21 dias). |
 
 O produto dos modificadores é limitado a 0,5–1,6 e o intervalo final a 1–180 dias.
 
@@ -123,12 +132,28 @@ O sistema percebe a queda depois do intervalo longo, volta uma etapa e reduz a f
 assunto — as próximas subidas serão mais cautelosas. Também gera a notificação
 “Seu desempenho em Coledocolitíase caiu de 85% para 60%”.
 
+**Abaixo de 60%: reforço em 3 dias**
+
+| Contato | Resultado | Próxima revisão |
+|---|---|---|
+| D0 | 11/20 = 55% | **D3 em 3 dias** — reforço: questões + revisão dos erros (10–15 questões) |
+| reforço | 16/20 = 80% | **D10 em 11 dias** |
+| D10 | 17/20 = 85% | **D21 em 21 dias** |
+| D21 | 18/20 = 90% | **D60 em 74 dias** |
+
+**Mínimo da etapa**
+
+| Contato | Resultado | Próxima revisão |
+|---|---|---|
+| D0 | 13/20 = 65% | 1ª revisão em 10 dias (D10) |
+| D10 | 17/20 = 85% | **D21 em 21 dias** — o cálculo daria 20 (facilidade reduzida pelo início fraco), mas o D21 não fica abaixo de 21 |
+
 **Assunto que começa só com teoria**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
 | D0 | só teoria, 🙂 | amanhã — verificação com 15–25 questões |
-| verificação | 14/20 = 70% | **1ª revisão em 13 dias** (tabela: 66–70%) |
+| verificação | 14/20 = 70% | **D10 em 13 dias** (tabela: 66–70%) |
 | 1ª revisão | 17/20, 🙂 | D21 em 22 dias |
 | 2ª revisão | 19/20, 😄 | D60 em 81 dias |
 
@@ -179,7 +204,7 @@ literatura de psicologia cognitiva, por exemplo:
   effective learning techniques: promising directions from cognitive and educational psychology.
   *Psychol Sci Public Interest.* 2013;14(1):4–58.
 
-Os **números específicos** (D1/D7/D21/D60/D90, faixas de 90/80/70/50%, pesos e fatores) **não
+Os **números específicos** (D3/D10/D21/D60/D90, faixas de 90/80/70/50%, pesos e fatores) **não
 vêm desses estudos**: são a heurística definida na especificação do projeto, pensada como ponto
 de partida. O motor é isolado e parametrizado justamente para que esses valores possam ser
 calibrados com os dados reais do grupo (ex.: comparar a retenção prevista com o desempenho

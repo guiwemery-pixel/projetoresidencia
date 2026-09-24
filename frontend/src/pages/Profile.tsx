@@ -239,12 +239,19 @@ export default function ProfilePage() {
             <div>
               <p className="mb-2 font-medium text-ink">Escada de intervalos-base</p>
               <div className="flex flex-wrap gap-2">
-                {algorithm.data.ladderLabels.map((l, i) => (
-                  <span key={l} className="rounded-xl bg-subtle px-3 py-1.5">
-                    <strong className="text-ink">{l}</strong> <span className="text-xs text-ink2">{algorithm.data.phases[i]}</span>
-                  </span>
-                ))}
+                {/* A etapa 0 (D3) é o reforço de quem vai mal, fora do caminho normal */}
+                {[{ l: 'D0', p: 'Aprender' }, ...algorithm.data.ladderLabels.slice(1).map((l, i) => ({ l, p: algorithm.data!.phases[i + 1] }))].map(
+                  ({ l, p }) => (
+                    <span key={l} className="rounded-xl bg-subtle px-3 py-1.5">
+                      <strong className="text-ink">{l}</strong> <span className="text-xs text-ink2">{p}</span>
+                    </span>
+                  ),
+                )}
                 <span className="rounded-xl bg-subtle px-3 py-1.5 text-xs text-ink2">depois ×1,5 até {algorithm.data.maxIntervalDays} dias</span>
+                <span className="rounded-xl border border-dashed border-line px-3 py-1.5">
+                  <strong className="text-ink">{algorithm.data.ladderLabels[0]}</strong>{' '}
+                  <span className="text-xs text-ink2">{algorithm.data.phases[0]} (abaixo de 60% ou resultado crítico)</span>
+                </span>
               </div>
             </div>
             <div className="-mx-4 overflow-x-auto sm:mx-0">

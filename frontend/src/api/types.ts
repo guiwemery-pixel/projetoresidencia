@@ -532,6 +532,8 @@ export interface SubjectDetail extends Subject {
       difficulty: number | null;
       score: number | null;
     }[];
-    reviews: Omit<Review, 'subject' | 'stageLabel' | 'phase'>[];
+    /** Etapas da escada (ex.: D3 · D10 · D21 · D60 · D90 · D90+) */
+    ladder: string[];
+    reviews: Omit<Review, 'subject' | 'phase'>[];
   };
 }

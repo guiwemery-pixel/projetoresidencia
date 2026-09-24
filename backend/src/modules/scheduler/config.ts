@@ -12,7 +12,7 @@ export interface BandRule {
   rule: string;
   /** Quanto a etapa anda na escada: +1 avança, 0 mantém, -1 volta uma etapa */
   stageDelta: number;
-  /** Se definido, volta diretamente para esta etapa (ex.: 0 = D1) */
+  /** Se definido, volta diretamente para esta etapa (ex.: 0 = D3, reforço) */
   resetToStage?: number;
   /** Multiplicador sobre o intervalo-base da nova etapa */
   factor: number;
@@ -25,7 +25,10 @@ export interface BandRule {
 
 export interface SchedulerConfig {
   version: string;
-  /** Intervalos-base (dias) de cada etapa: D1 → D7 → D21 → D60 → D90 */
+  /**
+   * Intervalos-base (dias) de cada etapa: D10 → D21 → D60 → D90. A etapa 0 (D3)
+   * é o reforço de quem ficou abaixo de 60% (ou caiu para "crítico").
+   */
   ladder: number[];
   ladderLabels: string[];
   phases: string[];
@@ -33,6 +36,11 @@ export interface SchedulerConfig {
   maintenanceGrowth: number;
   /** Limites para o produto de todos os modificadores (evita saltos exagerados) */
   modifierBounds: { min: number; max: number };
+  /**
+   * Nas faixas de crescimento (≥ 70%) o intervalo não fica abaixo do intervalo-base
+   * da etapa (D10 ≥ 10 dias, D21 ≥ 21…): o desempenho só pode aumentá-lo.
+   */
+  growthFloorAtBase: boolean;
   minIntervalDays: number;
   maxIntervalDays: number;
   score: {
@@ -76,11 +84,11 @@ export interface SchedulerConfig {
 }
 
 export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
-  version: 'adaptive-ladder-v1',
-  ladder: [1, 7, 21, 60, 90],
-  ladderLabels: ['D1', 'D7', 'D21', 'D60', 'D90'],
+  version: 'adaptive-ladder-v2',
+  ladder: [3, 10, 21, 60, 90],
+  ladderLabels: ['D3', 'D10', 'D21', 'D60', 'D90'],
   phases: [
-    'Evitar esquecimento precoce',
+    'Reforço — rever os erros',
     'Consolidar',
     'Recuperação após intervalo maior',
     'Manutenção',
@@ -88,6 +96,7 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   ],
   maintenanceGrowth: 1.5,
   modifierBounds: { min: 0.5, max: 1.6 },
+  growthFloorAtBase: true,
   minIntervalDays: 1,
   maxIntervalDays: 180,
   score: {
@@ -187,16 +196,16 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   lateCredit: { enabled: true, minGrowth: { excelente: 1.5, bom: 1.2, medio: 1.0 } },
   activeMethods: ['QUESTOES', 'FLASHCARDS', 'RECALL', 'SIMULADO'],
   suggestedMethodsByStage: [
-    ['FLASHCARDS', 'RECALL', 'QUESTOES'],
-    ['QUESTOES', 'FLASHCARDS', 'RECALL'],
+    ['QUESTOES', 'REVISAO'],
+    ['QUESTOES', 'FLASHCARDS'],
     ['QUESTOES'],
     ['QUESTOES', 'FLASHCARDS'],
-    ['QUESTOES', 'SIMULADO', 'RECALL'],
+    ['QUESTOES', 'SIMULADO'],
   ],
   theoryMethods: ['TEORIA', 'QUESTOES'],
   newSubjectQuestions: { SMALL: [10, 15], MEDIUM: [15, 25], LARGE: [20, 30] },
   reviewQuestionsByStage: [
-    [5, 10],
+    [10, 15],
     [10, 20],
     [15, 25],
     [15, 25],

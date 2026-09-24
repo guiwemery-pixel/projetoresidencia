@@ -49,6 +49,12 @@ describe('primeiro contato (D0)', () => {
     expect(first(20, 20)).toBe(23); // 100%
   });
 
+  it('a explicação da 1ª revisão não diz "sem medida" quando houve questões', () => {
+    const r = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(16, 20), quality: 4 }), history: [] });
+    expect(r.explanation.steps.map((s) => s.label)).not.toContain('Sem medida de desempenho');
+    expect(r.explanation.steps.map((s) => s.label)).toContain('1ª revisão pelo percentual de acertos');
+  });
+
   it('abaixo de 50% no 1º contato sugere voltar à teoria', () => {
     const r = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(6, 20), quality: 1 }), history: [] });
     expect(r.intervalDays).toBe(3);
@@ -81,6 +87,62 @@ describe('primeiro contato (D0)', () => {
   it('mais questões no 1º contato aumentam o intervalo', () => {
     const r = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(34, 40) }), history: [] });
     expect(r.intervalDays).toBe(Math.round(23 * 1.2)); // 85% com 2× o sugerido
+  });
+});
+
+describe('escada de revisões', () => {
+  /** Faz cada revisão no dia previsto, com o resultado indicado. */
+  function onSchedule(first: ContactEvidence, reviews: { correct: number; total: number }[]) {
+    const results = simulate([first]);
+    for (const r of reviews) {
+      const prev = results[results.length - 1];
+      const history = results.map((x, i) => ({ date: i === 0 ? first.date : results[i - 1].dueOn, score: x.score, accuracy: x.accuracy }));
+      results.push(scheduleNext({ state: prev.nextState, contact: contact(prev.dueOn, { questions: q(r.correct, r.total) }), history, scheduledFor: prev.dueOn }));
+    }
+    return results;
+  }
+
+  it('D0 → D10 → D21 → D60 → D90+, sem D1 nem D7', () => {
+    const results = onSchedule(contact('2026-01-05', { methods: ['TEORIA', 'QUESTOES'], questions: q(13, 20) }), [
+      { correct: 17, total: 20 },
+      { correct: 17, total: 20 },
+      { correct: 17, total: 20 },
+      { correct: 17, total: 20 },
+    ]);
+    expect(results.map((r) => r.stageLabel)).toEqual(['D10', 'D21', 'D60', 'D90', 'D90+']);
+    expect(results[0].intervalDays).toBe(10); // 65% → 10 dias
+    // Começou fraco (65%) e foi bem no D10: a facilidade menor não derruba o D21 abaixo de 21 dias
+    expect(results[1].intervalDays).toBeGreaterThanOrEqual(21);
+    expect(results[1].explanation.steps.some((s) => s.label === 'Mínimo da etapa')).toBe(true);
+    expect(results.map((r) => r.suggestedMethods)).toEqual([
+      ['QUESTOES', 'FLASHCARDS'],
+      ['QUESTOES'],
+      ['QUESTOES', 'FLASHCARDS'],
+      ['QUESTOES', 'SIMULADO'],
+      ['QUESTOES', 'SIMULADO'],
+    ]);
+    expect(results.some((r) => ['D1', 'D7'].includes(r.stageLabel))).toBe(false);
+  });
+
+  it('abaixo de 60% volta em 3 dias (reforço D3) e, indo bem, segue para o D10', () => {
+    const [d0, reforco] = onSchedule(contact('2026-01-05', { methods: ['TEORIA', 'QUESTOES'], questions: q(11, 20) }), [
+      { correct: 17, total: 20 },
+    ]);
+    expect(d0.intervalDays).toBe(3);
+    expect(d0.stageLabel).toBe('D3');
+    expect(d0.suggestedMethods).toContain('QUESTOES');
+    expect(reforco.stageLabel).toBe('D10');
+    expect(reforco.intervalDays).toBeGreaterThanOrEqual(10);
+  });
+
+  it('D10 e D21 podem ficar maiores com bom desempenho', () => {
+    const [d0] = onSchedule(contact('2026-01-05', { questions: q(14, 20) }), []);
+    expect(d0.stageLabel).toBe('D10');
+    expect(d0.intervalDays).toBe(13); // 70% → 13 dias
+    const [first, excelente] = onSchedule(contact('2026-01-05', { questions: q(17, 20) }), [{ correct: 20, total: 20 }]);
+    expect(first.stageLabel).toBe('D21');
+    expect(first.intervalDays).toBe(23); // 85% → 23 dias
+    expect(excelente.intervalDays).toBeGreaterThan(60);
   });
 });
 
@@ -117,25 +179,26 @@ describe('revisão adaptativa', () => {
     const state: LearningSnapshot = {
       stage: 1,
       ease: 1,
-      intervalDays: 7,
+      intervalDays: 10,
       lastContactOn: '2026-09-01',
       lastScore: 80,
       contacts: 2,
       lapses: 0,
     };
     const run = (correct: number, quality: 1 | 2 | 3 | 4 | 5) =>
-      scheduleNext({ state, contact: contact('2026-09-08', { questions: q(correct, 20), quality }), history: [], scheduledFor: '2026-09-08' });
+      scheduleNext({ state, contact: contact('2026-09-11', { questions: q(correct, 20), quality }), history: [], scheduledFor: '2026-09-11' });
 
     const dominei = run(18, 5); // 90% + Dominei
     const razoavel = run(14, 3); // 70% + Razoável
     const dificuldade = run(10, 2); // 50% + Tive dificuldade
     const esqueci = run(4, 1); // 20% + Esqueci
 
-    expect(dominei.intervalDays).toBeGreaterThan(20); // aumenta bastante
-    expect(razoavel.intervalDays).toBeGreaterThan(7); // aumento pequeno
-    expect(razoavel.intervalDays).toBeLessThan(12);
-    expect(dificuldade.intervalDays).toBeLessThan(7); // diminui
-    expect(esqueci.intervalDays).toBe(1); // revisão próxima
+    expect(dominei.intervalDays).toBeGreaterThan(21); // aumenta bastante (D10 → D21)
+    expect(razoavel.intervalDays).toBeGreaterThan(10); // aumento pequeno, mantém D10
+    expect(razoavel.intervalDays).toBeLessThanOrEqual(13);
+    expect(dificuldade.intervalDays).toBe(3); // volta para o reforço D3
+    expect(dificuldade.stageLabel).toBe('D3');
+    expect(esqueci.intervalDays).toBe(3); // reforço em 3 dias + teoria
     expect(esqueci.suggestTheory).toBe(true);
   });
 

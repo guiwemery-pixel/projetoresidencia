@@ -17,12 +17,13 @@ import type {
 } from './types.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Motor de revisão espaçada "escada adaptativa" (adaptive-ladder-v1)
+// Motor de revisão espaçada "escada adaptativa" (adaptive-ladder-v2)
 //
 // 1. Mede o contato: % de acertos + autoavaliação → pontuação 0–100.
 // 2. Classifica a pontuação numa faixa (excelente, bom, mediano, fraco, crítico).
-// 3. A faixa move o assunto na escada D1 → D7 → D21 → D60 → D90+ (avança,
-//    mantém, volta uma etapa ou reinicia).
+//    A 1ª revisão sai direto do percentual de acertos (tabela firstReview).
+// 3. A faixa move o assunto na escada D10 → D21 → D60 → D90+ (avança, mantém,
+//    volta uma etapa ou reinicia no reforço D3).
 // 4. Nas faixas de crescimento o intervalo-base da etapa é ajustado pela
 //    facilidade individual do assunto, tendência, dificuldade percebida e tipo
 //    de método; nas faixas de queda usa-se o intervalo-base da etapa anterior.
@@ -47,6 +48,11 @@ export function stageLabel(stage: number, config: SchedulerConfig = DEFAULT_SCHE
 
 export function stagePhase(stage: number, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG): string {
   return config.phases[Math.min(Math.max(0, stage), config.phases.length - 1)];
+}
+
+/** Rótulo de uma revisão: a verificação após estudo/leitura tem rótulo próprio (D1). */
+export function reviewLabel(stage: number, checkup: boolean, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG): string {
+  return checkup ? config.passiveFollowUp.label : stageLabel(stage, config);
 }
 
 export function isActiveRecall(methods: Method[], config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
@@ -176,7 +182,7 @@ export function reviewPlan(
     const base = suggestedQuestions(stage, size, false, config);
     const [nMin, nMax] = config.newSubjectQuestions[size];
     return {
-      label: f.label,
+      label: reviewLabel(stage, true, config),
       phase: f.phase,
       methods: f.methods,
       questions: {
@@ -186,7 +192,7 @@ export function reviewPlan(
     };
   }
   return {
-    label: stageLabel(stage, config),
+    label: reviewLabel(stage, false, config),
     phase: stagePhase(stage, config),
     methods: suggestedMethods(stage, !!opts.theory, config),
     questions: suggestedQuestions(stage, size, !!opts.theory, config),
@@ -266,7 +272,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   }
   // Na 1ª revisão a data vem da tabela de percentual, não da regra da faixa
   if (band && !(firstMeasure && hasPercentual)) steps.push({ label: `Faixa: ${band.label}`, detail: band.rule });
-  else if (!passiveOnly) steps.push({ label: 'Sem medida de desempenho', detail: 'Nenhuma questão nem autoavaliação registrada neste contato.' });
+  else if (!passiveOnly && !band) steps.push({ label: 'Sem medida de desempenho', detail: 'Nenhuma questão nem autoavaliação registrada neste contato.' });
 
   // ── 3. Movimento na escada ─────────────────────────────────────────────
   const easeFrom = state?.ease ?? config.ease.initial;
@@ -406,7 +412,10 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     }
   }
 
-  const intervalDays = Math.round(clamp(raw, config.minIntervalDays, config.maxIntervalDays));
+  const computed = Math.round(clamp(raw, config.minIntervalDays, config.maxIntervalDays));
+  // O intervalo-base da etapa é o mínimo quando o desempenho foi bom
+  const floor = growth && config.growthFloorAtBase ? Math.min(stageInterval(stage, config), config.maxIntervalDays) : 0;
+  const intervalDays = Math.max(computed, floor);
   const dueOn = addDays(contact.date, intervalDays);
   const lapses = (state?.lapses ?? 0) + (isLapse ? 1 : 0);
   const reviewsDone = state ? state.contacts : 0;
@@ -414,7 +423,13 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   if (modifiers.length) {
     steps.push({
       label: 'Cálculo',
-      detail: `${baseInterval} × ${modifiers.map((m) => fmt(m.factor)).join(' × ')} ≈ ${intervalDays} ${intervalDays === 1 ? 'dia' : 'dias'}`,
+      detail: `${baseInterval} × ${modifiers.map((m) => fmt(m.factor)).join(' × ')} ≈ ${computed} ${computed === 1 ? 'dia' : 'dias'}`,
+    });
+  }
+  if (intervalDays > computed) {
+    steps.push({
+      label: 'Mínimo da etapa',
+      detail: `Com desempenho a partir de 70%, a etapa ${stageLabel(stage, config)} não fica abaixo de ${floor} dias: o desempenho só aumenta esse prazo.`,
     });
   }
   if (Math.abs(ease - easeFrom) > 1e-9) {

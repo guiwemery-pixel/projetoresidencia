@@ -227,7 +227,10 @@ export default function PrintWeekPage() {
               <Checkbox /> marque ao terminar
             </span>
             <span>
-              <b className="text-[#1c5cab]">D1 · D7 · D21 · D60 · D90</b> etapa da revisão
+              <b className="text-[#1c5cab]">D10 · D21 · D60 · D90</b> etapa da revisão
+            </span>
+            <span>
+              <b className="text-[#1c5cab]">D3</b> reforço (desempenho abaixo de 60%)
             </span>
             <span>
               <b className="text-[#1c5cab]">✎</b> verificação com questões (após leitura)
