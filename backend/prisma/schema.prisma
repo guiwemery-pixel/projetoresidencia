@@ -7,7 +7,9 @@
 // - Nomes de tabelas em snake_case via @@map para facilitar SQL manual.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "rhel-openssl-3.0.x" = ambiente das funções serverless (Vercel/AWS Lambda)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

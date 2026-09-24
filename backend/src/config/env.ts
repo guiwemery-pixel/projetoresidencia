@@ -11,12 +11,14 @@ const schema = z.object({
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   // Diretório do build do frontend servido em produção (opcional)
   FRONTEND_DIST: z.string().optional(),
+  // Segredo do agendador (Vercel Cron envia "Authorization: Bearer <CRON_SECRET>")
+  CRON_SECRET: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
-  console.error('Variáveis de ambiente inválidas:', parsed.error.flatten().fieldErrors);
-  process.exit(1);
+  // Lança (em vez de encerrar o processo) para a mensagem aparecer nos logs de funções serverless
+  throw new Error(`Variáveis de ambiente inválidas: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`);
 }
 
 export const env = parsed.data;

@@ -24,6 +24,15 @@ describe('autenticação', () => {
     expect((await other.get('/api/auth/me')).status).toBe(401);
   });
 
+  it('responde 400 para JSON malformado', async () => {
+    const res = await request(app).post('/api/auth/login').set('Content-Type', 'application/json').send('{ruim');
+    expect(res.status).toBe(400);
+  });
+
+  it('protege o endpoint do agendador', async () => {
+    expect((await request(app).get('/api/cron/notifications')).status).toBe(401);
+  });
+
   it('não expõe o hash da senha', async () => {
     const { agent } = await signup('Maria');
     const me = await agent.get('/api/auth/me');

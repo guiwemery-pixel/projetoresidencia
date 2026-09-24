@@ -22,6 +22,7 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { searchRouter } from './modules/search/search.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { invalidateProgressCache } from './modules/progress/public-summary.js';
+import { runNotificationJob } from './modules/notifications/notifications.service.js';
 
 export function createApp() {
   const app = express();
@@ -51,6 +52,17 @@ export function createApp() {
   app.use('/api', originCheck(allowedOrigins));
 
   app.get('/api/health', (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  // Job de notificações disparado por agendador externo (ex.: Vercel Cron).
+  // Em servidor tradicional o job roda por setInterval (ver index.ts).
+  app.get('/api/cron/notifications', async (req, res) => {
+    if (!env.CRON_SECRET || env.CRON_SECRET.length < 16 || req.get('authorization') !== `Bearer ${env.CRON_SECRET}`) {
+      res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+    await runNotificationJob();
     res.json({ ok: true });
   });
 

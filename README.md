@@ -45,6 +45,11 @@ Algoritmo: [`docs/ALGORITMO-REVISAO.md`](docs/ALGORITMO-REVISAO.md)
 
 ## Como rodar
 
+### Publicar na internet (Vercel)
+
+Passo a passo em [`docs/DEPLOY-VERCEL.md`](docs/DEPLOY-VERCEL.md): importar o repositório no
+Vercel (raiz do projeto), conectar um banco Neon e fazer *Redeploy*.
+
 ### Opção 1 — Docker (mais simples)
 
 ```bash
@@ -62,7 +67,7 @@ npm run db:seed
 
 ### Opção 2 — Desenvolvimento local
 
-Pré-requisitos: Node.js 20+ e PostgreSQL 16 (ou `docker compose up -d db`).
+Pré-requisitos: Node.js 22 e PostgreSQL 16 (ou `docker compose up -d db`).
 
 ```bash
 npm install
