@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Study, StudyMethod } from '../api/types';
 import { useInvalidateStudyData, useStudies } from '../hooks/api';
@@ -126,9 +126,14 @@ export default function StudiesPage() {
         title="Estudos"
         subtitle="Histórico de sessões. Editar ou excluir um registro recalcula as revisões do assunto."
         actions={
-          <Button icon={<Plus className="h-4 w-4" />} onClick={() => openStudy()}>
-            Registrar estudo
-          </Button>
+          <>
+            <Link to="/importar" className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-subtle">
+              <FileSpreadsheet className="h-4 w-4" /> Importar planilha
+            </Link>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => openStudy()}>
+              Registrar estudo
+            </Button>
+          </>
         }
       />
       {isLoading && <Loading />}

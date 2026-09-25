@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, ImagePlus, Trash2 } from 'lucide-react';
+import { Download, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { User } from '../api/types';
 import { useProgress } from '../hooks/api';
@@ -334,8 +334,11 @@ export default function ProfilePage() {
           </form>
         </Card>
         <Card title="Seus dados">
-          <p className="mb-3 text-sm text-ink2">Baixe tudo o que você registrou (JSON) ou exclua sua conta definitivamente.</p>
+          <p className="mb-3 text-sm text-ink2">Traga seu histórico de uma planilha, baixe tudo o que você registrou (JSON) ou exclua sua conta definitivamente.</p>
           <div className="flex flex-wrap gap-2">
+            <Link to="/importar" className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-subtle">
+              <FileSpreadsheet className="h-4 w-4" /> Importar planilha
+            </Link>
             <a href="/api/me/export" className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-subtle">
               <Download className="h-4 w-4" /> Exportar meus dados
             </a>

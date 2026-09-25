@@ -264,6 +264,51 @@ describe('armazenamento compacto', () => {
   });
 });
 
+describe('importar planilha', () => {
+  const events = [
+    { area: 'CM', subarea: 'Cardiologia', subject: 'Insuficiência cardíaca', date: addDays(today, -30), total: 20, correct: 16, minutes: 60, methods: ['TEORIA', 'QUESTOES'] },
+    { area: 'CM', subarea: 'Cardiologia', subject: 'insuficiência  cardíaca', date: addDays(today, -10), total: 20, correct: 18, minutes: 30 },
+    { area: 'Oftalmologia', subject: 'Glaucoma', date: addDays(today, -5), minutes: 40, methods: ['FLASHCARDS'], quality: 4 },
+    { subject: 'Assunto sem área', date: addDays(today, -2), total: 10, correct: 7 },
+  ];
+
+  it('mostra a prévia, importa, recalcula as revisões e não duplica ao reimportar', async () => {
+    const { agent } = await signup('Antonio');
+    const preview = await agent.post('/api/import/preview').send({ events });
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({ studies: 4, duplicates: 0, questions: 50, subjects: 3, newSubjects: 3 });
+    // "CM" é a Clínica Médica do modelo; Cardiologia já existe nela
+    expect(preview.body.newAreas).toEqual(['Oftalmologia', 'Importados']);
+
+    const run = await agent.post('/api/import/run').send({ events });
+    expect(run.status).toBe(200);
+    expect(run.body).toMatchObject({ created: 4, duplicates: 0, subjects: 3 });
+
+    const subjects = (await agent.get('/api/subjects')).body as { id: string; name: string; area: { path: string } }[];
+    const ic = subjects.find((x) => x.name === 'Insuficiência cardíaca')!;
+    expect(ic.area.path).toBe('Clínica Médica › Cardiologia');
+    const timeline = (await agent.get(`/api/subjects/${ic.id}`)).body.timeline;
+    expect(timeline.contacts).toHaveLength(2);
+    expect(timeline.reviews.filter((r: { status: string }) => r.status === 'DONE')).toHaveLength(1);
+    expect(timeline.reviews.filter((r: { status: string }) => r.status === 'PENDING')).toHaveLength(1);
+    const studies = (await agent.get(`/api/studies?subjectId=${ic.id}`)).body as { isFirstContact: boolean; date: string }[];
+    expect(studies.find((x) => x.isFirstContact)?.date).toBe(addDays(today, -30));
+
+    const again = await agent.post('/api/import/run').send({ events });
+    expect(again.body).toMatchObject({ created: 0, duplicates: 4 });
+    expect((await agent.post('/api/import/preview').send({ events })).body).toMatchObject({ studies: 0, duplicates: 4 });
+  });
+
+  it('valida datas futuras e acertos maiores que o total', async () => {
+    const { agent } = await signup('Validador');
+    const future = await agent.post('/api/import/run').send({ events: [{ subject: 'X', date: addDays(today, 1) }] });
+    expect(future.status).toBe(400);
+    const wrong = await agent.post('/api/import/preview').send({ events: [{ subject: 'X', date: today, total: 5, correct: 6 }] });
+    expect(wrong.status).toBe(400);
+    expect((await request(app).post('/api/import/run').send({ events })).status).toBe(401);
+  });
+});
+
 describe('privacidade entre usuários', () => {
   async function setup() {
     const a = await signup('Guilherme');

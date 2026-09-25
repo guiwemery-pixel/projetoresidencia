@@ -13,6 +13,7 @@ import { usersRouter } from './modules/users/users.routes.js';
 import { groupsRouter } from './modules/groups/groups.routes.js';
 import { areasRouter, subjectsRouter } from './modules/taxonomy/taxonomy.routes.js';
 import { studiesRouter } from './modules/studies/studies.routes.js';
+import { importRouter } from './modules/import/import.routes.js';
 import { reviewsRouter } from './modules/reviews/reviews.routes.js';
 import { metricsRouter } from './modules/metrics/metrics.routes.js';
 import { goalsRouter } from './modules/goals/goals.routes.js';
@@ -48,6 +49,8 @@ export function createApp() {
     }),
   );
   app.use(cors({ origin: allowedOrigins, credentials: true }));
+  // Importação de planilha: lotes maiores (os estudos já chegam convertidos, sem arquivo)
+  app.use('/api/import', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '300kb' }));
   app.use(cookieParser());
   app.use('/api', originCheck(allowedOrigins));
@@ -87,6 +90,7 @@ export function createApp() {
   api.use('/areas', areasRouter);
   api.use('/subjects', subjectsRouter);
   api.use('/studies', studiesRouter);
+  api.use('/import', importRouter);
   api.use('/reviews', reviewsRouter);
   api.use('/metrics', metricsRouter);
   api.use('/goals', goalsRouter);
