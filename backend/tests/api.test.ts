@@ -151,6 +151,27 @@ describe('fluxo principal: estudo → revisão → reagendamento', () => {
     expect((await agent.get(`/api/reviews?subjectId=${subjectId}`)).body).toHaveLength(0);
   });
 
+  it('D1 feita com flashcards define a próxima revisão pela autoavaliação (sem outra D1)', async () => {
+    const { agent } = await signup('Ana');
+    const area = await firstArea(agent);
+    const d0 = await agent.post('/api/studies').send({
+      newSubject: { areaId: area.children[0].id, name: 'Anatomia' },
+      date: addDays(today, -1),
+      durationMinutes: 60,
+      methods: ['LEITURA'],
+    });
+    expect(d0.body.schedule.stageLabel).toBe('D1');
+    const subjectId = d0.body.session.subject.id;
+    const d1 = await agent.post('/api/studies').send({ subjectId, date: today, durationMinutes: 20, methods: ['FLASHCARDS'], quality: 3 });
+    expect(d1.status).toBe(201);
+    expect(d1.body.completedReviewId).toBeTruthy();
+    expect(d1.body.schedule).toMatchObject({ stageLabel: 'D10', intervalDays: 12, checkup: false });
+    // Mais uma sessão no mesmo dia (reprocessa o histórico): continua sem voltar para D1
+    const again = await agent.post('/api/studies').send({ subjectId, date: today, durationMinutes: 10, methods: ['RECALL'] });
+    expect(again.body.schedule.checkup).toBe(false);
+    expect(again.body.schedule.intervalDays).toBe(13); // Razoável → 13 dias × 1,0 (30 min no dia)
+  });
+
   it('não aceita estudo com data futura nem acertos > total', async () => {
     const { agent } = await signup('Pedro');
     const area = await firstArea(agent, 'Pediatria');

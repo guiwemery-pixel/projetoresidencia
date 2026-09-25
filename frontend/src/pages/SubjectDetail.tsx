@@ -60,7 +60,7 @@ export default function SubjectDetailPage() {
         <StatTile
           label="Próxima revisão"
           value={pending ? relativeDay(pending.scheduledFor) : '—'}
-          sub={pending ? `${pending.stageLabel}${pending.checkup ? ' (com questões)' : ''} · ${fmtShort(pending.scheduledFor)}` : undefined}
+          sub={pending ? `${pending.stageLabel}${pending.checkup ? ' (após leitura)' : ''} · ${fmtShort(pending.scheduledFor)}` : undefined}
         />
       </div>
 
@@ -126,7 +126,7 @@ export default function SubjectDetailPage() {
                   <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2" style={{ background: 'var(--surface)', borderColor: 'var(--accent)' }} aria-hidden />
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="font-medium text-ink">
-                      {i === 0 ? 'D0 — primeiro contato' : `Revisão ${review ? review.stageLabel : ''}${review?.checkup ? ' (verificação)' : ''}`}
+                      {i === 0 ? 'D0 — primeiro contato' : `Revisão ${review ? review.stageLabel : ''}${review?.checkup ? ' (após leitura)' : ''}`}
                       <span className="ml-2 text-sm font-normal text-ink2">{fmtShort(c.date)}</span>
                     </p>
                     {c.questions && (
@@ -151,7 +151,7 @@ export default function SubjectDetailPage() {
                 <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full" style={{ background: 'var(--accent)' }} aria-hidden />
                 <p className="font-medium text-ink">
                   Próxima: {pending.stageLabel}
-                  {pending.checkup && ' — verificação com questões'} <span className="text-sm font-normal text-ink2">{fmtShort(pending.scheduledFor)}</span>
+                  {pending.checkup && ' — revisão após leitura (questões, flashcards ou teoria)'} <span className="text-sm font-normal text-ink2">{fmtShort(pending.scheduledFor)}</span>
                 </p>
                 <p className="text-xs text-muted">
                   Sugerido: {pending.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')}

@@ -85,6 +85,16 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
 
   const newSuggestion = subject?.kind === 'new' ? { SMALL: '10–15', MEDIUM: '15–25', LARGE: '20–30' }[subject.data.size] : null;
 
+  // Sem questões: explica de onde sai a próxima data
+  const activeRecall = methods.some((m) => m === 'FLASHCARDS' || m === 'RECALL');
+  const noQuestionsHint =
+    methods.length === 0 || hasQuestions
+      ? null
+      : activeRecall || suggestion?.checkup || (suggestion && !suggestion.isNew && !suggestion.pendingReview)
+        ? 'Sem questões, a próxima revisão sai de “Como foi?”, do tempo de estudo e da dificuldade.'
+        : suggestion?.isNew
+          ? 'Só teoria/leitura no primeiro contato: a revisão D1 fica para amanhã (questões, flashcards, recall ou teoria).'
+          : 'Só teoria/leitura: a revisão D1 fica para amanhã, mantendo a etapa do assunto.';
   const canSubmit = !!subject && methods.length > 0 && minutes !== null && !questionsError && (!hasQuestions || total === null || (total > 0 && correct !== null));
 
   const toggle = (m: StudyMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
@@ -166,7 +176,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                   <Lightbulb className="h-4 w-4 text-accent" /> Para a próxima revisão
                 </p>
                 <p className="mt-1 text-ink2">
-                  {s.checkup && 'Como foi só estudo/leitura, amanhã meça a retenção com questões. '}
+                  {s.checkup && 'Como foi só estudo/leitura, amanhã faça a revisão D1: questões, flashcards, recall ou teoria. '}
                   {s.suggestTheory && 'Volte ao conteúdo teórico e depois faça questões. '}
                   Sugerido: {s.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')} · {s.suggestedQuestions.min}–{s.suggestedQuestions.max} questões.
                   {' '}Com bom desempenho, menos de 20 questões aproximam a próxima revisão e mais de 20 a afastam, aos poucos.
@@ -325,6 +335,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
             <span className="text-xs text-ink2">Dificuldade do assunto:</span>
             <DifficultyPicker value={difficulty} onChange={setDifficulty} />
           </div>
+          {noQuestionsHint && <p className="mt-2 text-xs text-ink2">{noQuestionsHint}</p>}
         </section>
 
         <Textarea label="Observações (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
@@ -378,7 +389,7 @@ function SuggestionBox({ suggestion: s }: { suggestion: StudySuggestion }) {
       return `Assunto novo (D0 — aprender): sugerimos teoria + ${s.questions.min}–${s.questions.max} questões. Seu percentual de acertos define a data da 1ª revisão, ajustada pela quantidade de questões.`;
     const when = s.pendingReview ? ` prevista ${relativeDay(s.pendingReview.scheduledFor)}` : '';
     if (s.checkup) {
-      return `Verificação${when}: o último contato foi só estudo/leitura. Faça ${s.questions.min}–${s.questions.max} questões — acertando bem, o próximo intervalo cresce.`;
+      return `Revisão D1${when}: o último contato foi só estudo/leitura. Revise como preferir — ${s.questions.min}–${s.questions.max} questões, flashcards, recall ou teoria — e marque "Como foi?". Sem questões, a próxima data sai da sua autoavaliação, do tempo de estudo e da dificuldade.`;
     }
     const ref = s.questionCount?.reference ?? 20;
     return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões. ${ref} questões é a referência: indo bem, menos que isso aproxima a próxima revisão e mais que isso a afasta.`;

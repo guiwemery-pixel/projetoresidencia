@@ -284,7 +284,8 @@ export default function ProfilePage() {
                 .join(', ')}
               ). A 1ª revisão sai do percentual de acertos do primeiro contato (mínimo de {algorithm.data.firstReview.minQuestions} questões):{' '}
               {firstReviewText(algorithm.data.firstReview.tiers)}. Contato só de estudo/leitura
-              (sem questões) agenda uma verificação com questões no dia seguinte, com mais questões que o normal, e mantém a etapa. Nas faixas de crescimento, o intervalo
+              agenda a revisão D1 no dia seguinte — com questões, flashcards, recall ou teoria — e mantém a etapa; a D1 nunca gera outra D1. Sem questões suficientes, a
+              data sai da autoavaliação (mesma tabela), ajustada pelo tempo de estudo e pela dificuldade. Nas faixas de crescimento, o intervalo
               ainda é ajustado pela facilidade individual do assunto, tendência e dificuldade percebida.
             </p>
             {algorithm.data.questionCount && (

@@ -60,14 +60,21 @@ export interface SchedulerConfig {
    * (D0 com questões, ou a verificação com questões após um D0 só de leitura).
    * `stage` posiciona o assunto na escada para as revisões seguintes.
    */
-  firstReview: { minQuestions: number; tiers: { min: number; days: number; stage: number }[] };
+  firstReview: {
+    minQuestions: number;
+    tiers: { min: number; days: number; stage: number }[];
+    /** Sem questões suficientes nem autoavaliação: pontuação considerada (desempenho médio) */
+    assumedScore: number;
+    /** Com poucas questões e sem autoavaliação, a pontuação vai no máximo até aqui */
+    fewQuestionsMaxScore: number;
+  };
   ease: { initial: number; min: number; max: number };
   difficultyFactors: Record<string, number>;
   trend: { window: number; threshold: number; improvingFactor: number; decliningFactor: number };
   /**
    * Contato só de estudo/leitura (sem questões nem recuperação ativa) não mede
-   * a retenção: agenda uma verificação com questões (mais questões que o normal)
-   * e mantém a etapa do assunto.
+   * a retenção: agenda a revisão D1 no dia seguinte (questões, flashcards, recall
+   * ou teoria) e mantém a etapa do assunto. A D1 nunca gera outra D1.
    */
   passiveFollowUp: { intervalDays: number; questionsMultiplier: number; methods: Method[]; label: string; phase: string };
   /**
@@ -77,6 +84,11 @@ export interface SchedulerConfig {
    * ≥ 70% e à 1ª revisão (exceto a faixa mais baixa da tabela).
    */
   questionCount: { reference: number; points: { questions: number; factor: number }[] };
+  /**
+   * Tempo de estudo do contato quando não há questões (flashcards, recall, teoria):
+   * `reference` minutos valem ×1; menos encurta e mais alonga, de forma gradual.
+   */
+  studyTime: { reference: number; points: { minutes: number; factor: number }[] };
   /** Se a revisão foi feita atrasada e o desempenho foi bom, o intervalo real conta a favor */
   lateCredit: { enabled: boolean; minGrowth: Partial<Record<BandKey, number>> };
   activeMethods: Method[];
@@ -182,6 +194,8 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
       { min: 60, days: 10, stage: 1 },
       { min: 0, days: 3, stage: 0 },
     ],
+    assumedScore: 70,
+    fewQuestionsMaxScore: 80,
   },
   ease: { initial: 1.0, min: 0.6, max: 1.4 },
   difficultyFactors: { '1': 1.1, '2': 1.0, '3': 0.85 },
@@ -189,9 +203,19 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   passiveFollowUp: {
     intervalDays: 1,
     questionsMultiplier: 1.5,
-    methods: ['QUESTOES'],
+    methods: ['QUESTOES', 'FLASHCARDS', 'RECALL'],
     label: 'D1',
-    phase: 'Verificar com questões',
+    phase: 'Revisar com questões, flashcards ou teoria',
+  },
+  studyTime: {
+    reference: 30,
+    points: [
+      { minutes: 5, factor: 0.8 },
+      { minutes: 15, factor: 0.9 },
+      { minutes: 30, factor: 1.0 },
+      { minutes: 60, factor: 1.1 },
+      { minutes: 90, factor: 1.15 },
+    ],
   },
   questionCount: {
     reference: 20,

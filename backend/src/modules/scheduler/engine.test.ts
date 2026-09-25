@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SCHEDULER_CONFIG, computeScore, mergeConfig, questionCountFactor, reviewPlan, scheduleNext, suggestedQuestions, type ContactEvidence, type HistoryPoint, type LearningSnapshot, type ScheduleResult } from './index.js';
+import { DEFAULT_SCHEDULER_CONFIG, computeScore, mergeConfig, questionCountFactor, reviewPlan, scheduleNext, studyTimeFactor, suggestedQuestions, type ContactEvidence, type HistoryPoint, type LearningSnapshot, type ScheduleResult } from './index.js';
 
 const q = (correct: number, total: number) => ({ correct, total });
 
@@ -24,13 +24,13 @@ function simulate(contacts: ContactEvidence[]) {
 }
 
 describe('primeiro contato (D0)', () => {
-  it('só teoria agenda D1 com questões (mais que o normal)', () => {
+  it('só teoria agenda a revisão D1 (questões, flashcards, recall ou teoria)', () => {
     const r = scheduleNext({ state: null, contact: contact('2026-09-01', { methods: ['TEORIA'] }), history: [] });
     expect(r.intervalDays).toBe(1);
     expect(r.stageLabel).toBe('D1');
     expect(r.dueOn).toBe('2026-09-02');
     expect(r.checkup).toBe(true);
-    expect(r.suggestedMethods).toEqual(['QUESTOES']);
+    expect(r.suggestedMethods).toEqual(['QUESTOES', 'FLASHCARDS', 'RECALL']);
     expect(r.suggestedQuestions).toEqual({ min: 20, max: 30 });
   });
 
@@ -61,18 +61,12 @@ describe('primeiro contato (D0)', () => {
     expect(r.suggestedMethods).toContain('TEORIA');
   });
 
-  it('com poucas questões no 1º contato pede verificação no dia seguinte, que define a 1ª revisão', () => {
+  it('com poucas questões no 1º contato não volta amanhã: pontuação (no máximo "Bom") e quantidade', () => {
     const r = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(3, 3) }), history: [] });
-    expect(r.checkup).toBe(true);
-    expect(r.intervalDays).toBe(1);
-    expect(r.suggestedQuestions).toEqual({ min: 20, max: 30 });
-    const check = scheduleNext({
-      state: r.nextState,
-      contact: contact('2026-09-02', { questions: q(14, 20) }),
-      history: [{ date: '2026-09-01', score: 100, accuracy: 100 }],
-      scheduledFor: r.dueOn,
-    });
-    expect(check.intervalDays).toBe(13); // tabela: 70% → 13 dias
+    expect(r.checkup).toBe(false);
+    expect(r.intervalDays).toBe(13); // 3/3 sem autoavaliação vale no máximo 80 → 20 dias × 0,66 (3 questões)
+    const rated = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(3, 3), quality: 5 }), history: [] });
+    expect(rated.intervalDays).toBe(15); // Dominei → 23 dias × 0,66
   });
 
   it('D0 só de leitura: o percentual da verificação define a 1ª revisão', () => {
@@ -100,6 +94,69 @@ describe('primeiro contato (D0)', () => {
     expect(first(3, 5)).toBe(7); // 60% com 5 questões: 10 × 0,7
     expect(first(2, 5)).toBe(3); // abaixo de 60% volta em 3 dias, qualquer quantidade
     expect(first(20, 40)).toBe(3);
+  });
+});
+
+describe('revisão D1 flexível (sem questões)', () => {
+  const d0 = scheduleNext({ state: null, contact: contact('2026-09-24', { methods: ['LEITURA'] }), history: [] });
+  const d1 = (partial: Partial<ContactEvidence>) =>
+    scheduleNext({ state: d0.nextState, contact: contact('2026-09-25', partial), history: [], scheduledFor: d0.dueOn, pendingCheckup: true });
+
+  it('D1 com flashcards + "Razoável": a data sai da autoavaliação e do tempo, sem outra D1', () => {
+    const r = d1({ methods: ['FLASHCARDS'], quality: 3, minutes: 20 });
+    expect(r.checkup).toBe(false);
+    expect(r.stageLabel).toBe('D10');
+    expect(r.intervalDays).toBe(12); // Razoável (70) → 13 dias × 0,93 (20 min)
+    const labels = r.explanation.steps.map((s) => s.label);
+    expect(labels).toContain('1ª revisão pela autoavaliação');
+    expect(labels).toContain('Tempo de estudo');
+    expect(labels).not.toContain('Sem bônus');
+    expect(r.explanation.stage.fromLabel).toBe('D1');
+  });
+
+  it('bom desempenho vai longe; dificuldade e tempo ajustam', () => {
+    expect(d1({ methods: ['FLASHCARDS'], quality: 4, minutes: 30 }).intervalDays).toBe(23); // Fui bem → 23
+    expect(d1({ methods: ['FLASHCARDS'], quality: 4, minutes: 45, difficulty: 3 }).intervalDays).toBe(21); // 23 × 0,85 ≈ 20 → × 1,05
+    expect(d1({ methods: ['RECALL'], quality: 2, minutes: 90 }).intervalDays).toBe(3); // Tive dificuldade → 3 dias, sem ajuste
+  });
+
+  it('a D1 pode ser só teoria/leitura e nunca gera outra D1', () => {
+    const teoria = d1({ methods: ['TEORIA'], quality: 4, minutes: 30 });
+    expect(teoria.checkup).toBe(false);
+    expect(teoria.intervalDays).toBe(23);
+    const semNota = d1({ methods: ['LEITURA'] });
+    expect(semNota.checkup).toBe(false);
+    expect(semNota.intervalDays).toBe(13); // sem autoavaliação: desempenho médio (70)
+    expect(semNota.nextState.lastScore).toBe(70);
+  });
+
+  it('revisão só de leitura numa etapa avançada: D1 amanhã, e a D1 feita com teoria avança normalmente', () => {
+    const state: LearningSnapshot = { stage: 2, ease: 1, intervalDays: 21, lastContactOn: '2026-01-01', lastScore: 85, contacts: 3, lapses: 0 };
+    const leitura = scheduleNext({ state, contact: contact('2026-01-22', { methods: ['LEITURA'], quality: 4 }), history: [] });
+    expect(leitura.checkup).toBe(true);
+    const dia1 = scheduleNext({
+      state: leitura.nextState,
+      contact: contact('2026-01-23', { methods: ['TEORIA'], quality: 4, minutes: 40 }),
+      history: [],
+      scheduledFor: leitura.dueOn,
+      pendingCheckup: true,
+    });
+    expect(dia1.checkup).toBe(false);
+    expect(dia1.band).toBe('bom');
+    expect(dia1.stageLabel).toBe('D60');
+  });
+
+  it('tempo de estudo gradual (sem questões) e só quando não há questões', () => {
+    expect([5, 10, 15, 20, 30, 45, 60, 90, 120].map((m) => studyTimeFactor(m))).toEqual([0.8, 0.85, 0.9, 0.93, 1, 1.05, 1.1, 1.15, 1.15]);
+    const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 10, lastContactOn: '2026-01-01', lastScore: 80, contacts: 2, lapses: 0 };
+    const run = (partial: Partial<ContactEvidence>) =>
+      scheduleNext({ state, contact: contact('2026-01-11', partial), history: [], scheduledFor: '2026-01-11' });
+    const curto = run({ methods: ['FLASHCARDS'], quality: 4, minutes: 10 });
+    const longo = run({ methods: ['FLASHCARDS'], quality: 4, minutes: 60 });
+    expect(longo.intervalDays).toBeGreaterThan(curto.intervalDays);
+    // Com questões, vale a quantidade de questões (o tempo não entra)
+    const comQuestoes = run({ questions: q(17, 20), minutes: 10 });
+    expect(comQuestoes.explanation.modifiers.some((m) => m.key === 'tempo')).toBe(false);
   });
 });
 
@@ -246,7 +303,7 @@ describe('revisão adaptativa', () => {
     const normal = suggestedQuestions(2, 'MEDIUM', false);
     expect(r.suggestedQuestions.min).toBeGreaterThan(normal.min);
     expect(r.suggestedQuestions.max).toBeGreaterThan(normal.max);
-    expect(r.suggestedMethods).toEqual(['QUESTOES']);
+    expect(r.suggestedMethods).toEqual(['QUESTOES', 'FLASHCARDS', 'RECALL']);
 
     // No dia seguinte, as questões decidem: bom desempenho avança a etapa normalmente
     // (fazer as questões extras sugeridas já conta como volume acima do normal)

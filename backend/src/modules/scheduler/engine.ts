@@ -128,15 +128,27 @@ export function measuredScore(
  * da configuração: ex.: 7 questões → ×0,74 · 15 → ×0,90 · 25 → ×1,05 · 34 → ×1,14.
  */
 export function questionCountFactor(questions: number, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG): number {
-  const points = [...config.questionCount.points].sort((a, b) => a.questions - b.questions);
+  return interpolate(questions, config.questionCount.points.map((p) => ({ x: p.questions, factor: p.factor })));
+}
+
+/**
+ * Fator do tempo de estudo quando não há questões (referência = ×1):
+ * ex.: 5 min → ×0,80 · 15 → ×0,90 · 30 → ×1 · 45 → ×1,05 · 60 → ×1,10 · 90+ → ×1,15.
+ */
+export function studyTimeFactor(minutes: number, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG): number {
+  return interpolate(minutes, config.studyTime.points.map((p) => ({ x: p.minutes, factor: p.factor })));
+}
+
+/** Interpolação linear entre pontos (fora deles vale o ponto da ponta), 2 casas. */
+function interpolate(x: number, raw: { x: number; factor: number }[]): number {
+  const points = [...raw].sort((a, b) => a.x - b.x);
   if (!points.length) return 1;
-  if (questions <= points[0].questions) return points[0].factor;
+  if (x <= points[0].x) return points[0].factor;
   const last = points[points.length - 1];
-  if (questions >= last.questions) return last.factor;
-  const i = points.findIndex((p) => p.questions >= questions);
+  if (x >= last.x) return last.factor;
+  const i = points.findIndex((p) => p.x >= x);
   const [a, b] = [points[i - 1], points[i]];
-  const factor = a.factor + ((questions - a.questions) / (b.questions - a.questions)) * (b.factor - a.factor);
-  return Math.round(factor * 100) / 100;
+  return Math.round((a.factor + ((x - a.x) / (b.x - a.x)) * (b.factor - a.factor)) * 100) / 100;
 }
 
 /** "< 60% → 3 dias · 60–65% → 10 · …" (texto da tabela da 1ª revisão) */
@@ -244,15 +256,23 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
 
   const accuracy = accuracyOf(contact.questions);
   const passiveOnly = isPassiveOnly(contact, config);
-  // Só leitura/estudo não mede retenção: a autoavaliação é registrada, mas não pontua
-  const { score, formula } = passiveOnly ? { score: null, formula: null } : computeScore(contact, config);
+  // A revisão D1 pode ser feita com teoria/leitura: conta como revisão e nunca gera outra D1
+  const pendingCheckup = !!input.pendingCheckup && !!state;
+  const passiveAsReview = passiveOnly && pendingCheckup;
+  // Fora da D1, só leitura/estudo não mede retenção: a autoavaliação é registrada, mas não pontua
+  const { score, formula } = passiveOnly && !passiveAsReview ? { score: null, formula: null } : computeScore(contact, config);
   const { trend, previousScore, reference } = computeTrend(score, history, config);
 
   const qualityLabel = contact.quality ? config.score.qualityLabels[String(contact.quality)] : null;
   const questionCount = contact.questions?.total ?? 0;
-  const referenceQuestions = config.questionCount.reference;
-  // Quantidade de questões: só quando há percentual de acertos (sem questões, fica neutro)
-  const quantityFactor = accuracy !== null ? questionCountFactor(questionCount, config) : 1;
+  const minutes = contact.minutes ?? 0;
+  // Quanto a pessoa praticou: quantidade de questões; sem questões, o tempo de estudo
+  const amount =
+    accuracy !== null
+      ? { key: 'questoes', factor: questionCountFactor(questionCount, config) }
+      : minutes > 0
+        ? { key: 'tempo', factor: studyTimeFactor(minutes, config) }
+        : null;
   // Ainda não há 1ª revisão definida (D0 ou verificação que vai defini-la)
   const noMeasureYet = !state || state.lastScore === null;
   const elapsedDays = state ? diffDays(state.lastContactOn, contact.date) : null;
@@ -273,7 +293,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   if (qualityLabel) {
     steps.push({
       label: 'Autoavaliação',
-      detail: passiveOnly
+      detail: passiveOnly && !passiveAsReview
         ? `${qualityLabel} (registrada, mas sem questões ela não define o intervalo)`
         : `${qualityLabel} (${config.score.qualityScores[String(contact.quality)]} pontos)`,
     });
@@ -282,8 +302,8 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     steps.push({ label: 'Pontuação combinada', detail: formula });
   }
 
-  // Primeiro contato com desempenho medido (D0, ou a verificação após um D0 só de leitura)
-  const firstMeasure = !passiveOnly && noMeasureYet;
+  // Primeiro contato que define a 1ª revisão (D0 ativo, ou a revisão D1 após um D0 só de leitura)
+  const firstMeasure = (!passiveOnly || passiveAsReview) && noMeasureYet;
   const hasPercentual = accuracy !== null && questionCount >= config.firstReview.minQuestions;
 
   // ── 2. Faixa de desempenho ─────────────────────────────────────────────
@@ -298,9 +318,10 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       band = capped;
     }
   }
-  // Na 1ª revisão a data vem da tabela de percentual, não da regra da faixa
-  if (band && !(firstMeasure && hasPercentual)) steps.push({ label: `Faixa: ${band.label}`, detail: band.rule });
-  else if (!passiveOnly && !band) steps.push({ label: 'Sem medida de desempenho', detail: 'Nenhuma questão nem autoavaliação registrada neste contato.' });
+  // Na 1ª revisão a data vem da tabela, não da regra da faixa
+  if (band && !firstMeasure) steps.push({ label: `Faixa: ${band.label}`, detail: band.rule });
+  else if (!band && !firstMeasure && (!passiveOnly || passiveAsReview))
+    steps.push({ label: 'Sem medida de desempenho', detail: 'Nenhuma questão nem autoavaliação registrada neste contato.' });
 
   // ── 3. Movimento na escada ─────────────────────────────────────────────
   const easeFrom = state?.ease ?? config.ease.initial;
@@ -311,33 +332,54 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   let isLapse = false;
   let suggestTheory = false;
   let quantityApplies = false;
-  // Sem percentual confiável no 1º contato, ou só leitura → verificação com questões amanhã
-  const checkup = passiveOnly || (firstMeasure && !hasPercentual);
+  let measured: number | null = score; // pontuação que fica registrada como "último desempenho"
+  // Só leitura (fora da própria D1) → revisão D1 amanhã
+  const checkup = passiveOnly && !passiveAsReview;
 
   if (checkup) {
     stage = state ? state.stage : 0;
     growth = false;
     baseInterval = config.passiveFollowUp.intervalDays;
     const plan = reviewPlan(stage, size, { checkup: true, firstMeasure: noMeasureYet }, config);
-    const next = `${plan.questions.min}–${plan.questions.max} questões`;
-    if (passiveOnly) {
-      steps.push({
-        label: state ? 'Revisão só de estudo/leitura' : 'Primeiro contato só com estudo/leitura',
-        detail:
-          `Estudo sem questões não mede quanto você lembra. A próxima revisão fica para o dia seguinte, com ${next}` +
-          (firstMeasure
-            ? '; o percentual dessas questões define a data da 1ª revisão.'
-            : `; a etapa ${stageLabel(stage, config)} é mantida até o resultado das questões.`),
-      });
-    } else {
-      steps.push({
-        label: questionCount ? 'Poucas questões para medir' : 'Sem percentual de acertos',
-        detail:
-          (questionCount
-            ? `Com ${questionCount} ${questionCount === 1 ? 'questão' : 'questões'} o percentual ainda não é confiável. `
-            : 'A 1ª revisão é definida pelo percentual em questões. ') +
-          `Amanhã faça ${next} para definir a data da 1ª revisão.`,
-      });
+    steps.push({
+      label: state ? 'Revisão só de estudo/leitura' : 'Primeiro contato só com estudo/leitura',
+      detail:
+        `Estudo sem questões não mede quanto você lembra. Amanhã faça a revisão D1 como preferir — ${plan.questions.min}–${plan.questions.max} questões, ` +
+        'flashcards, recall ou teoria — e marque como foi' +
+        (noMeasureYet
+          ? ': a data da 1ª revisão sai do seu desempenho nela.'
+          : `; a etapa ${stageLabel(stage, config)} é mantida até essa revisão.`),
+    });
+  } else if (firstMeasure && !hasPercentual) {
+    // 1ª revisão sem questões suficientes: autoavaliação (mesma tabela) + tempo + dificuldade
+    const tiers = [...config.firstReview.tiers].sort((a, b) => b.min - a.min);
+    const hasRating = contact.quality != null;
+    const perf = score === null ? config.firstReview.assumedScore : hasRating ? score : Math.min(score, config.firstReview.fewQuestionsMaxScore);
+    const tier = tiers.find((t) => perf >= t.min) ?? tiers[tiers.length - 1];
+    const perfBand = bandFor(perf, config);
+    stage = tier.stage;
+    growth = false;
+    baseInterval = tier.days;
+    measured = score === null ? perf : Math.min(score, perf);
+    suggestTheory = score !== null && (perfBand.suggestTheory ?? false);
+    if (score !== null) ease = clamp(easeFrom + perfBand.easeDelta, config.ease.min, config.ease.max);
+    const days = `${tier.days} ${tier.days === 1 ? 'dia' : 'dias'}`;
+    steps.push({
+      label: hasRating ? '1ª revisão pela autoavaliação' : score === null ? '1ª revisão sem medida' : '1ª revisão com poucas questões',
+      detail:
+        (hasRating
+          ? `Sem ${config.firstReview.minQuestions} questões ou mais, vale sua autoavaliação: ${qualityLabel} (${fmt(perf, 0)} pontos) → ${days}`
+          : score === null
+            ? `Sem questões nem autoavaliação, consideramos desempenho médio (${perf} pontos) → ${days}`
+            : `Com menos de ${config.firstReview.minQuestions} questões e sem autoavaliação, a pontuação vai no máximo até ${perf} → ${days}`) +
+        ` (mesma tabela do percentual: ${firstReviewTableText(config)}).`,
+    });
+    // Tempo e dificuldade ajustam a data (exceto na faixa mais baixa, que já volta logo)
+    quantityApplies = tier !== tiers[tiers.length - 1];
+    if (quantityApplies && contact.difficulty) {
+      const f = config.difficultyFactors[String(contact.difficulty)] ?? 1;
+      const name = ['', 'fácil', 'média', 'difícil'][contact.difficulty];
+      if (f !== 1) modifiers.push({ key: 'dificuldade', label: `Dificuldade percebida ${name}`, factor: f });
     }
   } else if (firstMeasure) {
     // 1ª revisão: data definida pela tabela de percentual de acertos
@@ -394,7 +436,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       const name = ['', 'fácil', 'média', 'difícil'][contact.difficulty];
       if (f !== 1) modifiers.push({ key: 'dificuldade', label: `Dificuldade percebida ${name}`, factor: f });
     }
-  } else if (state && band) {
+  } else if (state && band && !band.growth && !firstMeasure) {
     steps.push({
       label: 'Sem bônus',
       detail: 'Com desempenho abaixo de 70% o intervalo-base da etapa é aplicado sem aumentos nem ajuste pela quantidade de questões.',
@@ -427,10 +469,10 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   // Com bom desempenho, parte de no mínimo o intervalo-base da etapa…
   const floor = growth && config.growthFloorAtBase ? Math.min(stageInterval(stage, config), config.maxIntervalDays) : 0;
   const beforeQuantity = Math.max(computed, floor);
-  // …e a quantidade de questões ajusta a partir daí (menos de 20 encurta, mais alonga)
-  const applyQuantity = quantityApplies && quantityFactor !== 1;
-  const intervalDays = applyQuantity
-    ? Math.round(clamp(beforeQuantity * quantityFactor, config.minIntervalDays, config.maxIntervalDays))
+  // …e a quantidade de questões (ou, sem questões, o tempo de estudo) ajusta a partir daí
+  const applyAmount = quantityApplies && amount !== null && amount.factor !== 1;
+  const intervalDays = applyAmount
+    ? Math.round(clamp(beforeQuantity * amount!.factor, config.minIntervalDays, config.maxIntervalDays))
     : beforeQuantity;
   const dueOn = addDays(contact.date, intervalDays);
   const lapses = (state?.lapses ?? 0) + (isLapse ? 1 : 0);
@@ -448,15 +490,23 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       detail: `Com desempenho a partir de 70%, a etapa ${stageLabel(stage, config)} parte de no mínimo ${floor} dias.`,
     });
   }
-  if (applyQuantity) {
+  const days = (n: number) => `${n} ${n === 1 ? 'dia' : 'dias'}`;
+  if (applyAmount && amount!.key === 'questoes') {
     const n = `${questionCount} ${questionCount === 1 ? 'questão' : 'questões'}`;
     steps.push({
       label: 'Quantidade de questões',
       detail:
-        `${n} (referência: ${referenceQuestions}) → ×${fmt(quantityFactor)}: ${beforeQuantity} → ${intervalDays} ${intervalDays === 1 ? 'dia' : 'dias'}. ` +
-        (quantityFactor < 1
+        `${n} (referência: ${config.questionCount.reference}) → ×${fmt(amount!.factor)}: ${beforeQuantity} → ${days(intervalDays)}. ` +
+        (amount!.factor < 1
           ? 'Com menos questões o resultado é menos seguro, então a próxima revisão fica um pouco mais próxima.'
           : 'Mais questões dão mais segurança ao resultado, então a próxima revisão pode ficar um pouco mais longe.'),
+    });
+  } else if (applyAmount) {
+    steps.push({
+      label: 'Tempo de estudo',
+      detail:
+        `${minutes} min sem questões (referência: ${config.studyTime.reference} min) → ×${fmt(amount!.factor)}: ${beforeQuantity} → ${days(intervalDays)}. ` +
+        (amount!.factor < 1 ? 'Uma revisão curta fixa menos, então a próxima fica um pouco mais próxima.' : 'Uma revisão mais longa fixa mais, então a próxima pode ficar um pouco mais longe.'),
     });
   }
   if (Math.abs(ease - easeFrom) > 1e-9) {
@@ -480,16 +530,17 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     ease: Math.round(ease * 1000) / 1000,
     intervalDays,
     lastContactOn: contact.date,
-    // Poucas questões no 1º contato ainda não definem a 1ª revisão: a verificação define
-    lastScore: score === null || (checkup && firstMeasure) ? (state?.lastScore ?? null) : Math.round(score * 10) / 10,
+    lastScore: measured === null ? (state?.lastScore ?? null) : Math.round(measured * 10) / 10,
     contacts: (state?.contacts ?? 0) + 1,
     lapses,
   };
 
   const plan = reviewPlan(stage, size, { theory: suggestTheory, checkup, firstMeasure: checkup && noMeasureYet }, config);
-  const shownModifiers = applyQuantity
-    ? [...modifiers, { key: 'questoes', label: `Quantidade de questões (${questionCount}; referência ${referenceQuestions})`, factor: quantityFactor }]
-    : modifiers;
+  const shownModifiers = !applyAmount
+    ? modifiers
+    : amount!.key === 'questoes'
+      ? [...modifiers, { key: 'questoes', label: `Quantidade de questões (${questionCount}; referência ${config.questionCount.reference})`, factor: amount!.factor }]
+      : [...modifiers, { key: 'tempo', label: `Tempo de estudo (${minutes} min; referência ${config.studyTime.reference})`, factor: amount!.factor }];
   const label = plan.label;
   const explanation: Explanation = {
     algorithm: config.version,
@@ -511,7 +562,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       timing,
       reviewsDone,
       lapses,
-      expectedQuestions: referenceQuestions,
+      expectedQuestions: config.questionCount.reference,
     },
     checkup,
     score: score === null ? null : Math.round(score * 10) / 10,
@@ -519,7 +570,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     stage: {
       from: state ? state.stage : null,
       to: stage,
-      fromLabel: state ? stageLabel(state.stage, config) : 'D0',
+      fromLabel: state ? reviewLabel(state.stage, pendingCheckup, config) : 'D0',
       toLabel: label,
     },
     baseIntervalDays: baseInterval,

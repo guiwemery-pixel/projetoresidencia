@@ -33,7 +33,7 @@ desde o último contato**, porque as datas reais se deslocam com a adaptação.
 
 Não há mais D1 nem D7 na escada. O **D3** não é uma etapa do caminho normal: é o reforço de quem
 fica abaixo de 60% na 1ª revisão, vai mal (“fraco”) no D10 ou tem resultado crítico (< 50%) em
-qualquer revisão. O rótulo **D1** só aparece na verificação com questões depois de um estudo só de
+qualquer revisão. O rótulo **D1** só aparece na revisão do dia seguinte a um estudo só de
 leitura (regra abaixo).
 
 ## 2. Pontuação do contato (0–100)
@@ -57,7 +57,7 @@ vale a menor entre essa conta e a conta com o peso normal (0,70). Ex.: 7/7 + Raz
 
 Só questões → pontuação = % de acertos. Só autoavaliação (com flashcards/recall) → pontos da
 autoavaliação. **Só estudo/leitura** (teoria, aula, vídeo, leitura, resumo — sem questões nem
-recuperação ativa) **não pontua**: ver a regra de verificação abaixo.
+recuperação ativa) **não pontua**, exceto quando é a própria revisão D1: ver a regra abaixo.
 
 Exemplos da especificação: 90% + Dominei = 93 · 70% + Razoável = 70 · 50% + Tive dificuldade = 50 ·
 20% + Esqueci = 20.
@@ -78,17 +78,17 @@ com menos de 20, a quantidade de questões (seção 4) o traz um pouco para meno
 
 Trava de segurança: com menos de 5 questões e sem autoavaliação, a faixa máxima é “Bom”.
 
-**Revisão só de estudo/leitura → verificação no dia seguinte.** Ler de novo não mede quanto você
+**Revisão só de estudo/leitura → revisão D1 no dia seguinte.** Ler de novo não mede quanto você
 lembra. Quando o contato do dia é só estudo/leitura (inclusive no D0), a próxima revisão fica para
-o **dia seguinte** (rótulo D1), focada em **questões** e com **mais questões que o normal**
-(1,5× a sugestão da etapa, ex.: 30–45 questões; depois de um D0 só de leitura, a quantidade de um
-assunto novo, 20–30). A etapa e a facilidade do
-assunto **não mudam**: quem decide o próximo passo é o resultado dessas questões. A
-autoavaliação dada à leitura fica registrada, mas não conta como desempenho.
+o **dia seguinte** (rótulo D1). A D1 pode ser feita **como a pessoa preferir**: questões (sugestão
+de 1,5× o normal da etapa, ex.: 30–45; depois de um D0 só de leitura, 20–30), flashcards, recall ou
+teoria. A etapa e a facilidade do assunto **não mudam** até a D1. **A D1 nunca gera outra D1**:
+feita com questões, vale o percentual; feita sem questões (inclusive só teoria), valem a
+autoavaliação, o tempo de estudo e a dificuldade (abaixo).
 
 **1ª revisão — definida pelo percentual de acertos.** A data da primeira revisão sai do
-percentual de acertos do primeiro contato medido (o D0 com questões, ou a verificação com questões
-feita depois de um D0 só de leitura):
+percentual de acertos do primeiro contato medido (o D0 com questões, ou a revisão D1 feita depois
+de um D0 só de leitura):
 
 | Acertos | 1ª revisão em | Posição na escada |
 |---|---|---|
@@ -98,8 +98,13 @@ feita depois de um D0 só de leitura):
 | 71–80% | 20 dias | D21 |
 | 81% ou mais | 23 dias | D21 |
 
-São necessárias pelo menos 5 questões; com menos, o sistema pede a verificação com questões no
-dia seguinte, e é ela que define a data. Abaixo de 50% também sugere voltar à teoria. A
+**Sem 5 questões ou mais** (ex.: D1 com flashcards, recall ou teoria), a data sai da
+**autoavaliação** na mesma tabela — 😄 Dominei e 🙂 Fui bem → 23 dias · 😐 Razoável → 13 ·
+😕 Tive dificuldade e 😣 Esqueci → 3 —, ajustada pelo **tempo de estudo** (30 min = ×1; ex.: 20 min
+→ ×0,93, 60 min → ×1,1) e pela **dificuldade** marcada (fácil ×1,1 · difícil ×0,85). Sem
+autoavaliação, considera desempenho médio (70 → 13 dias); com 1 a 4 questões e sem autoavaliação, a
+pontuação vai no máximo até 80. Abaixo de 60 são sempre 3 dias. Abaixo de 50% também sugere voltar à
+teoria. A
 **quantidade de questões** ajusta essa data (seção 4): com 20 questões vale a tabela exata; 85% em
 7 questões → 17 dias em vez de 23; 85% em 40 questões → 28 dias. Abaixo de 60% são sempre 3 dias.
 Da 1ª revisão em diante, valem as faixas acima. A tabela é configurável (`firstReview.tiers`).
@@ -114,6 +119,7 @@ Da 1ª revisão em diante, valem as faixas acima. A tabela é configurável (`fi
 | **Crédito pelo intervalo real** | Revisão feita atrasada e bem: o novo intervalo não fica abaixo de dias decorridos × 1,5 (excelente), × 1,2 (bom) ou × 1,0 (mediano). |
 | **Mínimo da etapa** | O resultado não fica abaixo do intervalo-base da etapa (ex.: facilidade baixa reduz o bônus, mas o D21 continua com pelo menos 21 dias). |
 | **Quantidade de questões** | Aplicada por último, sobre o resultado acima (tabela abaixo). |
+| **Tempo de estudo** (só quando não há questões) | 30 min = ×1 · 5 min ×0,80 · 15 min ×0,90 · 60 min ×1,10 · 90 min ou mais ×1,15 — gradual, também aplicado por último. |
 
 O produto dos modificadores (sem a quantidade) é limitado a 0,5–1,6 e o intervalo final a 1–180 dias.
 
@@ -185,18 +191,27 @@ assunto — as próximas subidas serão mais cautelosas. Também gera a notifica
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | só teoria, 🙂 | amanhã — verificação com 20–30 questões |
-| verificação | 14/20 = 70% | **D10 em 13 dias** (tabela: 66–70%) |
+| D0 | só teoria, 🙂 | amanhã — revisão D1 (20–30 questões, flashcards, recall ou teoria) |
+| D1 | 14/20 = 70% | **D10 em 13 dias** (tabela: 66–70%) |
 | 1ª revisão | 17/20, 🙂 | D21 em 22 dias |
 | 2ª revisão | 19/20, 😄 | D60 em 81 dias |
 
-**Revisão feita só com leitura + mais questões na verificação**
+**D1 feita sem questões**
+
+| Contato | Resultado | Próxima revisão |
+|---|---|---|
+| D0 | só leitura | amanhã — revisão D1 |
+| D1 | flashcards, 😐 Razoável, 20 min | **D10 em 12 dias** (Razoável → 13 dias × 0,93 pelo tempo) |
+| D1 (outro caso) | flashcards, 🙂 Fui bem, 45 min, difícil | **D21 em 21 dias** (23 × 0,85 ≈ 20 → × 1,05) |
+| D1 (outro caso) | só teoria, 🙂 Fui bem, 30 min | **D21 em 23 dias** — teoria também vale na D1 |
+
+**Revisão feita só com leitura + mais questões na D1**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
 | D0 | 16/20 = 80% | 1ª revisão em 20 dias |
 | 1ª revisão | 18/20 = 90% | D60 em 85 dias |
-| 2ª revisão | só leitura, 🙂 | **amanhã** — verificação com 30–45 questões, etapa mantida |
+| 2ª revisão | só leitura, 🙂 | **amanhã** — revisão D1 (30–45 questões sugeridas), etapa mantida |
 | dia seguinte | 34/40 = 85% | **D90 em 118 dias** (98 × 1,2 pelas 40 questões; seriam 98 com 20) |
 
 ## 6. Transparência (“Por quê?”)
@@ -220,7 +235,8 @@ ON CONFLICT (key) DO UPDATE SET config = EXCLUDED.config, version = EXCLUDED.ver
 A API recarrega a configuração em até 1 minuto. As novas regras valem para os próximos contatos;
 o histórico já registrado é preservado (só é recalculado se um estudo daquele assunto for editado
 ou excluído). Os parâmetros ativos ficam visíveis em **Perfil → Algoritmo de revisão**. Exemplos:
-`{"passiveFollowUp": {"questionsMultiplier": 2}}` (verificação com o dobro de questões) ou
+`{"passiveFollowUp": {"questionsMultiplier": 2}}` (D1 com o dobro de questões sugeridas),
+`{"studyTime": {"reference": 45}}` (45 min passam a valer ×1 — ajuste os `points` junto) ou
 `{"questionCount": {"points": [{"questions": 0, "factor": 0.7}, {"questions": 10, "factor": 0.85}, {"questions": 20, "factor": 1}, {"questions": 40, "factor": 1.25}]}}`
 (ajuste mais suave para menos e mais forte para mais; a lista substitui a padrão inteira e
 `reference` deve ser a quantidade com fator 1).

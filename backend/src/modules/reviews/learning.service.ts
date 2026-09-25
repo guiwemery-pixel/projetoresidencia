@@ -48,6 +48,7 @@ type SessionRow = {
   methods: StudyMethod[];
   quality: number | null;
   difficulty: number | null;
+  durationMinutes?: number;
   questionSessions: { total: number; correct: number }[];
 };
 
@@ -57,7 +58,7 @@ export function groupContacts(sessions: SessionRow[]): DayContact[] {
     const date = fromDb(s.studiedOn);
     let day = byDay.get(date);
     if (!day) {
-      day = { date, lastSessionId: s.id, evidence: { date, methods: [], questions: null, quality: null, difficulty: null } };
+      day = { date, lastSessionId: s.id, evidence: { date, methods: [], questions: null, quality: null, difficulty: null, minutes: 0 } };
       byDay.set(date, day);
     }
     day.lastSessionId = s.id;
@@ -66,6 +67,7 @@ export function groupContacts(sessions: SessionRow[]): DayContact[] {
     for (const q of s.questionSessions) {
       ev.questions = { total: (ev.questions?.total ?? 0) + q.total, correct: (ev.questions?.correct ?? 0) + q.correct };
     }
+    ev.minutes = (ev.minutes ?? 0) + (s.durationMinutes ?? 0);
     if (s.quality) ev.quality = s.quality as Quality;
     if (s.difficulty) ev.difficulty = s.difficulty as Difficulty;
   }
@@ -82,6 +84,7 @@ async function loadContacts(tx: Tx, userId: string, subjectId: string): Promise<
       methods: true,
       quality: true,
       difficulty: true,
+      durationMinutes: true,
       questionSessions: { select: { total: true, correct: true } },
     },
   });
@@ -178,6 +181,7 @@ export async function rebuildSubject(tx: Tx, userId: string, subjectId: string):
         contact: contact.evidence,
         history: [...history],
         scheduledFor: pending?.dueOn ?? null,
+        pendingCheckup: pending?.checkup ?? false,
         subjectSize: subject.size,
       },
       config,
@@ -241,6 +245,7 @@ export async function processContact(tx: Tx, userId: string, subjectId: string, 
       contact: contact.evidence,
       history,
       scheduledFor: pending ? fromDb(pending.scheduledFor) : null,
+      pendingCheckup: pending?.checkup ?? false,
       subjectSize: subject.size,
     },
     config,

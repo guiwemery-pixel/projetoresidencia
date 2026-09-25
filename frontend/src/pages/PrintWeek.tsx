@@ -233,7 +233,7 @@ export default function PrintWeekPage() {
               <b className="text-[#1c5cab]">D3</b> reforço (desempenho abaixo de 60%)
             </span>
             <span>
-              <b className="text-[#1c5cab]">✎</b> verificação com questões (após leitura)
+              <b className="text-[#1c5cab]">✎</b> revisão D1 após leitura (questões, flashcards ou teoria)
             </span>
             <span>Como foi: circule 😄 dominei · 🙂 fui bem · 😐 razoável · 😕 dificuldade · 😣 esqueci</span>
           </div>

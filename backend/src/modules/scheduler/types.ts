@@ -36,6 +36,8 @@ export interface ContactEvidence {
   questions: { total: number; correct: number } | null;
   quality: Quality | null;
   difficulty: Difficulty | null;
+  /** Tempo de estudo do dia (minutos); pesa quando não há questões */
+  minutes?: number | null;
 }
 
 export interface LearningSnapshot {
@@ -63,6 +65,8 @@ export interface ScheduleInput {
   /** Data para a qual a revisão concluída por este contato estava prevista */
   scheduledFor?: string | null;
   subjectSize?: SubjectSize;
+  /** A revisão concluída por este contato é a D1 (depois de um estudo só de leitura) */
+  pendingCheckup?: boolean;
 }
 
 export interface Modifier {

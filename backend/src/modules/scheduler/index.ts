@@ -14,6 +14,7 @@ export {
   suggestedMethods,
   suggestedQuestions,
   questionCountFactor,
+  studyTimeFactor,
   reviewPlan,
   firstReviewTableText,
   isPassiveOnly,
