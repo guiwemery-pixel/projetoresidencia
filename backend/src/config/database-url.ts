@@ -39,3 +39,20 @@ export function databaseEnvNames(env: Env = process.env) {
 }
 
 export const isLocalUrl = (url: string) => /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
+
+/**
+ * Bancos na nuvem (ex.: Neon) "dormem" quando ficam parados e levam alguns
+ * segundos para acordar — mais que os 5 s que o Prisma espera por padrão.
+ * Acrescenta `connect_timeout` (se ainda não houver) em URLs remotas.
+ */
+export function withConnectTimeout(raw: string, seconds = 15): string {
+  if (isLocalUrl(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    if (url.searchParams.has('connect_timeout')) return raw;
+    url.searchParams.set('connect_timeout', String(seconds));
+    return url.toString();
+  } catch {
+    return raw; // URL fora do padrão: usa como está
+  }
+}

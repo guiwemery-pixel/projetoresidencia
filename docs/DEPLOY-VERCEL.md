@@ -42,6 +42,7 @@ funciona. Corrija em *Settings → Build and Deployment → Root Directory*: apa
 |---|---|
 | Build falha com “❌ BANCO DE DADOS NÃO CONFIGURADO” | Banco não conectado ao projeto (passo 3) ou não marcado para o ambiente do deploy. |
 | Build falha com “aponta para localhost” | Sobrou uma variável de exemplo: apague-a em *Settings → Environment Variables*. |
+| Build falha nas migrations com `P1001`/`P1002` (“Can't reach database server”, “Timed out”) | Banco Neon acordando ou ocupado por outro deploy. O script já espera e tenta 3 vezes; se persistir, confira no painel do Neon se o banco está ativo e faça *Redeploy*. |
 | Onde ver o motivo da falha | Na página do deploy, em *Deploy Logs*, role a caixa de logs até o fim: a última linha com ❌ explica. |
 | Site abre, mas login/cadastro dá erro | *Root Directory* apontando para `frontend`, ou deploy anterior ao banco (faça *Redeploy*). |
 | Erro 500 na API | Veja *Deployments → (deploy) → Logs/Functions*; a mensagem de erro aparece ali. |
