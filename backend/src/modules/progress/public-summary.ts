@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { todayIn } from '../../lib/dates.js';
 import { computeProgress, type ComponentKey, type DetailedProgress, type Level, type TrendDir } from './progress.service.js';
+import { invalidateCompareCache } from './group-compare.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FRONTEIRA DE PRIVACIDADE
@@ -64,6 +65,7 @@ const cache = new Map<string, { at: number; value: DetailedProgress }>();
 
 export function invalidateProgressCache(userId: string) {
   cache.delete(userId);
+  invalidateCompareCache(userId);
 }
 
 async function cachedProgress(userId: string, timezone: string) {

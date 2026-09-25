@@ -325,6 +325,64 @@ describe('privacidade entre usuários', () => {
     expect((await outsider.agent.put(`/api/groups/${groupId}/favorite`).send({ favorite: true })).status).toBe(404);
   });
 
+  it('comparativos do grupo: só níveis relativos, destaques e ritmo — nunca números', async () => {
+    const { a, b, outsider, groupId } = await setup();
+    const area = await firstArea(b.agent);
+    await b.agent.post('/api/studies').send({
+      newSubject: { areaId: area.id, name: 'Colangite aguda' },
+      date: today,
+      durationMinutes: 30,
+      methods: ['FLASHCARDS', 'QUESTOES'],
+      questions: { total: 40, correct: 28 },
+    });
+    expect((await outsider.agent.get(`/api/groups/${groupId}/compare`)).status).toBe(404);
+
+    const res = await b.agent.get(`/api/groups/${groupId}/compare?period=7`);
+    expect(res.status).toBe(200);
+    const body = res.body;
+    const guilherme = body.members.find((m: { userId: string }) => m.userId === a.user.id);
+    const maria = body.members.find((m: { userId: string }) => m.userId === b.user.id);
+
+    // Guilherme: 20 questões (85%), 75 min · Maria: 40 questões (70%), 30 min, flashcards
+    expect(maria.levels).toMatchObject({ questoes: 'acima', tempo: 'abaixo', acertos: 'abaixo', flashcards: 'muito-acima' });
+    expect(guilherme.levels).toMatchObject({ questoes: 'abaixo', tempo: 'acima', acertos: 'acima', flashcards: 'sem-registro' });
+    expect(guilherme.mix).toEqual({ questoes: 50, teoria: 50, flashcards: 0, simulados: 0 });
+    const top = Object.fromEntries(body.highlights.map((h: { key: string; names: string[] }) => [h.key, h.names]));
+    expect(top).toMatchObject({ questoes: ['Maria'], tempo: ['Guilherme'], acertos: ['Guilherme'], flashcards: ['Maria'] });
+    expect(body.me).toMatchObject({ levels: maria.levels, comparedWith: 1, sharing: true });
+    expect(body.pulse.questoes).toEqual({ direction: 'new', percent: null });
+
+    // Lista de permissão: nenhum número além dos campos relativos/contagens de pessoas
+    const allowed = /^(period|memberCount|sharingCount|activeCount|me\.comparedWith|members\.\d+\.mix\.\w+|pulse\.\w+\.(percent|points))$/;
+    const walk = (v: unknown, path: string) => {
+      if (typeof v === 'number') expect(path).toMatch(allowed);
+      else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k);
+    };
+    walk(body, '');
+    const levels = new Set(['muito-acima', 'acima', 'media', 'abaixo', 'muito-abaixo', 'sem-registro']);
+    for (const m of body.members) {
+      expect(Object.keys(m).every((k) => ['userId', 'name', 'avatar', 'isMe', 'shared', 'levels', 'strengths', 'mix'].includes(k))).toBe(true);
+      for (const l of Object.values(m.levels) as string[]) expect(levels.has(l)).toBe(true);
+      for (const v of Object.values(m.mix) as number[]) expect(v % 10).toBe(0);
+    }
+    const json = JSON.stringify(body);
+    for (const leak of ['Pancreatite', 'Colangite', 'minutes', '"questions"', '"correct"', today, a.email]) expect(json).not.toContain(leak);
+  });
+
+  it('comparativos respeitam quem não compartilha', async () => {
+    const { a, b, groupId } = await setup();
+    await a.agent.patch('/api/me').send({ shareProgress: false });
+    const forMaria = (await b.agent.get(`/api/groups/${groupId}/compare`)).body;
+    const guilherme = forMaria.members.find((m: { userId: string }) => m.userId === a.user.id);
+    expect(guilherme).toEqual({ userId: a.user.id, name: 'Guilherme', avatar: null, isMe: false, shared: false });
+    expect(forMaria.sharingCount).toBe(1);
+    expect(forMaria.highlights).toEqual([]);
+    // Quem não compartilha ainda vê a própria posição (só para si)
+    const forGuilherme = (await a.agent.get(`/api/groups/${groupId}/compare`)).body;
+    expect(forGuilherme.me).toMatchObject({ comparedWith: 1, sharing: false });
+    expect(forGuilherme.members.find((m: { isMe: boolean }) => m.isMe).shared).toBe(false);
+  });
+
   it('o próprio usuário vê o cálculo detalhado do indicador', async () => {
     const { a } = await setup();
     const progress = await a.agent.get('/api/me/progress');

@@ -5,7 +5,8 @@ estudantes de Medicina (residência / ENAMED), mas com arquitetura pronta para o
 
 Cada pessoa tem sua conta e vê **todos os próprios dados em detalhe**: horas, questões, acertos,
 revisões, metas, simulados e provas. Do grupo de amigos, cada um vê **apenas um resumo visual**
-do progresso dos outros (🟢🟡🟠🔴), nunca os números.
+do progresso dos outros (🟢🟡🟠🔴) e **comparações relativas** (acima, na média ou abaixo da média do
+grupo em questões, acertos, tempo, flashcards, constância, revisões e assuntos), nunca os números.
 
 ```
 GUILHERME
@@ -20,7 +21,7 @@ GUILHERME
 
 | Módulo | Destaques |
 |---|---|
-| **Contas e grupos** | Cadastro/login com sessão segura, avatar, perfil. Grupos com código/link de convite, vários grupos por pessoa, administração (remover integrante, trocar código). |
+| **Contas e grupos** | Cadastro/login com sessão segura, avatar, perfil. Grupos com código/link de convite, vários grupos por pessoa, administração (remover integrante, trocar código). Comparativos de 7 ou 30 dias: destaques, você em relação ao grupo, ritmo do grupo, quadro por integrante e como cada um estuda. |
 | **Registro de estudos** | Área → Subárea → Assunto (cria na hora), vários tipos na mesma sessão (Teoria + Questões…), X/Y com acertos, erros e % calculados, banca, prova, dificuldade, tempo, observações e autoavaliação 😄🙂😐😕😣. |
 | **Revisão espaçada adaptativa** | Escada D0 → D10 → D21 → D60 → D90+ (reforço D3 abaixo de 60%), adaptada por desempenho, quantidade de questões (20 é a referência), autoavaliação, tendência, dificuldade, método, atraso e histórico do assunto. Cada agendamento tem um **“Por quê?”**. |
 | **Revisões e calendário** | Hoje / atrasadas / próximas / histórico, adiar/antecipar, calendário mensal com detalhe do dia e **folha semanal para imprimir/salvar em PDF** (A4, com caixas para marcar, acertos e anotações). |

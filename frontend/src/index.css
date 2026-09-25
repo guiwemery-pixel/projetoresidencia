@@ -41,6 +41,11 @@
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
+
+  /* Divergente (posição em relação à média do grupo): azul acima, vermelho abaixo */
+  --div-pos: #2a78d6;
+  --div-neg: #e34948;
+  --div-mid: #7a7873;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -69,6 +74,9 @@
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
+    --div-pos: #3987e5;
+    --div-neg: #e66767;
+    --div-mid: #9a9890;
   }
 }
 
@@ -97,6 +105,9 @@
   --series-3: #199e70;
   --series-4: #c98500;
   --series-5: #d55181;
+  --div-pos: #3987e5;
+  --div-neg: #e66767;
+  --div-mid: #9a9890;
 }
 
 html,

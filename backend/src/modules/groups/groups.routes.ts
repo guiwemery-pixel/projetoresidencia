@@ -34,6 +34,11 @@ groupsRouter.post('/join', joinLimiter, async (req, res) => {
   res.status(201).json({ id: group.id, name: group.name });
 });
 
+groupsRouter.get('/:id/compare', async (req, res) => {
+  const { period } = parse(z.object({ period: z.enum(['7', '30']).default('7') }), req.query);
+  res.json(await svc.groupCompare(currentUser(req).id, req.params.id, Number(period) as 7 | 30));
+});
+
 groupsRouter.get('/:id', async (req, res) => {
   res.json(await svc.groupBoard(currentUser(req).id, req.params.id));
 });

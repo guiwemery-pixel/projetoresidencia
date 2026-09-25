@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, EyeOff, Lock, LogOut, Minus, RefreshCw, Star, TrendingDown, TrendingUp, UserMinus, UserPlus, Users } from 'lucide-react';
+import { Award, Copy, EyeOff, Lock, LogOut, Minus, RefreshCw, Star, TrendingDown, TrendingUp, UserMinus, UserPlus, Users } from 'lucide-react';
 import { api } from '../api/client';
-import type { GroupMember } from '../api/types';
-import { useGroup, useGroups, useToggleFavoriteGroup } from '../hooks/api';
+import type { CompareDim, GroupMember } from '../api/types';
+import { useGroup, useGroupCompare, useGroups, useToggleFavoriteGroup } from '../hooks/api';
+import { GroupComparisons, strengthsText } from '../components/groups/compare';
 import { GROUP_INDICATORS as INDICATORS, LEVELS } from '../lib/constants';
 import { Avatar, Button, Card, ConfirmDialog, EmptyState, ErrorState, IconButton, Input, LevelBadge, Loading, Modal, PageHeader, ProgressBar, cx, useToast } from '../components/ui';
 
-function MemberCard({ m, canRemove, onRemove }: { m: GroupMember; canRemove: boolean; onRemove: () => void }) {
+function MemberCard({ m, strengths, canRemove, onRemove }: { m: GroupMember; strengths?: CompareDim[]; canRemove: boolean; onRemove: () => void }) {
+  const highlight = strengthsText(strengths);
   const trend = m.trend === 'up' ? { icon: TrendingUp, label: 'evoluindo', color: 'var(--good)' } : m.trend === 'down' ? { icon: TrendingDown, label: 'em queda', color: 'var(--crit)' } : { icon: Minus, label: 'estável', color: 'var(--muted)' };
   return (
     <article className={cx('card p-4', m.isMe && 'ring-2 ring-accent-wash')}>
@@ -43,6 +45,11 @@ function MemberCard({ m, canRemove, onRemove }: { m: GroupMember; canRemove: boo
             </div>
             <ProgressBar value={m.progress ?? 0} color={LEVELS[m.level!].color} height={12} label={`Progresso geral de ${m.name}`} />
           </div>
+          {highlight && (
+            <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-accent-wash px-3 py-1.5 text-xs font-medium text-ink">
+              <Award className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden /> {highlight}
+            </p>
+          )}
           <ul className="mt-4 space-y-1.5 text-sm">
             {INDICATORS.map(({ key, label, emoji }) => {
               const ind = m.indicators![key];
@@ -135,6 +142,8 @@ export default function GroupPage() {
   const groups = useGroups();
   const groupId = id ?? groups.data?.[0]?.id;
   const board = useGroup(groupId);
+  const [period, setPeriod] = useState<7 | 30>(7);
+  const compare = useGroupCompare(groupId, period);
   const [joinOpen, setJoinOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; message: string; run: () => Promise<unknown> } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -225,8 +234,8 @@ export default function GroupPage() {
       <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4 text-sm text-ink2">
         <Lock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
         <p>
-          Aqui cada pessoa aparece só com <strong className="text-ink">indicadores resumidos</strong> (ritmo, desempenho, revisões em dia, metas). Números de questões, percentuais de acerto, horas,
-          assuntos e datas continuam privados. Você pode desativar o compartilhamento em{' '}
+          Aqui cada pessoa aparece só com <strong className="text-ink">indicadores resumidos</strong> e <strong className="text-ink">comparações relativas</strong> (acima, na média ou
+          abaixo da média do grupo). Números de questões, percentuais de acerto, horas, assuntos e datas continuam privados. Você pode desativar o compartilhamento em{' '}
           <Link to="/perfil" className="font-medium text-accent">
             Perfil
           </Link>
@@ -238,11 +247,15 @@ export default function GroupPage() {
       {board.error && <ErrorState error={board.error} />}
       {data && (
         <>
+          {compare.data && <GroupComparisons data={compare.data} period={period} onPeriod={setPeriod} />}
+          {compare.isLoading && <Loading label="Montando os comparativos…" />}
+          <h2 className="pt-2 text-lg font-semibold text-ink">Integrantes</h2>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {data.members.map((m) => (
               <MemberCard
                 key={m.userId}
                 m={m}
+                strengths={compare.data?.members.find((c) => c.userId === m.userId)?.strengths}
                 canRemove={data.myRole === 'OWNER' && !m.isMe}
                 onRemove={() => setConfirm({ title: `Remover ${m.name}?`, message: 'A pessoa sai do grupo, mas nada dos dados dela é apagado.', run: () => api.del(`/groups/${data.id}/members/${m.userId}`) })}
               />

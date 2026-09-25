@@ -81,11 +81,17 @@ histórico do assunto é **reprocessado do zero** (o motor é determinístico), 
 1. **Isolamento por usuário em toda consulta.** Todos os serviços filtram por `userId` da sessão.
    Um id de outra pessoa na URL retorna **404** (não 403), para não revelar que o recurso existe.
    Os testes de integração cobrem leitura, edição, exclusão e “roubo” de assunto por outro usuário.
-2. **Fronteira de privacidade explícita.** `progress/public-summary.ts` é o *único* formato de dado
-   de um usuário que outro usuário pode receber. É montado campo a campo (lista de permissão), nunca
+2. **Fronteira de privacidade explícita.** `progress/public-summary.ts` e `progress/group-compare.ts`
+   são os *únicos* formatos de dado de um usuário que outro usuário pode receber. É montado campo a campo (lista de permissão), nunca
    por cópia do objeto detalhado — um campo novo no cálculo jamais vaza por acidente. O progresso é
    arredondado de 5 em 5. Um teste verifica que o JSON do grupo não contém nomes de assuntos, datas,
    minutos, questões, percentuais de acerto, fórmula ou detalhes.
+   Os **comparativos do grupo** (questões, acertos, tempo, flashcards/recall, constância, revisões,
+   variedade de assuntos) calculam os números no servidor e entregam só a posição em relação à
+   mediana de quem compartilha, em faixas largas (bem abaixo · abaixo · na média · acima · bem acima —
+   largas para ninguém deduzir os números dos outros comparando com os próprios), quem se destacou
+   (sem o valor), a divisão do próprio estudo em faixas de 10% e a variação do grupo somado (% de 5 em 5).
+   Um teste percorre a resposta e falha se aparecer qualquer número fora desses campos.
 3. **Opt-out.** O usuário pode desligar o compartilhamento; o grupo passa a ver só nome e avatar.
 4. **Sessões:** token aleatório de 256 bits em cookie `httpOnly`, `SameSite=Lax` e `Secure` em
    produção; o banco guarda apenas o SHA-256 do token. Troca de senha encerra as outras sessões.

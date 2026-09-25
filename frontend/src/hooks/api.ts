@@ -7,6 +7,7 @@ import type {
   Dashboard,
   Goal,
   GroupBoard,
+  GroupCompare,
   GroupListItem,
   MockExamList,
   Notification,
@@ -62,6 +63,13 @@ export const useBoards = () => useQuery({ queryKey: keys.boards, queryFn: () => 
 export const useGroups = () => useQuery({ queryKey: keys.groups, queryFn: () => api.get<GroupListItem[]>('/groups') });
 export const useGroup = (id?: string) =>
   useQuery({ queryKey: keys.group(id ?? ''), queryFn: () => api.get<GroupBoard>(`/groups/${id}`), enabled: !!id });
+export const useGroupCompare = (id: string | undefined, period: 7 | 30) =>
+  useQuery({
+    queryKey: [...keys.group(id ?? ''), 'compare', period],
+    queryFn: () => api.get<GroupCompare>(`/groups/${id}/compare`, { period }),
+    enabled: !!id,
+    placeholderData: (prev) => prev,
+  });
 export const useProgress = () => useQuery({ queryKey: keys.progress, queryFn: () => api.get<Progress>('/me/progress') });
 export const useNotifications = () =>
   useQuery({

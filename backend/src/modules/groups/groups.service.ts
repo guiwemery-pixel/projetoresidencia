@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { publicSummaries } from '../progress/public-summary.js';
+import { groupComparison, type Period } from '../progress/group-compare.js';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_MEMBERS = 50;
@@ -139,4 +140,18 @@ export async function groupBoard(userId: string, groupId: string) {
       .map((s) => ({ ...s, role: roleBy.get(s.userId)!, isMe: s.userId === userId }))
       .sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.name.localeCompare(b.name, 'pt-BR')),
   };
+}
+
+/**
+ * Comparativos do grupo: níveis relativos, destaques e ritmo do grupo — nunca
+ * números absolutos (ver progress/group-compare.ts).
+ */
+export async function groupCompare(userId: string, groupId: string, period: Period) {
+  await requireMembership(userId, groupId);
+  const members = await prisma.groupMember.findMany({ where: { groupId }, select: { userId: true } });
+  return groupComparison(
+    userId,
+    members.map((m) => m.userId),
+    period,
+  );
 }

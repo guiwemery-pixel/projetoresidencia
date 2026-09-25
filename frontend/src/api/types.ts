@@ -460,6 +460,32 @@ export interface GroupMember {
   isMe: boolean;
 }
 
+export type RelLevel = 'muito-acima' | 'acima' | 'media' | 'abaixo' | 'muito-abaixo' | 'sem-registro';
+export type CompareDim = 'questoes' | 'acertos' | 'tempo' | 'flashcards' | 'constancia' | 'revisoes' | 'assuntos';
+export type MixKey = 'questoes' | 'teoria' | 'flashcards' | 'simulados';
+export type PulseChange = { direction: 'up' | 'down' | 'steady' | 'new' | 'none'; percent: number | null };
+
+/** Comparativos do grupo: só posições relativas, nunca números de ninguém. */
+export interface GroupCompare {
+  period: 7 | 30;
+  memberCount: number;
+  sharingCount: number;
+  activeCount: number;
+  members: {
+    userId: string;
+    name: string;
+    avatar: string | null;
+    isMe: boolean;
+    shared: boolean;
+    levels?: Record<CompareDim, RelLevel>;
+    strengths?: CompareDim[];
+    mix?: Record<MixKey, number> | null;
+  }[];
+  highlights: { key: CompareDim; names: string[] }[];
+  me: { levels: Record<CompareDim, RelLevel>; comparedWith: number; sharing: boolean } | null;
+  pulse: Record<'questoes' | 'tempo' | 'flashcards' | 'revisoes', PulseChange> & { acertos: { points: number } | null };
+}
+
 export interface GroupBoard {
   id: string;
   name: string;
