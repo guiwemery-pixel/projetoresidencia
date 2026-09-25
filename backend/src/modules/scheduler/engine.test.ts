@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SCHEDULER_CONFIG, mergeConfig, scheduleNext, suggestedQuestions, type ContactEvidence, type HistoryPoint, type LearningSnapshot, type ScheduleResult } from './index.js';
+import { DEFAULT_SCHEDULER_CONFIG, computeScore, mergeConfig, questionCountFactor, reviewPlan, scheduleNext, suggestedQuestions, type ContactEvidence, type HistoryPoint, type LearningSnapshot, type ScheduleResult } from './index.js';
 
 const q = (correct: number, total: number) => ({ correct, total });
 
@@ -31,7 +31,7 @@ describe('primeiro contato (D0)', () => {
     expect(r.dueOn).toBe('2026-09-02');
     expect(r.checkup).toBe(true);
     expect(r.suggestedMethods).toEqual(['QUESTOES']);
-    expect(r.suggestedQuestions).toEqual({ min: 15, max: 25 });
+    expect(r.suggestedQuestions).toEqual({ min: 20, max: 30 });
   });
 
   it('a data da 1ª revisão sai do percentual de acertos (tabela)', () => {
@@ -41,7 +41,6 @@ describe('primeiro contato (D0)', () => {
     expect(first(11, 20)).toBe(3); // 55%  → abaixo de 60%
     expect(first(12, 20)).toBe(10); // 60%
     expect(first(13, 20)).toBe(10); // 65%
-    expect(first(10, 15)).toBe(13); // 66,7%
     expect(first(14, 20)).toBe(13); // 70%
     expect(first(15, 20)).toBe(20); // 75%
     expect(first(16, 20)).toBe(20); // 80%
@@ -62,10 +61,18 @@ describe('primeiro contato (D0)', () => {
     expect(r.suggestedMethods).toContain('TEORIA');
   });
 
-  it('com poucas questões no 1º contato pede verificação no dia seguinte', () => {
+  it('com poucas questões no 1º contato pede verificação no dia seguinte, que define a 1ª revisão', () => {
     const r = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(3, 3) }), history: [] });
     expect(r.checkup).toBe(true);
     expect(r.intervalDays).toBe(1);
+    expect(r.suggestedQuestions).toEqual({ min: 20, max: 30 });
+    const check = scheduleNext({
+      state: r.nextState,
+      contact: contact('2026-09-02', { questions: q(14, 20) }),
+      history: [{ date: '2026-09-01', score: 100, accuracy: 100 }],
+      scheduledFor: r.dueOn,
+    });
+    expect(check.intervalDays).toBe(13); // tabela: 70% → 13 dias
   });
 
   it('D0 só de leitura: o percentual da verificação define a 1ª revisão', () => {
@@ -84,9 +91,15 @@ describe('primeiro contato (D0)', () => {
     expect(r.intervalDays).toBe(30);
   });
 
-  it('mais questões no 1º contato aumentam o intervalo', () => {
-    const r = scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(34, 40) }), history: [] });
-    expect(r.intervalDays).toBe(Math.round(23 * 1.2)); // 85% com 2× o sugerido
+  it('a quantidade de questões ajusta a data da 1ª revisão', () => {
+    const first = (correct: number, total: number) =>
+      scheduleNext({ state: null, contact: contact('2026-09-01', { questions: q(correct, total) }), history: [] }).intervalDays;
+    expect(first(34, 40)).toBe(28); // 85% com 40 questões: 23 × 1,2
+    expect(first(17, 20)).toBe(23); // 85% com 20 questões: a tabela pura
+    expect(first(6, 7)).toBe(17); // 86% com 7 questões: 23 × 0,74
+    expect(first(3, 5)).toBe(7); // 60% com 5 questões: 10 × 0,7
+    expect(first(2, 5)).toBe(3); // abaixo de 60% volta em 3 dias, qualquer quantidade
+    expect(first(20, 40)).toBe(3);
   });
 });
 
@@ -241,7 +254,7 @@ describe('revisão adaptativa', () => {
     expect(next.checkup).toBe(false);
     expect(next.nextState.stage).toBe(3);
     expect(next.stageLabel).toBe('D60');
-    expect(next.explanation.modifiers.some((m) => m.key === 'volume')).toBe(true);
+    expect(next.explanation.modifiers.find((m) => m.key === 'questoes')?.factor).toBe(1.1);
   });
 
   it('flashcards/recall contam como recuperação ativa (não viram verificação)', () => {
@@ -251,19 +264,63 @@ describe('revisão adaptativa', () => {
     expect(r.band).toBe('bom');
   });
 
-  it('mais questões que o sugerido (com bom desempenho) dão intervalo maior', () => {
-    const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 7, lastContactOn: '2026-01-01', lastScore: 80, contacts: 2, lapses: 0 };
+  it('fator da quantidade de questões: 20 é a referência, gradual para menos e para mais', () => {
+    const f = (n: number) => questionCountFactor(n);
+    expect(f(20)).toBe(1);
+    expect([f(1), f(5), f(7), f(10), f(12), f(15), f(18)]).toEqual([0.62, 0.7, 0.74, 0.8, 0.84, 0.9, 0.96]);
+    expect([f(22), f(25), f(30), f(34), f(40), f(60)]).toEqual([1.02, 1.05, 1.1, 1.14, 1.2, 1.2]);
+  });
+
+  it('poucas questões encurtam e muitas alongam o intervalo, questão a questão', () => {
+    const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 10, lastContactOn: '2026-01-01', lastScore: 80, contacts: 2, lapses: 0 };
+    const run = (total: number) =>
+      scheduleNext({ state, contact: contact('2026-01-11', { questions: q(total, total) }), history: [], scheduledFor: '2026-01-11' }).intervalDays;
+    const days = [5, 7, 10, 15, 20, 25, 30, 40].map(run);
+    for (let i = 1; i < days.length; i++) expect(days[i]).toBeGreaterThan(days[i - 1]);
+    expect(run(20)).toBe(26); // 100% → D21 × 1,2 (excelente) × 1,05 (facilidade)
+    expect(run(50)).toBe(run(40)); // acima de 40 não cresce mais
+  });
+
+  it('7 questões certas + "Razoável" não levam mais para longe como 20 questões', () => {
+    const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 10, lastContactOn: '2026-01-01', lastScore: 80, contacts: 2, lapses: 0 };
+    const run = (total: number) =>
+      scheduleNext({ state, contact: contact('2026-01-11', { questions: q(total, total), quality: 3 }), history: [], scheduledFor: '2026-01-11' });
+    const sete = run(7);
+    expect(sete.score).toBe(88.6);
+    expect(sete.intervalDays).toBe(16); // D21 (21 dias) × 0,74
+    expect(sete.explanation.steps.find((s) => s.label === 'Quantidade de questões')?.detail).toMatch(/7 questões \(referência: 20\) → ×0,74: 21 → 16 dias/);
+    expect(run(20).intervalDays).toBeGreaterThanOrEqual(21);
+  });
+
+  it('com poucas questões a autoavaliação só puxa a pontuação para baixo', () => {
+    expect(computeScore({ questions: q(7, 7), quality: 3 }).score).toBeCloseTo(88.6, 1); // Razoável puxa para baixo
+    expect(computeScore({ questions: q(4, 5), quality: 5 }).score).toBe(86); // Dominei não infla: peso normal
+    expect(computeScore({ questions: q(16, 20), quality: 5 }).score).toBe(86); // mesmo resultado com 20 questões
+    // 7 questões nunca vão mais longe que 21 com o mesmo percentual e a mesma autoavaliação
+    const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 10, lastContactOn: '2026-01-01', lastScore: 80, contacts: 2, lapses: 0 };
     const run = (correct: number, total: number) =>
-      scheduleNext({ state, contact: contact('2026-01-08', { questions: q(correct, total) }), history: [], expectedQuestions: 15 });
-    const sugerido = run(12, 15); // 80%, o sugerido
-    const dobro = run(24, 30); // 80%, 2× o sugerido
-    const triplo = run(36, 45); // 80%, 3× o sugerido
-    expect(sugerido.explanation.modifiers.some((m) => m.key === 'volume')).toBe(false);
-    expect(dobro.intervalDays).toBeGreaterThan(sugerido.intervalDays);
-    expect(triplo.intervalDays).toBeGreaterThanOrEqual(dobro.intervalDays);
-    // Muitas questões com desempenho ruim não ganham bônus
-    const ruim = run(15, 30);
-    expect(ruim.explanation.modifiers.some((m) => m.key === 'volume')).toBe(false);
+      scheduleNext({ state, contact: contact('2026-01-11', { questions: q(correct, total), quality: 5 }), history: [], scheduledFor: '2026-01-11' });
+    expect(run(5, 7).intervalDays).toBeLessThan(run(15, 21).intervalDays);
+  });
+
+  it('com desempenho abaixo de 70% a quantidade não muda o intervalo', () => {
+    const state: LearningSnapshot = { stage: 3, ease: 1, intervalDays: 60, lastContactOn: '2026-01-01', lastScore: 85, contacts: 4, lapses: 0 };
+    const run = (correct: number, total: number) =>
+      scheduleNext({ state, contact: contact('2026-03-02', { questions: q(correct, total) }), history: [], scheduledFor: '2026-03-02' });
+    expect(run(6, 10).intervalDays).toBe(21); // fraco → volta para D21
+    expect(run(24, 40).intervalDays).toBe(21);
+    expect(run(24, 40).explanation.modifiers.some((m) => m.key === 'questoes')).toBe(false);
+  });
+
+  it('sugestões nunca ficam abaixo da referência de 20 questões', () => {
+    for (const size of ['SMALL', 'MEDIUM', 'LARGE'] as const) {
+      for (let stage = 0; stage < 6; stage++) expect(suggestedQuestions(stage, size, false).min).toBeGreaterThanOrEqual(20);
+      expect(suggestedQuestions(0, size, true).min).toBeGreaterThanOrEqual(20);
+    }
+    // Verificação que ainda vai definir a 1ª revisão: quantidade de assunto novo
+    expect(reviewPlan(0, 'MEDIUM', { checkup: true, firstMeasure: true }).questions).toEqual({ min: 20, max: 30 });
+    // Verificação depois de uma revisão só de leitura: mais questões que o normal
+    expect(reviewPlan(1, 'MEDIUM', { checkup: true }).questions).toEqual({ min: 30, max: 45 });
   });
 
   it('respeita o intervalo máximo configurado', () => {

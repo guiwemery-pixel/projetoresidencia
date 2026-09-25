@@ -37,8 +37,9 @@ export interface SchedulerConfig {
   /** Limites para o produto de todos os modificadores (evita saltos exagerados) */
   modifierBounds: { min: number; max: number };
   /**
-   * Nas faixas de crescimento (≥ 70%) o intervalo não fica abaixo do intervalo-base
-   * da etapa (D10 ≥ 10 dias, D21 ≥ 21…): o desempenho só pode aumentá-lo.
+   * Nas faixas de crescimento (≥ 70%) o intervalo parte de no mínimo o intervalo-base
+   * da etapa (D10 ≥ 10 dias, D21 ≥ 21…); só a quantidade de questões (abaixo da
+   * referência) pode trazê-lo para menos.
    */
   growthFloorAtBase: boolean;
   minIntervalDays: number;
@@ -69,8 +70,13 @@ export interface SchedulerConfig {
    * e mantém a etapa do assunto.
    */
   passiveFollowUp: { intervalDays: number; questionsMultiplier: number; methods: Method[]; label: string; phase: string };
-  /** Bônus no intervalo quando a pessoa faz bem mais questões que o sugerido (e vai bem) */
-  volume: { tiers: { ratio: number; factor: number }[] };
+  /**
+   * Quantidade de questões do contato: `reference` vale ×1. Menos questões encurtam
+   * o intervalo e mais questões o alongam, de forma gradual (interpolação linear
+   * entre os pontos; fora deles vale o ponto da ponta). Aplica-se às faixas
+   * ≥ 70% e à 1ª revisão (exceto a faixa mais baixa da tabela).
+   */
+  questionCount: { reference: number; points: { questions: number; factor: number }[] };
   /** Se a revisão foi feita atrasada e o desempenho foi bom, o intervalo real conta a favor */
   lateCredit: { enabled: boolean; minGrowth: Partial<Record<BandKey, number>> };
   activeMethods: Method[];
@@ -78,7 +84,7 @@ export interface SchedulerConfig {
   theoryMethods: Method[];
   /** Faixa de questões sugeridas para um assunto novo (D0), por tamanho */
   newSubjectQuestions: Record<SubjectSize, [number, number]>;
-  /** Faixa de questões sugeridas por etapa de revisão (assunto médio) */
+  /** Faixa de questões sugeridas por etapa de revisão (assunto médio; nunca abaixo da referência) */
   reviewQuestionsByStage: [number, number][];
   sizeMultipliers: Record<SubjectSize, number>;
 }
@@ -187,10 +193,16 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
     label: 'D1',
     phase: 'Verificar com questões',
   },
-  volume: {
-    tiers: [
-      { ratio: 2, factor: 1.2 },
-      { ratio: 1.5, factor: 1.1 },
+  questionCount: {
+    reference: 20,
+    points: [
+      { questions: 0, factor: 0.6 },
+      { questions: 5, factor: 0.7 },
+      { questions: 10, factor: 0.8 },
+      { questions: 15, factor: 0.9 },
+      { questions: 20, factor: 1.0 },
+      { questions: 30, factor: 1.1 },
+      { questions: 40, factor: 1.2 },
     ],
   },
   lateCredit: { enabled: true, minGrowth: { excelente: 1.5, bom: 1.2, medio: 1.0 } },
@@ -203,13 +215,13 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
     ['QUESTOES', 'SIMULADO'],
   ],
   theoryMethods: ['TEORIA', 'QUESTOES'],
-  newSubjectQuestions: { SMALL: [10, 15], MEDIUM: [15, 25], LARGE: [20, 30] },
+  newSubjectQuestions: { SMALL: [20, 25], MEDIUM: [20, 30], LARGE: [25, 35] },
   reviewQuestionsByStage: [
-    [10, 15],
-    [10, 20],
-    [15, 25],
-    [15, 25],
+    [20, 25],
     [20, 30],
+    [20, 30],
+    [20, 30],
+    [25, 40],
   ],
   sizeMultipliers: { SMALL: 0.75, MEDIUM: 1, LARGE: 1.25 },
 };

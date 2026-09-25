@@ -257,6 +257,8 @@ export async function studySuggestion(userId: string, subjectId: string) {
     prisma.learningState.findUnique({ where: { subjectId } }),
     prisma.review.findFirst({ where: { userId, subjectId, status: 'PENDING' }, orderBy: { scheduledFor: 'asc' } }),
   ]);
+  // Referência de questões (×1) e pontos do ajuste gradual, para o aviso no registro
+  const questionCount = config.questionCount;
   if (!state) {
     return {
       isNew: true,
@@ -265,12 +267,13 @@ export async function studySuggestion(userId: string, subjectId: string) {
       methods: config.theoryMethods,
       questions: suggestedQuestions(0, subject.size, true, config),
       pendingReview: null,
+      questionCount,
     };
   }
   const plan = reviewPlan(
     pending?.stage ?? state.stage,
     subject.size,
-    { theory: pending?.suggestTheory ?? false, checkup: pending?.checkup ?? false },
+    { theory: pending?.suggestTheory ?? false, checkup: pending?.checkup ?? false, firstMeasure: state.lastScore === null },
     config,
   );
   return {
@@ -281,5 +284,6 @@ export async function studySuggestion(userId: string, subjectId: string) {
     methods: plan.methods,
     questions: plan.questions,
     pendingReview: pending ? { id: pending.id, scheduledFor: fromDb(pending.scheduledFor) } : null,
+    questionCount,
   };
 }

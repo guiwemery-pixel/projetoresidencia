@@ -13,6 +13,7 @@ export {
   stagePhase,
   suggestedMethods,
   suggestedQuestions,
+  questionCountFactor,
   reviewPlan,
   firstReviewTableText,
   isPassiveOnly,

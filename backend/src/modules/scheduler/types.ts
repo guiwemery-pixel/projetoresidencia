@@ -63,8 +63,6 @@ export interface ScheduleInput {
   /** Data para a qual a revisão concluída por este contato estava prevista */
   scheduledFor?: string | null;
   subjectSize?: SubjectSize;
-  /** Quantidade de referência de questões para o bônus de volume (padrão: sugestão normal da etapa) */
-  expectedQuestions?: number | null;
 }
 
 export interface Modifier {
@@ -98,6 +96,7 @@ export interface Explanation {
     timing: Timing | null;
     reviewsDone: number;
     lapses: number;
+    /** Quantidade de questões de referência (vale ×1 no intervalo) */
     expectedQuestions: number | null;
   };
   /** Revisão de verificação (após contato só de estudo/leitura) */

@@ -22,7 +22,7 @@ GUILHERME
 |---|---|
 | **Contas e grupos** | Cadastro/login com sessão segura, avatar, perfil. Grupos com código/link de convite, vários grupos por pessoa, administração (remover integrante, trocar código). |
 | **Registro de estudos** | Área → Subárea → Assunto (cria na hora), vários tipos na mesma sessão (Teoria + Questões…), X/Y com acertos, erros e % calculados, banca, prova, dificuldade, tempo, observações e autoavaliação 😄🙂😐😕😣. |
-| **Revisão espaçada adaptativa** | Escada D0 → D10 → D21 → D60 → D90+ (reforço D3 abaixo de 60%), adaptada por desempenho, autoavaliação, tendência, dificuldade, método, atraso e histórico do assunto. Cada agendamento tem um **“Por quê?”**. |
+| **Revisão espaçada adaptativa** | Escada D0 → D10 → D21 → D60 → D90+ (reforço D3 abaixo de 60%), adaptada por desempenho, quantidade de questões (20 é a referência), autoavaliação, tendência, dificuldade, método, atraso e histórico do assunto. Cada agendamento tem um **“Por quê?”**. |
 | **Revisões e calendário** | Hoje / atrasadas / próximas / histórico, adiar/antecipar, calendário mensal com detalhe do dia e **folha semanal para imprimir/salvar em PDF** (A4, com caixas para marcar, acertos e anotações). |
 | **Dashboard** | Resumo do dia (revisões, atrasadas, questões planejadas, metas), semana, progresso, próximas atividades, estudos recentes, recomendações e comparação com o próprio histórico. **Personalizável**: arraste os balões, troque de coluna ou oculte (salvo por usuário). |
 | **Métricas** | Tempo, sessões, dias, sequência; questões por dia/semana/mês; acertos ao longo do tempo; desempenho por área/subárea (com variação em p.p.) e por assunto; revisões. Filtros 7/30/90 dias, 6 meses, 1 ano e personalizado. Gráficos com alternância para tabela. |

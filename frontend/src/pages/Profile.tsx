@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { LEVELS } from '../lib/constants';
 import { Avatar, Button, Card, Input, LevelBadge, Loading, Modal, NumberInput, PageHeader, ProgressBar, useToast } from '../components/ui';
 import { ProgressOverview } from '../components/dashboard/shared';
+import { questionCountFactor } from '../lib/questions';
 
 /** Reduz a imagem para 128×128 (JPEG) no navegador antes de enviar. */
 async function resizeImage(file: File): Promise<string> {
@@ -74,6 +75,7 @@ interface AlgorithmConfig {
   bands: { key: string; min: number; label: string; rule: string; factor: number }[];
   score: { accuracyWeight: number; qualityWeight: number; qualityScores: Record<string, number>; qualityLabels: Record<string, string> };
   firstReview: { minQuestions: number; tiers: { min: number; days: number; stage: number }[] };
+  questionCount?: { reference: number; points: { questions: number; factor: number }[] };
 }
 
 export default function ProfilePage() {
@@ -283,8 +285,31 @@ export default function ProfilePage() {
               ). A 1ª revisão sai do percentual de acertos do primeiro contato (mínimo de {algorithm.data.firstReview.minQuestions} questões):{' '}
               {firstReviewText(algorithm.data.firstReview.tiers)}. Contato só de estudo/leitura
               (sem questões) agenda uma verificação com questões no dia seguinte, com mais questões que o normal, e mantém a etapa. Nas faixas de crescimento, o intervalo
-              ainda é ajustado pela facilidade individual do assunto, tendência, dificuldade percebida e volume: fazer 1,5× ou 2× as questões sugeridas aumenta o intervalo.
+              ainda é ajustado pela facilidade individual do assunto, tendência e dificuldade percebida.
             </p>
+            {algorithm.data.questionCount && (
+              <div>
+                <p className="mb-1 font-medium text-ink">Quantidade de questões</p>
+                <p className="mb-2 text-ink2">
+                  {algorithm.data.questionCount.reference} questões é a referência. Com desempenho a partir de 70% (e na 1ª revisão), menos questões aproximam a próxima
+                  revisão e mais questões a afastam, de forma gradual. Entre um ponto e outro o ajuste é proporcional (ex.: 7 questões → ×
+                  {questionCountFactor(7, algorithm.data.questionCount).toLocaleString('pt-BR')}).
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {algorithm.data.questionCount.points
+                    .filter((p) => p.questions > 0)
+                    .map((p, i, list) => (
+                      <span key={p.questions} className="num rounded-xl bg-subtle px-3 py-1.5 text-xs text-ink2">
+                        <strong className="text-ink">
+                          {p.questions}
+                          {i === list.length - 1 ? '+' : ''}
+                        </strong>{' '}
+                        ×{p.factor.toLocaleString('pt-BR')}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       )}

@@ -11,7 +11,7 @@ Cada **assunto** tem seu próprio histórico de aprendizagem. Cada dia em que vo
 1. **mede** como foi (acertos + autoavaliação);
 2. **classifica** o resultado numa faixa;
 3. **move** o assunto na escada de intervalos (avança, mantém, volta ou reinicia);
-4. **ajusta** o intervalo pelo que já sabe desse assunto;
+4. **ajusta** o intervalo pelo que já sabe desse assunto e pela **quantidade de questões** feitas;
 5. **explica** tudo no botão **“Por quê?”**.
 
 Sessões do mesmo dia são somadas num único contato (ex.: teoria de manhã e questões à noite).
@@ -20,15 +20,16 @@ Sessões do mesmo dia são somadas num único contato (ex.: teoria de manhã e q
 
 | Etapa | Intervalo-base | Fase | Métodos sugeridos | Questões sugeridas* |
 |---|---|---|---|---|
-| D0 | — | Aprender | Teoria + questões | pequeno 10–15 · médio 15–25 · grande 20–30 |
-| D10 | 10 dias (pode ser mais, conforme o desempenho) | Consolidar | Questões + flashcards | 10–20 |
-| D21 | 21–30 dias (pode ser mais, conforme o desempenho) | Recuperação após intervalo maior | Questões | 15–25 |
-| D60 | 60 dias | Manutenção | Questões + flashcards | 15–25 |
-| D90+ | 90 dias, depois ×1,5 (máx. 180) | Manutenção de longo prazo | Questões / simulados | 20–30 |
-| D3 | 3 dias | Reforço — rever os erros (só quando o desempenho fica baixo) | Questões + revisão | 10–15 |
+| D0 | — | Aprender | Teoria + questões | pequeno 20–25 · médio 20–30 · grande 25–35 |
+| D10 | 10 dias (pode ser mais, conforme o desempenho) | Consolidar | Questões + flashcards | 20–30 |
+| D21 | 21–30 dias (pode ser mais, conforme o desempenho) | Recuperação após intervalo maior | Questões | 20–30 |
+| D60 | 60 dias | Manutenção | Questões + flashcards | 20–30 |
+| D90+ | 90 dias, depois ×1,5 (máx. 180) | Manutenção de longo prazo | Questões / simulados | 25–40 |
+| D3 | 3 dias | Reforço — rever os erros (só quando o desempenho fica baixo) | Questões + revisão | 20–25 |
 
-\* para assunto médio; pequeno ×0,75 e grande ×1,25. Os D são **intervalos desde o último
-contato**, porque as datas reais se deslocam com a adaptação.
+\* para assunto médio; pequeno ×0,75 e grande ×1,25, **nunca abaixo de 20** — a referência de
+quantidade (seção 4): quem segue a sugestão nunca tem o intervalo encurtado. Os D são **intervalos
+desde o último contato**, porque as datas reais se deslocam com a adaptação.
 
 Não há mais D1 nem D7 na escada. O **D3** não é uma etapa do caminho normal: é o reforço de quem
 fica abaixo de 60% na 1ª revisão, vai mal (“fraco”) no D10 ou tem resultado crítico (< 50%) em
@@ -41,6 +42,10 @@ leitura (regra abaixo).
 pontuação = (acertos% × pesoAcertos + autoavaliação × 0,30) ÷ (pesoAcertos + 0,30)
 pesoAcertos = 0,70 × min(1, questões ÷ 10)      ← poucas questões pesam menos
 ```
+
+Com menos de 10 questões, a autoavaliação pode puxar a pontuação **para baixo, nunca para cima**:
+vale a menor entre essa conta e a conta com o peso normal (0,70). Ex.: 7/7 + Razoável = 88,6;
+4/5 + Dominei = 86 (o mesmo que 16/20 + Dominei), e não 89.
 
 | Autoavaliação | Pontos |
 |---|---|
@@ -67,15 +72,17 @@ Exemplos da especificação: 90% + Dominei = 93 · 70% + Razoável = 70 · 50% +
 | 50–69 | Fraco | **volta 1** | base da etapa anterior (sem bônus); do D10 volta ao reforço D3 | −0,15 |
 | < 50 | Crítico | **reinicia (D3)** | 3 dias + sugestão de voltar à teoria | −0,20 |
 
-Nas faixas de crescimento (≥ 70%) o intervalo **nunca fica abaixo do intervalo-base da etapa**:
-D10 ≥ 10 dias, D21 ≥ 21, D60 ≥ 60, D90 ≥ 90. O desempenho só aumenta esse prazo.
+Nas faixas de crescimento (≥ 70%) o intervalo **parte de no mínimo o intervalo-base da etapa**:
+D10 ≥ 10 dias, D21 ≥ 21, D60 ≥ 60, D90 ≥ 90. Com 20 questões ou mais ele nunca fica abaixo disso;
+com menos de 20, a quantidade de questões (seção 4) o traz um pouco para menos.
 
 Trava de segurança: com menos de 5 questões e sem autoavaliação, a faixa máxima é “Bom”.
 
 **Revisão só de estudo/leitura → verificação no dia seguinte.** Ler de novo não mede quanto você
 lembra. Quando o contato do dia é só estudo/leitura (inclusive no D0), a próxima revisão fica para
 o **dia seguinte** (rótulo D1), focada em **questões** e com **mais questões que o normal**
-(1,5× a sugestão da etapa, no mínimo a quantidade de um assunto novo). A etapa e a facilidade do
+(1,5× a sugestão da etapa, ex.: 30–45 questões; depois de um D0 só de leitura, a quantidade de um
+assunto novo, 20–30). A etapa e a facilidade do
 assunto **não mudam**: quem decide o próximo passo é o resultado dessas questões. A
 autoavaliação dada à leitura fica registrada, mas não conta como desempenho.
 
@@ -92,9 +99,10 @@ feita depois de um D0 só de leitura):
 | 81% ou mais | 23 dias | D21 |
 
 São necessárias pelo menos 5 questões; com menos, o sistema pede a verificação com questões no
-dia seguinte antes de definir a data. Abaixo de 50% também sugere voltar à teoria. Fazer bem mais
-questões que o sugerido para um assunto novo aplica o bônus de volume (×1,1 ou ×1,2). Da 1ª revisão
-em diante, valem as faixas acima. A tabela é configurável (`firstReview.tiers`).
+dia seguinte, e é ela que define a data. Abaixo de 50% também sugere voltar à teoria. A
+**quantidade de questões** ajusta essa data (seção 4): com 20 questões vale a tabela exata; 85% em
+7 questões → 17 dias em vez de 23; 85% em 40 questões → 28 dias. Abaixo de 60% são sempre 3 dias.
+Da 1ª revisão em diante, valem as faixas acima. A tabela é configurável (`firstReview.tiers`).
 
 ## 4. Modificadores (só nas faixas de crescimento)
 
@@ -103,11 +111,29 @@ em diante, valem as faixas acima. A tabela é configurável (`firstReview.tiers`
 | **Facilidade individual do assunto** (0,6–1,4) | Aprende com o histórico: assuntos em que você erra repetidamente ficam com intervalos menores. |
 | **Tendência** (pontuação atual vs. média dos 3 contatos anteriores) | melhora ≥ +10 → ×1,1 · queda ≤ −10 → ×0,85 |
 | **Dificuldade percebida** | fácil ×1,1 · média ×1,0 · difícil ×0,85 |
-| **Volume de questões** (vs. a sugestão normal da etapa) | ≥ 1,5× o sugerido → ×1,1 · ≥ 2× → ×1,2 |
 | **Crédito pelo intervalo real** | Revisão feita atrasada e bem: o novo intervalo não fica abaixo de dias decorridos × 1,5 (excelente), × 1,2 (bom) ou × 1,0 (mediano). |
-| **Mínimo da etapa** | O resultado final não fica abaixo do intervalo-base da etapa (ex.: facilidade baixa reduz o bônus, mas o D21 continua com pelo menos 21 dias). |
+| **Mínimo da etapa** | O resultado não fica abaixo do intervalo-base da etapa (ex.: facilidade baixa reduz o bônus, mas o D21 continua com pelo menos 21 dias). |
+| **Quantidade de questões** | Aplicada por último, sobre o resultado acima (tabela abaixo). |
 
-O produto dos modificadores é limitado a 0,5–1,6 e o intervalo final a 1–180 dias.
+O produto dos modificadores (sem a quantidade) é limitado a 0,5–1,6 e o intervalo final a 1–180 dias.
+
+### Quantidade de questões
+
+**20 questões é a referência** (×1). Com menos, o resultado é menos seguro e a próxima revisão fica
+um pouco mais próxima; com mais, um pouco mais longe. É gradual — cada questão conta; entre os
+pontos da tabela o fator é proporcional:
+
+| Questões | 5 | 7 | 10 | 15 | **20** | 25 | 30 | 35 | 40 ou mais |
+|---|---|---|---|---|---|---|---|---|---|
+| Fator | ×0,70 | ×0,74 | ×0,80 | ×0,90 | **×1** | ×1,05 | ×1,10 | ×1,15 | ×1,20 |
+
+(1 a 4 questões: ×0,62 a ×0,68.) Vale com desempenho ≥ 70% e na 1ª revisão (exceto abaixo de 60%).
+Com desempenho baixo não há ajuste — o intervalo já é o curto. Sem questões (só flashcards/recall)
+também não. Exemplo no D21 com 80% de acertos, subindo para o D60:
+
+| Questões | 5 | 10 | 15 | 20 | 25 | 30 | 40 |
+|---|---|---|---|---|---|---|---|
+| Próxima revisão | 43 dias | 49 | 55 | **61** | 64 | 67 | 73 |
 
 ## 5. Simulações (saída real do motor)
 
@@ -136,8 +162,8 @@ assunto — as próximas subidas serão mais cautelosas. Também gera a notifica
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | 11/20 = 55% | **D3 em 3 dias** — reforço: questões + revisão dos erros (10–15 questões) |
-| reforço | 16/20 = 80% | **D10 em 11 dias** |
+| D0 | 11/20 = 55% | **D3 em 3 dias** — reforço: questões + revisão dos erros (20–25 questões) |
+| reforço | 16/20 = 80% | **D10 em 10 dias** |
 | D10 | 17/20 = 85% | **D21 em 21 dias** |
 | D21 | 18/20 = 90% | **D60 em 74 dias** |
 
@@ -148,23 +174,30 @@ assunto — as próximas subidas serão mais cautelosas. Também gera a notifica
 | D0 | 13/20 = 65% | 1ª revisão em 10 dias (D10) |
 | D10 | 17/20 = 85% | **D21 em 21 dias** — o cálculo daria 20 (facilidade reduzida pelo início fraco), mas o D21 não fica abaixo de 21 |
 
+**Poucas questões**
+
+| Contato | Resultado | Próxima revisão |
+|---|---|---|
+| D0 | 14/20 = 70% | 1ª revisão em 13 dias (D10) |
+| D10 | 7/7 = 100% + 😐 Razoável → pontuação 88,6 (Bom) | **D21 em 16 dias** — o cálculo dá 22, × 0,74 por serem só 7 questões |
+
 **Assunto que começa só com teoria**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | só teoria, 🙂 | amanhã — verificação com 15–25 questões |
+| D0 | só teoria, 🙂 | amanhã — verificação com 20–30 questões |
 | verificação | 14/20 = 70% | **D10 em 13 dias** (tabela: 66–70%) |
 | 1ª revisão | 17/20, 🙂 | D21 em 22 dias |
 | 2ª revisão | 19/20, 😄 | D60 em 81 dias |
 
-**Revisão feita só com leitura + bônus de volume**
+**Revisão feita só com leitura + mais questões na verificação**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
 | D0 | 16/20 = 80% | 1ª revisão em 20 dias |
 | 1ª revisão | 18/20 = 90% | D60 em 85 dias |
-| 2ª revisão | só leitura, 🙂 | **amanhã** — verificação com 23–38 questões, etapa mantida |
-| dia seguinte | 34/40 = 85% (2× o normal) | **D90 em 118 dias** (seriam 98 com 20 questões) |
+| 2ª revisão | só leitura, 🙂 | **amanhã** — verificação com 30–45 questões, etapa mantida |
+| dia seguinte | 34/40 = 85% | **D90 em 118 dias** (98 × 1,2 pelas 40 questões; seriam 98 com 20) |
 
 ## 6. Transparência (“Por quê?”)
 
@@ -188,7 +221,9 @@ A API recarrega a configuração em até 1 minuto. As novas regras valem para os
 o histórico já registrado é preservado (só é recalculado se um estudo daquele assunto for editado
 ou excluído). Os parâmetros ativos ficam visíveis em **Perfil → Algoritmo de revisão**. Exemplos:
 `{"passiveFollowUp": {"questionsMultiplier": 2}}` (verificação com o dobro de questões) ou
-`{"volume": {"tiers": [{"ratio": 2, "factor": 1.3}, {"ratio": 1.5, "factor": 1.15}]}}`.
+`{"questionCount": {"points": [{"questions": 0, "factor": 0.7}, {"questions": 10, "factor": 0.85}, {"questions": 20, "factor": 1}, {"questions": 40, "factor": 1.25}]}}`
+(ajuste mais suave para menos e mais forte para mais; a lista substitui a padrão inteira e
+`reference` deve ser a quantidade com fator 1).
 
 ## 8. Fundamentação e limites
 

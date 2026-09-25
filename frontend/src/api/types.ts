@@ -195,6 +195,8 @@ export interface StudySuggestion {
   methods: StudyMethod[];
   questions: { min: number; max: number };
   pendingReview: { id: string; scheduledFor: string } | null;
+  /** Referência de questões (×1) e pontos do ajuste gradual do intervalo */
+  questionCount?: { reference: number; points: { questions: number; factor: number }[] };
 }
 
 export type GoalMetric =

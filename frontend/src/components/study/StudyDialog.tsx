@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarCheck2, ChevronDown, Lightbulb, Sparkles } from 'lucide-react';
+import { CalendarCheck2, ChevronDown, Info, Lightbulb, Sparkles } from 'lucide-react';
 import { api } from '../../api/client';
 import type { StudyMethod, StudyResult, StudySuggestion } from '../../api/types';
 import { useCreateStudy, useSubjects } from '../../hooks/api';
 import { DIFFICULTY, METHODS, METHOD_LABEL, QUALITY } from '../../lib/constants';
 import { duration, fmtLong, pct, relativeDay, todayLocal } from '../../lib/format';
+import { questionCountFactor, type QuestionCountConfig } from '../../lib/questions';
 import { Button, Input, Modal, NumberInput, Textarea, cx, useToast } from '../ui';
 import { SubjectPicker, type SubjectChoice } from './SubjectPicker';
 import { WhyPanel } from './WhyPanel';
@@ -168,7 +169,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                   {s.checkup && 'Como foi só estudo/leitura, amanhã meça a retenção com questões. '}
                   {s.suggestTheory && 'Volte ao conteúdo teórico e depois faça questões. '}
                   Sugerido: {s.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')} · {s.suggestedQuestions.min}–{s.suggestedQuestions.max} questões.
-                  {' '}Quanto mais questões (com bom desempenho), maior o próximo intervalo.
+                  {' '}Com bom desempenho, menos de 20 questões aproximam a próxima revisão e mais de 20 a afastam, aos poucos.
                 </p>
               </div>
               <button type="button" onClick={() => setShowWhy((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-accent" aria-expanded={showWhy}>
@@ -277,6 +278,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                 de acertos
               </p>
             )}
+            {total !== null && total > 0 && suggestion?.questionCount && <QuantityHint total={total} config={suggestion.questionCount} />}
             <button type="button" className="flex items-center gap-1 text-xs font-medium text-accent" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore}>
               Banca, prova, dificuldade e tempo <ChevronDown className={cx('h-3.5 w-3.5 transition', showMore && 'rotate-180')} />
             </button>
@@ -350,16 +352,36 @@ function DifficultyPicker({ value, onChange }: { value: number | null; onChange:
   );
 }
 
+/** Quanto a quantidade de questões aproxima ou afasta a próxima revisão (com bom desempenho). */
+function QuantityHint({ total, config }: { total: number; config: QuestionCountConfig }) {
+  const factor = questionCountFactor(total, config);
+  const change = Math.round(Math.abs(1 - factor) * 100);
+  const n = `${total} ${total === 1 ? 'questão' : 'questões'}`;
+  const text =
+    change === 0
+      ? `${n}: na referência de ${config.reference}. A próxima revisão segue só o seu desempenho.`
+      : factor < 1
+        ? `${n}: abaixo da referência de ${config.reference}. Indo bem, a próxima revisão fica ${change}% mais próxima (×${factor.toLocaleString('pt-BR')}).`
+        : `${n}: acima da referência de ${config.reference}. Indo bem, a próxima revisão fica ${change}% mais distante (×${factor.toLocaleString('pt-BR')}).`;
+  return (
+    <p className="flex items-start gap-1.5 text-xs text-ink2">
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+      {text}
+    </p>
+  );
+}
+
 function SuggestionBox({ suggestion: s }: { suggestion: StudySuggestion }) {
   const text = useMemo(() => {
     const methods = s.methods.map((m) => METHOD_LABEL[m]).join(', ');
     if (s.isNew)
-      return `Assunto novo (D0 — aprender): sugerimos teoria + ${s.questions.min}–${s.questions.max} questões. Seu percentual de acertos define a data da 1ª revisão.`;
+      return `Assunto novo (D0 — aprender): sugerimos teoria + ${s.questions.min}–${s.questions.max} questões. Seu percentual de acertos define a data da 1ª revisão, ajustada pela quantidade de questões.`;
     const when = s.pendingReview ? ` prevista ${relativeDay(s.pendingReview.scheduledFor)}` : '';
     if (s.checkup) {
       return `Verificação${when}: o último contato foi só estudo/leitura. Faça ${s.questions.min}–${s.questions.max} questões — acertando bem, o próximo intervalo cresce.`;
     }
-    return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões. Fazer mais questões que o sugerido, com bom desempenho, aumenta o próximo intervalo.`;
+    const ref = s.questionCount?.reference ?? 20;
+    return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões. ${ref} questões é a referência: indo bem, menos que isso aproxima a próxima revisão e mais que isso a afasta.`;
   }, [s]);
   return (
     <p className="mt-2 flex items-start gap-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">

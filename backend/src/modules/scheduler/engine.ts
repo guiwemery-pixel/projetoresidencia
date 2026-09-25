@@ -25,9 +25,11 @@ import type {
 // 3. A faixa move o assunto na escada D10 → D21 → D60 → D90+ (avança, mantém,
 //    volta uma etapa ou reinicia no reforço D3).
 // 4. Nas faixas de crescimento o intervalo-base da etapa é ajustado pela
-//    facilidade individual do assunto, tendência, dificuldade percebida e tipo
-//    de método; nas faixas de queda usa-se o intervalo-base da etapa anterior.
-// 5. Tudo é registrado numa explicação legível ("Por quê?").
+//    facilidade individual do assunto, tendência e dificuldade percebida; nas
+//    faixas de queda usa-se o intervalo-base da etapa anterior.
+// 5. A quantidade de questões ajusta o resultado de forma gradual: 20 é a
+//    referência; menos questões encurtam e mais questões alongam o intervalo.
+// 6. Tudo é registrado numa explicação legível ("Por quê?").
 // ─────────────────────────────────────────────────────────────────────────────
 
 const pct = (n: number) => `${Math.round(n)}%`;
@@ -73,12 +75,17 @@ export function computeScore(
   const qualityScore = contact.quality ? config.score.qualityScores[String(contact.quality)] : null;
   if (accuracy !== null && qualityScore != null) {
     const { accuracyWeight, qualityWeight, minQuestionsForFullWeight } = config.score;
+    const combined = (w: number) => (accuracy * w + qualityScore * qualityWeight) / (w + qualityWeight);
+    const formula = (w: number, value: number) =>
+      `(${fmt(accuracy, 0)} × ${fmt(w)} + ${qualityScore} × ${fmt(qualityWeight)}) ÷ ${fmt(w + qualityWeight)} = ${fmt(value, 1)}`;
     const w = accuracyWeight * Math.min(1, contact.questions!.total / minQuestionsForFullWeight);
-    const score = (accuracy * w + qualityScore * qualityWeight) / (w + qualityWeight);
-    return {
-      score,
-      formula: `(${fmt(accuracy, 0)} × ${fmt(w)} + ${qualityScore} × ${fmt(qualityWeight)}) ÷ ${fmt(w + qualityWeight)} = ${fmt(score, 1)}`,
-    };
+    const reduced = combined(w);
+    // Com poucas questões a autoavaliação pode puxar a pontuação para baixo, nunca para cima
+    const full = combined(accuracyWeight);
+    if (full < reduced) {
+      return { score: full, formula: `${formula(accuracyWeight, full)} (com poucas questões a autoavaliação não aumenta a pontuação)` };
+    }
+    return { score: reduced, formula: formula(w, reduced) };
   }
   if (accuracy !== null) return { score: accuracy, formula: `acertos = ${fmt(accuracy, 1)}` };
   if (qualityScore != null) return { score: qualityScore, formula: `autoavaliação = ${qualityScore}` };
@@ -116,7 +123,21 @@ export function measuredScore(
   return isPassiveOnly(contact, config) ? null : computeScore(contact, config).score;
 }
 
-const mid = (r: { min: number; max: number }) => Math.round((r.min + r.max) / 2);
+/**
+ * Fator da quantidade de questões (referência = ×1), interpolado entre os pontos
+ * da configuração: ex.: 7 questões → ×0,74 · 15 → ×0,90 · 25 → ×1,05 · 34 → ×1,14.
+ */
+export function questionCountFactor(questions: number, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG): number {
+  const points = [...config.questionCount.points].sort((a, b) => a.questions - b.questions);
+  if (!points.length) return 1;
+  if (questions <= points[0].questions) return points[0].factor;
+  const last = points[points.length - 1];
+  if (questions >= last.questions) return last.factor;
+  const i = points.findIndex((p) => p.questions >= questions);
+  const [a, b] = [points[i - 1], points[i]];
+  const factor = a.factor + ((questions - a.questions) / (b.questions - a.questions)) * (b.factor - a.factor);
+  return Math.round(factor * 100) / 100;
+}
 
 /** "< 60% → 3 dias · 60–65% → 10 · …" (texto da tabela da 1ª revisão) */
 export function firstReviewTableText(config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
@@ -158,7 +179,9 @@ export function suggestedQuestions(
   const table = config.reviewQuestionsByStage;
   const [min, max] = table[Math.min(stage, table.length - 1)];
   const k = config.sizeMultipliers[size] ?? 1;
-  return { min: Math.max(1, Math.round(min * k)), max: Math.max(1, Math.round(max * k)) };
+  // Nunca sugere menos que a referência: seguir a sugestão não encurta o intervalo
+  const lo = Math.max(config.questionCount.reference, Math.round(min * k));
+  return { min: lo, max: Math.max(lo, Math.round(max * k)) };
 }
 
 export function suggestedMethods(stage: number, theory: boolean, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
@@ -169,12 +192,13 @@ export function suggestedMethods(stage: number, theory: boolean, config: Schedul
 
 /**
  * O que fazer na próxima revisão: rótulo, fase, métodos e faixa de questões.
- * `checkup` = verificação após contato só de estudo/leitura (mais questões).
+ * `checkup` = verificação após contato só de estudo/leitura (mais questões);
+ * `firstMeasure` = essa verificação ainda vai definir a 1ª revisão (quantidade de assunto novo).
  */
 export function reviewPlan(
   stage: number,
   size: SubjectSize,
-  opts: { theory?: boolean; checkup?: boolean },
+  opts: { theory?: boolean; checkup?: boolean; firstMeasure?: boolean },
   config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG,
 ) {
   if (opts.checkup) {
@@ -185,10 +209,12 @@ export function reviewPlan(
       label: reviewLabel(stage, true, config),
       phase: f.phase,
       methods: f.methods,
-      questions: {
-        min: Math.max(nMin, Math.round(base.min * f.questionsMultiplier)),
-        max: Math.max(nMax, Math.round(base.max * f.questionsMultiplier)),
-      },
+      questions: opts.firstMeasure
+        ? { min: nMin, max: nMax }
+        : {
+            min: Math.max(nMin, Math.round(base.min * f.questionsMultiplier)),
+            max: Math.max(nMax, Math.round(base.max * f.questionsMultiplier)),
+          },
     };
   }
   return {
@@ -223,9 +249,12 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   const { trend, previousScore, reference } = computeTrend(score, history, config);
 
   const qualityLabel = contact.quality ? config.score.qualityLabels[String(contact.quality)] : null;
-  const expectedQuestions =
-    input.expectedQuestions ??
-    (state ? mid(suggestedQuestions(state.stage, size, false, config)) : mid(suggestedQuestions(0, size, true, config)));
+  const questionCount = contact.questions?.total ?? 0;
+  const referenceQuestions = config.questionCount.reference;
+  // Quantidade de questões: só quando há percentual de acertos (sem questões, fica neutro)
+  const quantityFactor = accuracy !== null ? questionCountFactor(questionCount, config) : 1;
+  // Ainda não há 1ª revisão definida (D0 ou verificação que vai defini-la)
+  const noMeasureYet = !state || state.lastScore === null;
   const elapsedDays = state ? diffDays(state.lastContactOn, contact.date) : null;
   const scheduledFor = input.scheduledFor ?? null;
   let timing: Timing | null = null;
@@ -254,8 +283,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   }
 
   // Primeiro contato com desempenho medido (D0, ou a verificação após um D0 só de leitura)
-  const firstMeasure = !passiveOnly && (!state || state.lastScore === null);
-  const questionCount = contact.questions?.total ?? 0;
+  const firstMeasure = !passiveOnly && noMeasureYet;
   const hasPercentual = accuracy !== null && questionCount >= config.firstReview.minQuestions;
 
   // ── 2. Faixa de desempenho ─────────────────────────────────────────────
@@ -282,6 +310,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   let growth: boolean;
   let isLapse = false;
   let suggestTheory = false;
+  let quantityApplies = false;
   // Sem percentual confiável no 1º contato, ou só leitura → verificação com questões amanhã
   const checkup = passiveOnly || (firstMeasure && !hasPercentual);
 
@@ -289,7 +318,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     stage = state ? state.stage : 0;
     growth = false;
     baseInterval = config.passiveFollowUp.intervalDays;
-    const plan = reviewPlan(stage, size, { checkup: true }, config);
+    const plan = reviewPlan(stage, size, { checkup: true, firstMeasure: noMeasureYet }, config);
     const next = `${plan.questions.min}–${plan.questions.max} questões`;
     if (passiveOnly) {
       steps.push({
@@ -323,16 +352,8 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       label: '1ª revisão pelo percentual de acertos',
       detail: `${pct(accuracy!)} de acertos → ${tier.days} ${tier.days === 1 ? 'dia' : 'dias'} (${firstReviewTableText(config)}).`,
     });
-    // Mais questões que o sugerido para um assunto novo → intervalo maior (exceto na faixa mais baixa)
-    const lowest = tiers[tiers.length - 1];
-    const expected = input.expectedQuestions ?? mid(suggestedQuestions(0, size, true, config));
-    if (tier !== lowest && expected > 0) {
-      const ratio = questionCount / expected;
-      const vt = [...config.volume.tiers].sort((a, b) => b.ratio - a.ratio).find((t) => ratio >= t.ratio);
-      if (vt) {
-        modifiers.push({ key: 'volume', label: `Volume de questões (${questionCount} de ~${expected} sugeridas)`, factor: vt.factor });
-      }
-    }
+    // A quantidade de questões ajusta a data (exceto na faixa mais baixa, que já volta logo)
+    quantityApplies = tier !== tiers[tiers.length - 1];
   } else if (!band) {
     // Contato ativo sem medida (ex.: flashcards sem autoavaliação): mantém a etapa
     // (aqui sempre há estado: o primeiro contato é tratado acima)
@@ -351,6 +372,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     isLapse = !band.growth;
     ease = clamp(easeFrom + band.easeDelta, config.ease.min, config.ease.max);
     baseInterval = stageInterval(stage, config);
+    quantityApplies = band.growth;
     const moved =
       stage > from ? 'avança' : stage === from ? 'mantém' : band.resetToStage !== undefined ? 'reinicia' : 'volta';
     steps.push({
@@ -372,21 +394,10 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       const name = ['', 'fácil', 'média', 'difícil'][contact.difficulty];
       if (f !== 1) modifiers.push({ key: 'dificuldade', label: `Dificuldade percebida ${name}`, factor: f });
     }
-    if (contact.questions && contact.questions.total > 0 && expectedQuestions > 0) {
-      const ratio = contact.questions.total / expectedQuestions;
-      const tier = [...config.volume.tiers].sort((a, b) => b.ratio - a.ratio).find((t) => ratio >= t.ratio);
-      if (tier) {
-        modifiers.push({
-          key: 'volume',
-          label: `Volume de questões (${contact.questions.total} de ~${expectedQuestions} sugeridas)`,
-          factor: tier.factor,
-        });
-      }
-    }
   } else if (state && band) {
     steps.push({
       label: 'Sem bônus',
-      detail: 'Com desempenho abaixo de 70% o intervalo-base da etapa é aplicado sem aumentos.',
+      detail: 'Com desempenho abaixo de 70% o intervalo-base da etapa é aplicado sem aumentos nem ajuste pela quantidade de questões.',
     });
   }
 
@@ -413,9 +424,14 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   }
 
   const computed = Math.round(clamp(raw, config.minIntervalDays, config.maxIntervalDays));
-  // O intervalo-base da etapa é o mínimo quando o desempenho foi bom
+  // Com bom desempenho, parte de no mínimo o intervalo-base da etapa…
   const floor = growth && config.growthFloorAtBase ? Math.min(stageInterval(stage, config), config.maxIntervalDays) : 0;
-  const intervalDays = Math.max(computed, floor);
+  const beforeQuantity = Math.max(computed, floor);
+  // …e a quantidade de questões ajusta a partir daí (menos de 20 encurta, mais alonga)
+  const applyQuantity = quantityApplies && quantityFactor !== 1;
+  const intervalDays = applyQuantity
+    ? Math.round(clamp(beforeQuantity * quantityFactor, config.minIntervalDays, config.maxIntervalDays))
+    : beforeQuantity;
   const dueOn = addDays(contact.date, intervalDays);
   const lapses = (state?.lapses ?? 0) + (isLapse ? 1 : 0);
   const reviewsDone = state ? state.contacts : 0;
@@ -426,10 +442,21 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       detail: `${baseInterval} × ${modifiers.map((m) => fmt(m.factor)).join(' × ')} ≈ ${computed} ${computed === 1 ? 'dia' : 'dias'}`,
     });
   }
-  if (intervalDays > computed) {
+  if (beforeQuantity > computed) {
     steps.push({
       label: 'Mínimo da etapa',
-      detail: `Com desempenho a partir de 70%, a etapa ${stageLabel(stage, config)} não fica abaixo de ${floor} dias: o desempenho só aumenta esse prazo.`,
+      detail: `Com desempenho a partir de 70%, a etapa ${stageLabel(stage, config)} parte de no mínimo ${floor} dias.`,
+    });
+  }
+  if (applyQuantity) {
+    const n = `${questionCount} ${questionCount === 1 ? 'questão' : 'questões'}`;
+    steps.push({
+      label: 'Quantidade de questões',
+      detail:
+        `${n} (referência: ${referenceQuestions}) → ×${fmt(quantityFactor)}: ${beforeQuantity} → ${intervalDays} ${intervalDays === 1 ? 'dia' : 'dias'}. ` +
+        (quantityFactor < 1
+          ? 'Com menos questões o resultado é menos seguro, então a próxima revisão fica um pouco mais próxima.'
+          : 'Mais questões dão mais segurança ao resultado, então a próxima revisão pode ficar um pouco mais longe.'),
     });
   }
   if (Math.abs(ease - easeFrom) > 1e-9) {
@@ -453,12 +480,16 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     ease: Math.round(ease * 1000) / 1000,
     intervalDays,
     lastContactOn: contact.date,
-    lastScore: score === null ? (state?.lastScore ?? null) : Math.round(score * 10) / 10,
+    // Poucas questões no 1º contato ainda não definem a 1ª revisão: a verificação define
+    lastScore: score === null || (checkup && firstMeasure) ? (state?.lastScore ?? null) : Math.round(score * 10) / 10,
     contacts: (state?.contacts ?? 0) + 1,
     lapses,
   };
 
-  const plan = reviewPlan(stage, size, { theory: suggestTheory, checkup }, config);
+  const plan = reviewPlan(stage, size, { theory: suggestTheory, checkup, firstMeasure: checkup && noMeasureYet }, config);
+  const shownModifiers = applyQuantity
+    ? [...modifiers, { key: 'questoes', label: `Quantidade de questões (${questionCount}; referência ${referenceQuestions})`, factor: quantityFactor }]
+    : modifiers;
   const label = plan.label;
   const explanation: Explanation = {
     algorithm: config.version,
@@ -480,7 +511,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       timing,
       reviewsDone,
       lapses,
-      expectedQuestions,
+      expectedQuestions: referenceQuestions,
     },
     checkup,
     score: score === null ? null : Math.round(score * 10) / 10,
@@ -492,7 +523,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       toLabel: label,
     },
     baseIntervalDays: baseInterval,
-    modifiers: modifiers.map((m) => ({ ...m, factor: Math.round(m.factor * 1000) / 1000 })),
+    modifiers: shownModifiers.map((m) => ({ ...m, factor: Math.round(m.factor * 1000) / 1000 })),
     newIntervalDays: intervalDays,
     dueOn,
     ease: { from: easeFrom, to: nextState.ease },
