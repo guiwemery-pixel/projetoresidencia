@@ -107,12 +107,20 @@ function capBand(band: BandRule, cap: BandKey, config: SchedulerConfig): BandRul
   return band.min > capRule.min ? capRule : band;
 }
 
-/** Contato só de estudo/leitura: nenhum método de recuperação ativa e nenhuma questão. */
+/**
+ * Contato só de estudo teórico (aula, vídeo, teoria, leitura…): sem questões
+ * registradas e sem flashcards/recall. "Questões" marcado sem a quantidade, junto
+ * com estudo teórico, também conta como teórico (não houve medida).
+ */
 export function isPassiveOnly(
   contact: Pick<ContactEvidence, 'methods' | 'questions'>,
   config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG,
 ) {
-  return !isActiveRecall(contact.methods, config) && !(contact.questions && contact.questions.total > 0);
+  if (contact.questions && contact.questions.total > 0) return false;
+  if (contact.methods.some((m) => config.recallMethods.includes(m))) return false;
+  const questionTick = contact.methods.some((m) => config.activeMethods.includes(m));
+  const study = contact.methods.some((m) => config.studyMethods.includes(m));
+  return study || !questionTick;
 }
 
 /** Pontuação que conta como desempenho medido (leitura pura não conta). */
@@ -332,6 +340,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   let isLapse = false;
   let suggestTheory = false;
   let quantityApplies = false;
+  let theoryApplies = false;
   let measured: number | null = score; // pontuação que fica registrada como "último desempenho"
   // Só leitura (fora da própria D1) → revisão D1 amanhã
   const checkup = passiveOnly && !passiveAsReview;
@@ -344,6 +353,9 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     steps.push({
       label: state ? 'Revisão só de estudo/leitura' : 'Primeiro contato só com estudo/leitura',
       detail:
+        (contact.methods.some((m) => config.activeMethods.includes(m))
+          ? '"Questões" foi marcado sem a quantidade, então conta como estudo teórico. '
+          : '') +
         `Estudo sem questões não mede quanto você lembra. Amanhã faça a revisão D1 como preferir — ${plan.questions.min}–${plan.questions.max} questões, ` +
         'flashcards, recall ou teoria — e marque como foi' +
         (noMeasureYet
@@ -357,7 +369,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     const perf = score === null ? config.firstReview.assumedScore : hasRating ? score : Math.min(score, config.firstReview.fewQuestionsMaxScore);
     const tier = tiers.find((t) => perf >= t.min) ?? tiers[tiers.length - 1];
     const perfBand = bandFor(perf, config);
-    stage = tier.stage;
+    stage = passiveAsReview ? Math.min(tier.stage, config.theoryReview.maxStage) : tier.stage;
     growth = false;
     baseInterval = tier.days;
     measured = score === null ? perf : Math.min(score, perf);
@@ -376,6 +388,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     });
     // Tempo e dificuldade ajustam a data (exceto na faixa mais baixa, que já volta logo)
     quantityApplies = tier !== tiers[tiers.length - 1];
+    theoryApplies = passiveAsReview && quantityApplies;
     if (quantityApplies && contact.difficulty) {
       const f = config.difficultyFactors[String(contact.difficulty)] ?? 1;
       const name = ['', 'fácil', 'média', 'difícil'][contact.difficulty];
@@ -408,7 +421,10 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     });
   } else {
     const from = state!.stage;
-    stage = band.resetToStage ?? Math.max(0, from + band.stageDelta);
+    // Revisão só teórica não avança a etapa (pode manter, voltar ou reiniciar)
+    const delta = passiveAsReview ? Math.min(0, band.stageDelta) : band.stageDelta;
+    stage = band.resetToStage ?? Math.max(0, from + delta);
+    theoryApplies = passiveAsReview && band.growth;
     growth = band.growth;
     suggestTheory = band.suggestTheory ?? false;
     isLapse = !band.growth;
@@ -471,9 +487,10 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   const beforeQuantity = Math.max(computed, floor);
   // …e a quantidade de questões (ou, sem questões, o tempo de estudo) ajusta a partir daí
   const applyAmount = quantityApplies && amount !== null && amount.factor !== 1;
-  const intervalDays = applyAmount
-    ? Math.round(clamp(beforeQuantity * amount!.factor, config.minIntervalDays, config.maxIntervalDays))
-    : beforeQuantity;
+  const bound = (n: number) => Math.round(clamp(n, config.minIntervalDays, config.maxIntervalDays));
+  const afterAmount = applyAmount ? bound(beforeQuantity * amount!.factor) : beforeQuantity;
+  // Revisão só teórica: a autoavaliação vale menos que questões
+  const intervalDays = theoryApplies ? bound(afterAmount * config.theoryReview.factor) : afterAmount;
   const dueOn = addDays(contact.date, intervalDays);
   const lapses = (state?.lapses ?? 0) + (isLapse ? 1 : 0);
   const reviewsDone = state ? state.contacts : 0;
@@ -496,7 +513,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     steps.push({
       label: 'Quantidade de questões',
       detail:
-        `${n} (referência: ${config.questionCount.reference}) → ×${fmt(amount!.factor)}: ${beforeQuantity} → ${days(intervalDays)}. ` +
+        `${n} (referência: ${config.questionCount.reference}) → ×${fmt(amount!.factor)}: ${beforeQuantity} → ${days(afterAmount)}. ` +
         (amount!.factor < 1
           ? 'Com menos questões o resultado é menos seguro, então a próxima revisão fica um pouco mais próxima.'
           : 'Mais questões dão mais segurança ao resultado, então a próxima revisão pode ficar um pouco mais longe.'),
@@ -505,8 +522,16 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
     steps.push({
       label: 'Tempo de estudo',
       detail:
-        `${minutes} min sem questões (referência: ${config.studyTime.reference} min) → ×${fmt(amount!.factor)}: ${beforeQuantity} → ${days(intervalDays)}. ` +
+        `${minutes} min sem questões (referência: ${config.studyTime.reference} min) → ×${fmt(amount!.factor)}: ${beforeQuantity} → ${days(afterAmount)}. ` +
         (amount!.factor < 1 ? 'Uma revisão curta fixa menos, então a próxima fica um pouco mais próxima.' : 'Uma revisão mais longa fixa mais, então a próxima pode ficar um pouco mais longe.'),
+    });
+  }
+  if (theoryApplies) {
+    steps.push({
+      label: 'Revisão só teórica',
+      detail:
+        `Aula, vídeo, teoria e leitura medem menos o quanto você lembra do que questões: ×${fmt(config.theoryReview.factor)}` +
+        ` e a etapa não avança (${afterAmount} → ${days(intervalDays)}). Na próxima revisão, faça questões.`,
     });
   }
   if (Math.abs(ease - easeFrom) > 1e-9) {
@@ -536,11 +561,12 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   };
 
   const plan = reviewPlan(stage, size, { theory: suggestTheory, checkup, firstMeasure: checkup && noMeasureYet }, config);
-  const shownModifiers = !applyAmount
-    ? modifiers
-    : amount!.key === 'questoes'
-      ? [...modifiers, { key: 'questoes', label: `Quantidade de questões (${questionCount}; referência ${config.questionCount.reference})`, factor: amount!.factor }]
-      : [...modifiers, { key: 'tempo', label: `Tempo de estudo (${minutes} min; referência ${config.studyTime.reference})`, factor: amount!.factor }];
+  const shownModifiers = [...modifiers];
+  if (applyAmount && amount!.key === 'questoes')
+    shownModifiers.push({ key: 'questoes', label: `Quantidade de questões (${questionCount}; referência ${config.questionCount.reference})`, factor: amount!.factor });
+  else if (applyAmount)
+    shownModifiers.push({ key: 'tempo', label: `Tempo de estudo (${minutes} min; referência ${config.studyTime.reference})`, factor: amount!.factor });
+  if (theoryApplies) shownModifiers.push({ key: 'teoria', label: 'Revisão só teórica', factor: config.theoryReview.factor });
   const label = plan.label;
   const explanation: Explanation = {
     algorithm: config.version,

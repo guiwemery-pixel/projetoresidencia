@@ -92,6 +92,16 @@ export interface SchedulerConfig {
   /** Se a revisão foi feita atrasada e o desempenho foi bom, o intervalo real conta a favor */
   lateCredit: { enabled: boolean; minGrowth: Partial<Record<BandKey, number>> };
   activeMethods: Method[];
+  /** Recuperação ativa que vale mesmo sem números (sem questões registradas) */
+  recallMethods: Method[];
+  /** Estudo teórico: aula, vídeo, teoria, leitura, resumo… ("Questões" marcado sem quantidade não conta) */
+  studyMethods: Method[];
+  /**
+   * Revisão feita só com estudo teórico (ex.: a D1 feita vendo aula): a autoavaliação
+   * mede menos que questões, então o intervalo é multiplicado por `factor` e a etapa
+   * não passa de `maxStage` (1 = D10) nem avança.
+   */
+  theoryReview: { factor: number; maxStage: number };
   suggestedMethodsByStage: Method[][];
   theoryMethods: Method[];
   /** Faixa de questões sugeridas para um assunto novo (D0), por tamanho */
@@ -231,6 +241,9 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   },
   lateCredit: { enabled: true, minGrowth: { excelente: 1.5, bom: 1.2, medio: 1.0 } },
   activeMethods: ['QUESTOES', 'FLASHCARDS', 'RECALL', 'SIMULADO'],
+  recallMethods: ['FLASHCARDS', 'RECALL'],
+  studyMethods: ['TEORIA', 'AULA', 'VIDEO', 'LEITURA', 'RESUMO', 'REVISAO', 'OUTRO'],
+  theoryReview: { factor: 0.4, maxStage: 1 },
   suggestedMethodsByStage: [
     ['QUESTOES', 'REVISAO'],
     ['QUESTOES', 'FLASHCARDS'],

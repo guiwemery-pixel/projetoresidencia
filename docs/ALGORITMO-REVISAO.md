@@ -56,8 +56,9 @@ vale a menor entre essa conta e a conta com o peso normal (0,70). Ex.: 7/7 + Raz
 | 😣 Esqueci praticamente tudo | 20 |
 
 Só questões → pontuação = % de acertos. Só autoavaliação (com flashcards/recall) → pontos da
-autoavaliação. **Só estudo/leitura** (teoria, aula, vídeo, leitura, resumo — sem questões nem
-recuperação ativa) **não pontua**, exceto quando é a própria revisão D1: ver a regra abaixo.
+autoavaliação. **Só estudo teórico** (teoria, aula, vídeo, leitura, resumo — sem questões registradas
+nem flashcards/recall) **não pontua**, exceto quando é a própria revisão D1: ver a regra abaixo.
+“Questões” marcado **sem a quantidade**, junto com aula/teoria, conta como estudo teórico.
 
 Exemplos da especificação: 90% + Dominei = 93 · 70% + Razoável = 70 · 50% + Tive dificuldade = 50 ·
 20% + Esqueci = 20.
@@ -83,8 +84,11 @@ lembra. Quando o contato do dia é só estudo/leitura (inclusive no D0), a próx
 o **dia seguinte** (rótulo D1). A D1 pode ser feita **como a pessoa preferir**: questões (sugestão
 de 1,5× o normal da etapa, ex.: 30–45; depois de um D0 só de leitura, 20–30), flashcards, recall ou
 teoria. A etapa e a facilidade do assunto **não mudam** até a D1. **A D1 nunca gera outra D1**:
-feita com questões, vale o percentual; feita sem questões (inclusive só teoria), valem a
-autoavaliação, o tempo de estudo e a dificuldade (abaixo).
+feita com questões, vale o percentual; feita com flashcards/recall, valem a autoavaliação, o
+tempo de estudo e a dificuldade (abaixo); **feita só com teoria** (aula, vídeo, leitura), vale o
+mesmo cálculo **× 0,4** e a etapa fica no máximo em D10 — ir bem numa aula não mede o quanto você
+lembra como as questões medem. Numa etapa avançada, a revisão só teórica também usa × 0,4 e não
+avança a etapa.
 
 **1ª revisão — definida pelo percentual de acertos.** A data da primeira revisão sai do
 percentual de acertos do primeiro contato medido (o D0 com questões, ou a revisão D1 feita depois
@@ -119,6 +123,7 @@ Da 1ª revisão em diante, valem as faixas acima. A tabela é configurável (`fi
 | **Crédito pelo intervalo real** | Revisão feita atrasada e bem: o novo intervalo não fica abaixo de dias decorridos × 1,5 (excelente), × 1,2 (bom) ou × 1,0 (mediano). |
 | **Mínimo da etapa** | O resultado não fica abaixo do intervalo-base da etapa (ex.: facilidade baixa reduz o bônus, mas o D21 continua com pelo menos 21 dias). |
 | **Quantidade de questões** | Aplicada por último, sobre o resultado acima (tabela abaixo). |
+| **Revisão só teórica** (D1 ou revisão feita só com aula/vídeo/teoria/leitura) | × 0,4, a etapa não avança (1ª revisão: no máximo D10). |
 | **Tempo de estudo** (só quando não há questões) | 30 min = ×1 · 5 min ×0,80 · 15 min ×0,90 · 60 min ×1,10 · 90 min ou mais ×1,15 — gradual, também aplicado por último. |
 
 O produto dos modificadores (sem a quantidade) é limitado a 0,5–1,6 e o intervalo final a 1–180 dias.
@@ -203,7 +208,7 @@ assunto — as próximas subidas serão mais cautelosas. Também gera a notifica
 | D0 | só leitura | amanhã — revisão D1 |
 | D1 | flashcards, 😐 Razoável, 20 min | **D10 em 12 dias** (Razoável → 13 dias × 0,93 pelo tempo) |
 | D1 (outro caso) | flashcards, 🙂 Fui bem, 45 min, difícil | **D21 em 21 dias** (23 × 0,85 ≈ 20 → × 1,05) |
-| D1 (outro caso) | só teoria, 🙂 Fui bem, 30 min | **D21 em 23 dias** — teoria também vale na D1 |
+| D1 (outro caso) | só teoria/vídeo, 🙂 Fui bem, 30 min | **D10 em 9 dias** — 23 × 0,4 (revisão só teórica) |
 
 **Revisão feita só com leitura + mais questões na D1**
 

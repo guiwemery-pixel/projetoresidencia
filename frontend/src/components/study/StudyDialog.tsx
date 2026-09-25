@@ -33,6 +33,8 @@ export function StudyDialogProvider({ children }: { children: ReactNode }) {
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 const QUESTION_METHODS: StudyMethod[] = ['QUESTOES', 'SIMULADO'];
+/** Estudo teórico: sem questões registradas, a data não sai de percentual. */
+const STUDY_ONLY_METHODS: StudyMethod[] = ['TEORIA', 'AULA', 'VIDEO', 'LEITURA', 'RESUMO', 'REVISAO', 'OUTRO'];
 
 function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void }) {
   const toast = useToast();
@@ -87,14 +89,19 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
 
   // Sem questões: explica de onde sai a próxima data
   const activeRecall = methods.some((m) => m === 'FLASHCARDS' || m === 'RECALL');
-  const noQuestionsHint =
-    methods.length === 0 || hasQuestions
-      ? null
-      : activeRecall || suggestion?.checkup || (suggestion && !suggestion.isNew && !suggestion.pendingReview)
-        ? 'Sem questões, a próxima revisão sai de “Como foi?”, do tempo de estudo e da dificuldade.'
-        : suggestion?.isNew
-          ? 'Só teoria/leitura no primeiro contato: a revisão D1 fica para amanhã (questões, flashcards, recall ou teoria).'
-          : 'Só teoria/leitura: a revisão D1 fica para amanhã, mantendo a etapa do assunto.';
+  const theoryTicked = methods.some((m) => STUDY_ONLY_METHODS.includes(m));
+  const questionsEmpty = hasQuestions && !total;
+  let noQuestionsHint: string | null = null;
+  if (methods.length && (!hasQuestions || questionsEmpty)) {
+    if (activeRecall) noQuestionsHint = 'Sem questões, a próxima revisão sai de “Como foi?”, do tempo de estudo e da dificuldade.';
+    else if (questionsEmpty && !theoryTicked) noQuestionsHint = 'Informe quantas questões fez: sem a quantidade, vale só o “Como foi?”.';
+    else
+      noQuestionsHint =
+        (questionsEmpty ? '“Questões” sem a quantidade conta como estudo teórico. ' : '') +
+        (suggestion?.checkup
+          ? 'Revisão só teórica: vale o “Como foi?”, mas com prazo bem menor que com questões, e a etapa não avança.'
+          : 'Estudo teórico (aula, vídeo, leitura): a revisão D1 fica para amanhã — com questões, flashcards, recall ou teoria.');
+  }
   const canSubmit = !!subject && methods.length > 0 && minutes !== null && !questionsError && (!hasQuestions || total === null || (total > 0 && correct !== null));
 
   const toggle = (m: StudyMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));

@@ -285,7 +285,8 @@ export default function ProfilePage() {
               ). A 1ª revisão sai do percentual de acertos do primeiro contato (mínimo de {algorithm.data.firstReview.minQuestions} questões):{' '}
               {firstReviewText(algorithm.data.firstReview.tiers)}. Contato só de estudo/leitura
               agenda a revisão D1 no dia seguinte — com questões, flashcards, recall ou teoria — e mantém a etapa; a D1 nunca gera outra D1. Sem questões suficientes, a
-              data sai da autoavaliação (mesma tabela), ajustada pelo tempo de estudo e pela dificuldade. Nas faixas de crescimento, o intervalo
+              data sai da autoavaliação (mesma tabela), ajustada pelo tempo de estudo e pela dificuldade; se a revisão for só teórica (aula, vídeo,
+              leitura), o prazo é multiplicado por 0,4 e a etapa não avança. Nas faixas de crescimento, o intervalo
               ainda é ajustado pela facilidade individual do assunto, tendência e dificuldade percebida.
             </p>
             {algorithm.data.questionCount && (

@@ -120,17 +120,36 @@ describe('revisão D1 flexível (sem questões)', () => {
     expect(d1({ methods: ['RECALL'], quality: 2, minutes: 90 }).intervalDays).toBe(3); // Tive dificuldade → 3 dias, sem ajuste
   });
 
-  it('a D1 pode ser só teoria/leitura e nunca gera outra D1', () => {
-    const teoria = d1({ methods: ['TEORIA'], quality: 4, minutes: 30 });
+  it('a D1 pode ser só teoria/leitura e nunca gera outra D1 — mas teoria vale menos que questões', () => {
+    const teoria = d1({ methods: ['TEORIA', 'VIDEO'], quality: 4, minutes: 30 });
     expect(teoria.checkup).toBe(false);
-    expect(teoria.intervalDays).toBe(23);
+    expect(teoria.intervalDays).toBe(9); // Fui bem → 23 dias × 0,4 (revisão só teórica)
+    expect(teoria.stageLabel).toBe('D10'); // no máximo D10
+    expect(teoria.explanation.steps.map((s) => s.label)).toContain('Revisão só teórica');
     const semNota = d1({ methods: ['LEITURA'] });
     expect(semNota.checkup).toBe(false);
-    expect(semNota.intervalDays).toBe(13); // sem autoavaliação: desempenho médio (70)
+    expect(semNota.intervalDays).toBe(5); // sem autoavaliação: 70 → 13 dias × 0,4
     expect(semNota.nextState.lastScore).toBe(70);
+    // Com flashcards (recuperação ativa) a tabela vale inteira
+    expect(d1({ methods: ['FLASHCARDS'], quality: 4, minutes: 30 }).intervalDays).toBe(23);
   });
 
-  it('revisão só de leitura numa etapa avançada: D1 amanhã, e a D1 feita com teoria avança normalmente', () => {
+  it('aula/teoria com "Questões" marcado sem a quantidade conta como teórico: D1 amanhã', () => {
+    const r = scheduleNext({
+      state: null,
+      contact: contact('2026-09-25', { methods: ['TEORIA', 'VIDEO', 'QUESTOES'], quality: 4, minutes: 60 }),
+      history: [],
+    });
+    expect(r.checkup).toBe(true);
+    expect(r.intervalDays).toBe(1);
+    expect(r.explanation.steps[r.explanation.steps.length - 1].detail).toMatch(/sem a quantidade, então conta como estudo teórico/);
+    // Só "Questões" marcado (sem teoria), com autoavaliação: vale a autoavaliação
+    const soQuestoes = scheduleNext({ state: null, contact: contact('2026-09-25', { methods: ['QUESTOES'], quality: 4, minutes: 30 }), history: [] });
+    expect(soQuestoes.checkup).toBe(false);
+    expect(soQuestoes.intervalDays).toBe(23);
+  });
+
+  it('revisão só de leitura numa etapa avançada: D1 amanhã, e a D1 só teórica não avança e encurta', () => {
     const state: LearningSnapshot = { stage: 2, ease: 1, intervalDays: 21, lastContactOn: '2026-01-01', lastScore: 85, contacts: 3, lapses: 0 };
     const leitura = scheduleNext({ state, contact: contact('2026-01-22', { methods: ['LEITURA'], quality: 4 }), history: [] });
     expect(leitura.checkup).toBe(true);
@@ -143,7 +162,8 @@ describe('revisão D1 flexível (sem questões)', () => {
     });
     expect(dia1.checkup).toBe(false);
     expect(dia1.band).toBe('bom');
-    expect(dia1.stageLabel).toBe('D60');
+    expect(dia1.stageLabel).toBe('D21'); // não avança
+    expect(dia1.intervalDays).toBe(9); // 21 × 1,03 (40 min) ≈ 22 → × 0,4
   });
 
   it('tempo de estudo gradual (sem questões) e só quando não há questões', () => {
