@@ -33,7 +33,7 @@ GUILHERME
 | **Banco de provas** | Banca → Prova (ex.: ENAMED → ENAMED 2025) → resultados; bancas personalizadas; link para o arquivo. |
 | **Notificações** | Revisões do dia, atrasadas, meta perto do prazo, meta concluída, sequência de estudos, queda de desempenho, simulado agendado. |
 | **Pesquisa global** | “dengue” → Pediatria · 4 revisões · 2 simulados · 86 questões · 78% de acertos. |
-| **Privacidade** | Resumo público montado por lista de permissão, opção de não compartilhar, exportação e exclusão da conta. |
+| **Privacidade** | Resumo público montado por lista de permissão, opção de não compartilhar, exportação, **apagar o progresso** (só o histórico, ou tudo voltando à estrutura inicial, sem perder a conta e os grupos) e exclusão da conta. |
 | **Interface** | Responsiva (celular, tablet, desktop), modo claro/escuro/sistema, PWA-ready (manifest). |
 
 ## Stack

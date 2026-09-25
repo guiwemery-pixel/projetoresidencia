@@ -352,6 +352,60 @@ describe('importar planilha', () => {
   });
 });
 
+describe('apagar progresso', () => {
+  async function withData(name: string) {
+    const s = await signup(name);
+    const area = await firstArea(s.agent, 'Clínica Médica');
+    const goal = await s.agent.post('/api/goals').send({ title: 'Meta', metric: 'QUESTIONS', period: 'CUSTOM', target: 10, dueDate: addDays(today, 30) });
+    expect(goal.status).toBe(201);
+    await s.agent.post('/api/studies').send({
+      newSubject: { areaId: area.id, name: 'Pancreatite' },
+      date: today,
+      durationMinutes: 60,
+      methods: ['QUESTOES'],
+      questions: { total: 20, correct: 16 },
+    });
+    await s.agent.post('/api/import/run').send({ mocks: [{ name: 'ENARE 2025', date: today, accuracy: 80 }], exams: [{ board: 'SES', year: 2021, date: today, accuracy: 72 }] });
+    return s;
+  }
+
+  it('apaga estudos, revisões, simulados e resultados, mantendo assuntos e metas', async () => {
+    const { agent } = await withData('Recomeço');
+    expect((await agent.get('/api/goals')).body[0].status).toBe('COMPLETED');
+    expect((await agent.post('/api/me/reset').send({ password: 'errada' })).status).toBe(401);
+
+    const res = await agent.post('/api/me/reset').send({ password: 'senha-segura-123' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ scope: 'progress', studies: 1, questions: 1, mocks: 1, attempts: 1 });
+    expect((await agent.get('/api/studies')).body).toHaveLength(0);
+    expect((await agent.get('/api/reviews')).body).toHaveLength(0);
+    expect((await agent.get('/api/mock-exams')).body.items).toHaveLength(0);
+    expect((await agent.get('/api/metrics/overview?days=7')).body.questions.total).toBe(0);
+    // Estrutura continua: assunto, banca e prova; a meta volta a ficar ativa e zerada
+    expect((await agent.get('/api/subjects')).body.map((s: { name: string }) => s.name)).toEqual(['Pancreatite']);
+    const ses = ((await agent.get('/api/exams/boards')).body as { name: string; exams: { attempts: unknown[] }[] }[]).find((b) => b.name === 'SES')!;
+    expect(ses.exams[0].attempts).toHaveLength(0);
+    expect((await agent.get('/api/goals')).body[0]).toMatchObject({ status: 'ACTIVE', progress: 0 });
+    // A conta continua funcionando
+    expect((await agent.get('/api/auth/me')).status).toBe(200);
+  });
+
+  it('"tudo" volta ao modelo inicial de áreas e bancas', async () => {
+    const { agent } = await withData('Zerado');
+    const before = (await agent.get('/api/areas')).body.length;
+    const res = await agent.post('/api/me/reset').send({ password: 'senha-segura-123', scope: 'everything' });
+    expect(res.status).toBe(200);
+    expect((await agent.get('/api/subjects')).body).toHaveLength(0);
+    expect((await agent.get('/api/goals')).body).toHaveLength(0);
+    const areas = (await agent.get('/api/areas')).body as { name: string }[];
+    expect(areas).toHaveLength(before);
+    expect(areas.map((a) => a.name)).toContain('Clínica Médica');
+    const boards = (await agent.get('/api/exams/boards')).body as { name: string; exams: unknown[] }[];
+    expect(boards.map((b) => b.name)).not.toContain('SES');
+    expect(boards.every((b) => b.exams.length === 0)).toBe(true);
+  });
+});
+
 describe('privacidade entre usuários', () => {
   async function setup() {
     const a = await signup('Guilherme');

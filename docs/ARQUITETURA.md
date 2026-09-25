@@ -44,7 +44,7 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | Módulo | Responsabilidade |
 |---|---|
 | `auth` | Cadastro, login, logout, sessões (tokens opacos com hash no banco), hash de senha (bcrypt). |
-| `users` | Perfil, preferências de ritmo, privacidade, troca de senha, exportação e exclusão de conta. |
+| `users` | Perfil, preferências de ritmo, privacidade, troca de senha, exportação, apagar progresso (`POST /me/reset`, com senha) e exclusão de conta. |
 | `groups` | Grupos, convites, papéis (dono/membro) e o **painel do grupo**. |
 | `taxonomy` | Área → Subárea → Assunto, mover/renomear/arquivar, templates por área do conhecimento. |
 | `studies` | Registro de sessões de estudo e de questões; dispara o processamento do contato. |
@@ -101,7 +101,7 @@ histórico do assunto é **reprocessado do zero** (o motor é determinístico), 
 7. **Cabeçalhos:** `helmet` com Content-Security-Policy restritiva (sem scripts inline).
 8. **Força bruta:** limite de tentativas em login/cadastro e em códigos de convite.
 9. **Validação:** toda entrada passa por Zod; avatares só como imagem (PNG/JPEG/WebP) pequena ou link https.
-10. **LGPD:** exportação de todos os dados (JSON) e exclusão definitiva da conta pelo próprio usuário.
+10. **LGPD:** exportação de todos os dados (JSON), apagar o próprio progresso sem excluir a conta e exclusão definitiva da conta pelo próprio usuário.
 
 ## Modelo de dados
 

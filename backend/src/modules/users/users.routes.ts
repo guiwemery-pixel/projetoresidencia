@@ -8,7 +8,7 @@ import { currentUser, today } from '../../middleware/auth.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import { SESSION_COOKIE, destroyOtherSessions, sessionCookieOptions } from '../auth/session.js';
 import { computeProgress } from '../progress/progress.service.js';
-import { exportUserData, toPrivateUser } from './users.service.js';
+import { exportUserData, resetProgress, toPrivateUser } from './users.service.js';
 
 export const usersRouter = Router();
 
@@ -88,6 +88,14 @@ usersRouter.get('/export', async (req, res) => {
   const data = await exportUserData(currentUser(req).id);
   res.setHeader('Content-Disposition', `attachment; filename="meus-dados-${today(req)}.json"`);
   res.json(data);
+});
+
+/** Apaga o progresso (ou tudo, voltando ao modelo inicial) sem excluir a conta. */
+usersRouter.post('/reset', async (req, res) => {
+  const { password, scope } = parse(z.object({ password: z.string().min(1), scope: z.enum(['progress', 'everything']).default('progress') }), req.body);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: currentUser(req).id } });
+  if (!(await verifyPassword(password, user.passwordHash))) throw unauthorized('Senha incorreta');
+  res.json(await resetProgress(user.id, scope));
 });
 
 usersRouter.delete('/', async (req, res) => {

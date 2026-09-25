@@ -1,15 +1,95 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react';
+import { Download, FileSpreadsheet, ImagePlus, RotateCcw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { User } from '../api/types';
 import { useProgress } from '../hooks/api';
 import { useAuth } from '../hooks/useAuth';
 import { LEVELS } from '../lib/constants';
-import { Avatar, Button, Card, Input, LevelBadge, Loading, Modal, NumberInput, PageHeader, ProgressBar, useToast } from '../components/ui';
+import { Avatar, Button, Card, Input, LevelBadge, Loading, Modal, NumberInput, PageHeader, ProgressBar, cx, useToast } from '../components/ui';
 import { ProgressOverview } from '../components/dashboard/shared';
 import { questionCountFactor } from '../lib/questions';
+
+type ResetScope = 'progress' | 'everything';
+
+const RESET_OPTIONS: { value: ResetScope; title: string; detail: string }[] = [
+  {
+    value: 'progress',
+    title: 'Só o progresso',
+    detail: 'Apaga estudos, questões, revisões, simulados e resultados de provas. Mantém suas áreas, assuntos, bancas e metas (que voltam a zero).',
+  },
+  {
+    value: 'everything',
+    title: 'Tudo, voltando ao início',
+    detail: 'Apaga também áreas, assuntos, metas e o banco de provas, e recria a estrutura inicial, como numa conta nova.',
+  },
+];
+
+/** Apagar o progresso sem excluir a conta (com senha e opção de baixar os dados antes). */
+function ResetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [scope, setScope] = useState<ResetScope>('progress');
+  const [password, setPassword] = useState('');
+  const close = () => {
+    setPassword('');
+    setScope('progress');
+    onClose();
+  };
+  const reset = useMutation({
+    mutationFn: () => api.post<{ studies: number }>('/me/reset', { password, scope }),
+    onSuccess: async () => {
+      await qc.invalidateQueries();
+      toast.success(scope === 'everything' ? 'Tudo apagado. Sua conta está como nova.' : 'Progresso apagado. Você recomeça do zero.');
+      close();
+      navigate('/');
+    },
+    onError: toast.error,
+  });
+  return (
+    <Modal
+      open={open}
+      onClose={close}
+      title="Apagar seu progresso?"
+      footer={
+        <>
+          <Button variant="secondary" onClick={close}>
+            Cancelar
+          </Button>
+          <Button variant="danger" loading={reset.isPending} disabled={!password} onClick={() => reset.mutate()}>
+            Apagar
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-ink2">
+          Sua conta, seus grupos e suas preferências continuam. O que for apagado <strong className="text-ink">não pode ser recuperado</strong>.
+        </p>
+        <div role="radiogroup" aria-label="O que apagar" className="space-y-2">
+          {RESET_OPTIONS.map((o) => (
+            <label
+              key={o.value}
+              className={cx('flex cursor-pointer items-start gap-3 rounded-2xl border p-3', scope === o.value ? 'border-accent bg-accent-wash' : 'border-line')}
+            >
+              <input type="radio" name="reset-scope" checked={scope === o.value} onChange={() => setScope(o.value)} className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]" />
+              <span>
+                <span className="block text-sm font-medium text-ink">{o.title}</span>
+                <span className="block text-xs text-ink2">{o.detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <a href="/api/me/export" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent">
+          <Download className="h-4 w-4" /> Baixar uma cópia dos meus dados antes
+        </a>
+        <Input label="Confirme sua senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+      </div>
+    </Modal>
+  );
+}
 
 /** Reduz a imagem para 128×128 (JPEG) no navegador antes de enviar. */
 async function resizeImage(file: File): Promise<string> {
@@ -96,6 +176,7 @@ export default function ProfilePage() {
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePw, setDeletePw] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
 
   useEffect(() => {
     if (window.location.hash === '#indicador') setTimeout(() => document.getElementById('indicador')?.scrollIntoView({ behavior: 'smooth' }), 300);
@@ -335,7 +416,9 @@ export default function ProfilePage() {
           </form>
         </Card>
         <Card title="Seus dados">
-          <p className="mb-3 text-sm text-ink2">Traga seu histórico de uma planilha, baixe tudo o que você registrou (JSON) ou exclua sua conta definitivamente.</p>
+          <p className="mb-3 text-sm text-ink2">
+            Traga seu histórico de uma planilha, baixe tudo o que você registrou (JSON), recomece do zero apagando seu progresso ou exclua sua conta definitivamente.
+          </p>
           <div className="flex flex-wrap gap-2">
             <Link to="/importar" className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-subtle">
               <FileSpreadsheet className="h-4 w-4" /> Importar planilha
@@ -343,12 +426,17 @@ export default function ProfilePage() {
             <a href="/api/me/export" className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-subtle">
               <Download className="h-4 w-4" /> Exportar meus dados
             </a>
+            <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setResetOpen(true)}>
+              Apagar progresso
+            </Button>
             <Button variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleteOpen(true)}>
               Excluir conta
             </Button>
           </div>
         </Card>
       </div>
+
+      <ResetDialog open={resetOpen} onClose={() => setResetOpen(false)} />
 
       <Modal
         open={deleteOpen}
