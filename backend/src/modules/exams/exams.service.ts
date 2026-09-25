@@ -41,8 +41,8 @@ function serializeAttempt(a: {
   id: string;
   examId: string;
   takenOn: Date;
-  totalQuestions: number;
-  correct: number;
+  totalQuestions: number | null;
+  correct: number | null;
   accuracy: number;
   durationMinutes: number | null;
   notes: string | null;
@@ -53,7 +53,7 @@ function serializeAttempt(a: {
     takenOn: fromDb(a.takenOn),
     totalQuestions: a.totalQuestions,
     correct: a.correct,
-    wrong: a.totalQuestions - a.correct,
+    wrong: a.totalQuestions != null && a.correct != null ? a.totalQuestions - a.correct : null,
     accuracy: a.accuracy,
     durationMinutes: a.durationMinutes,
     notes: a.notes,

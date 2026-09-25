@@ -53,7 +53,8 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | `progress` | Indicador de progresso detalhado (só para o dono) e **resumo público** (para o grupo). |
 | `metrics` | Métricas por período, série temporal, por área e por assunto. |
 | `goals` | Metas recorrentes/personalizadas e cálculo automático do progresso. |
-| `mock-exams` / `exams` | Simulados e banco de provas (banca → prova → tentativas). |
+| `mock-exams` / `exams` | Simulados e banco de provas (banca → prova → tentativas). Simulado e tentativa aceitam só a nota em %, sem a quantidade de questões. |
+| `import` | Importação de planilhas: o navegador lê o arquivo (`frontend/src/lib/import`) e envia estudos, simulados e notas de provas em lotes pequenos (poucos assuntos por lote); o servidor grava em bloco, sem duplicar, e recalcula o histórico de cada assunto. |
 | `notifications` | Notificações idempotentes (chave de deduplicação) + job periódico. |
 | `insights` | Recomendações automáticas e comparações com o próprio histórico. |
 | `search` / `dashboard` | Pesquisa global e agregação da tela inicial. |
@@ -119,7 +120,7 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 | `algorithm_configs` | Parâmetros do algoritmo ajustáveis sem novo deploy. |
 | `goals` | Metas (métrica, período, alvo, área/assunto opcionais, prazo, status). |
 | `mock_exams`, `mock_exam_area_results` | Simulados e resultado por área. |
-| `boards`, `exams`, `exam_attempts` | Banco de provas. |
+| `boards`, `exams`, `exam_attempts` | Banco de provas (tentativa com questões/acertos opcionais: pode guardar só a %). |
 | `notifications` | Notificações com chave de deduplicação única por usuário. |
 
 Datas “de calendário” (dia do estudo, dia previsto da revisão) usam colunas `DATE` e são calculadas
@@ -152,7 +153,7 @@ o usuário abre o app e pelo job diário, que também apaga sessões de login ve
 | Algoritmo melhor (FSRS, IA) | Nova implementação de `scheduleNext` em `scheduler/`; `algorithm_version` fica gravado em cada estado. |
 | IA para analisar desempenho | Novo gerador em `insights/` usando `metrics` como fonte; o contrato `Insight` já é genérico. |
 | Flashcards / banco de questões | Novos módulos que registram contatos via `studies` → o motor de revisão já os trata como “recuperação ativa”. |
-| Importação de planilhas/questões | Endpoint que chama `createStudy` em lote (o reprocessamento garante consistência). |
+| Importação de outros formatos | Novo leitor em `frontend/src/lib/import` que gere os mesmos registros; o endpoint `/api/import` e o reprocessamento já existem. |
 | Google Calendar | Exportar `reviews` pendentes (já por dia) via OAuth; a agenda já é calculada no backend. |
 | Upload de PDFs de provas | `exams.file_url` já existe; trocar por armazenamento de objetos (S3/R2) respeitando direitos autorais. |
 | Ranking opcional | Seria um novo campo **opt-in** no resumo público — a lista de permissão torna a mudança explícita. |

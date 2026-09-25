@@ -3,7 +3,7 @@
 O projeto já vem configurado para o Vercel (`vercel.json`):
 
 - o **site** (frontend) é servido pela CDN do Vercel;
-- a **API** roda como função serverless (`api/index.mjs` → Express);
+- a **API** roda como função serverless (`api/index.mjs` → Express), com até 60 s por requisição;
 - o **banco** é um PostgreSQL externo — recomendado: **Neon**, pelo Marketplace do Vercel;
 - as **migrations** rodam sozinhas a cada deploy (`scripts/vercel-build.sh`);
 - as **notificações** também são geradas por um agendador diário (Vercel Cron), além de

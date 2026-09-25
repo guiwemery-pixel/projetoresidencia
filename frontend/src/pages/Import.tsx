@@ -6,11 +6,26 @@ import { api } from '../api/client';
 import { METHOD_LABEL } from '../lib/constants';
 import { fmtShort, plural, todayLocal } from '../lib/format';
 import { parseCsv } from '../lib/import/csv';
-import { GROUP_FIELDS, batches, buildEvents, detectHeaderRow, guessMapping, type GroupField, type GroupMap, type Grid, type ImportEvent, type Mapping } from '../lib/import/sheet';
+import { findResults, type ResultItem } from '../lib/import/results';
+import {
+  GROUP_FIELDS,
+  batches,
+  buildEvents,
+  columnTitles,
+  detectHeaderRow,
+  guessMapping,
+  pickSheet,
+  type GroupField,
+  type GroupMap,
+  type Grid,
+  type ImportEvent,
+  type Mapping,
+} from '../lib/import/sheet';
 import { Button, Card, PageHeader, ProgressBar, Segmented, cx, useToast } from '../components/ui';
 
 // Importar planilha: o arquivo é lido NO NAVEGADOR; só os estudos convertidos
-// (data, assunto, questões, acertos, tempo, tipo) vão para a conta da pessoa.
+// (data, assunto, questões, acertos, tempo, tipo) e as notas de simulados e
+// provas vão para a conta da pessoa.
 
 interface SheetData {
   name: string;
@@ -26,6 +41,33 @@ interface Preview {
   newAreas: string[];
   firstDate: string | null;
   lastDate: string | null;
+  mocks: number;
+  mockDuplicates: number;
+  exams: number;
+  examDuplicates: number;
+  newBoards: string[];
+}
+
+interface RunResult {
+  created: number;
+  duplicates: number;
+  subjects: number;
+  mocks: number;
+  exams: number;
+}
+
+type FoundResult = ResultItem & { include: boolean };
+
+/** Simulados e provas marcados, no formato da API (sem data na planilha → a data escolhida). */
+function resultPayload(results: FoundResult[], date: string) {
+  const chosen = results.filter((r) => r.include);
+  const base = (r: FoundResult) => ({ date: r.date ?? date, accuracy: r.accuracy, total: r.total, correct: r.correct });
+  return {
+    mocks: chosen.filter((r) => r.kind === 'mock').map((r) => ({ ...base(r), name: r.name.slice(0, 120), board: r.board?.slice(0, 80) ?? null, year: r.year })),
+    exams: chosen
+      .filter((r): r is FoundResult & { year: number; board: string } => r.kind === 'exam' && r.year !== null && !!r.board)
+      .map((r) => ({ ...base(r), board: r.board.slice(0, 80), year: r.year })),
+  };
 }
 
 const FIELD_LABEL: Record<GroupField, string> = {
@@ -62,20 +104,6 @@ async function readFile(file: File): Promise<SheetData[]> {
   }
 }
 
-/** Aba com mais estudos reconhecidos. */
-function bestSheet(sheets: SheetData[], today: string) {
-  let best = 0;
-  let most = -1;
-  sheets.forEach((s, i) => {
-    const n = buildEvents(s.grid, guessMapping(s.grid), today).events.length;
-    if (n > most) {
-      most = n;
-      best = i;
-    }
-  });
-  return best;
-}
-
 function ColumnSelect({ value, onChange, columns, label }: { value: number | null; onChange: (v: number | null) => void; columns: string[]; label: string }) {
   return (
     <label className="block min-w-0">
@@ -89,6 +117,90 @@ function ColumnSelect({ value, onChange, columns, label }: { value: number | nul
         ))}
       </select>
     </label>
+  );
+}
+
+function ResultRow({ r, onToggle }: { r: FoundResult; onToggle: (include: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm hover:bg-subtle">
+      <input type="checkbox" checked={r.include} onChange={(e) => onToggle(e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
+      <span className="min-w-0 flex-1 truncate text-ink" title={r.name}>
+        {r.name}
+      </span>
+      <span className="num shrink-0 font-medium text-ink">{Math.round(r.accuracy)}%</span>
+    </label>
+  );
+}
+
+/** Notas de simulados e provas antigas encontradas em outras abas. */
+function ResultsCard({
+  results,
+  onChange,
+  date,
+  onDate,
+  today,
+}: {
+  results: FoundResult[];
+  onChange: (next: FoundResult[]) => void;
+  date: string;
+  onDate: (d: string) => void;
+  today: string;
+}) {
+  const set = (match: (r: FoundResult) => boolean, include: boolean) => onChange(results.map((r) => (match(r) ? { ...r, include } : r)));
+  const examples = results.filter((r) => r.placeholder);
+  const undated = results.some((r) => r.include && !r.date);
+  const sections = [
+    { kind: 'mock' as const, title: 'Simulados', hint: 'Entram em Simulados, com a nota.' },
+    { kind: 'exam' as const, title: 'Provas antigas', hint: 'Entram no banco de provas: a instituição vira banca, e cada ano, uma prova com o seu resultado.' },
+  ];
+  return (
+    <Card title="3. Simulados e provas" subtitle="Notas encontradas nas outras abas da planilha. Desmarque o que não quiser trazer.">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {sections.map(({ kind, title, hint }) => {
+          const items = results.filter((r) => r.kind === kind && !r.placeholder);
+          if (!items.length) return null;
+          const all = items.every((r) => r.include);
+          return (
+            <section key={kind}>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-ink">
+                  {title} <span className="num font-normal text-muted">({items.filter((r) => r.include).length}/{items.length})</span>
+                </h3>
+                <button type="button" className="text-xs font-medium text-accent" onClick={() => set((r) => r.kind === kind && !r.placeholder, !all)}>
+                  {all ? 'Desmarcar todos' : 'Marcar todos'}
+                </button>
+              </div>
+              <p className="mb-2 text-xs text-ink2">{hint}</p>
+              <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+                {items.map((r) => (
+                  <ResultRow key={`${r.sheet}:${r.row}:${r.name}`} r={r} onToggle={(include) => set((x) => x === r, include)} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+      {examples.length > 0 && (
+        <label className="mt-3 flex items-start gap-2 text-sm text-ink2">
+          <input
+            type="checkbox"
+            checked={examples.every((r) => r.include)}
+            onChange={(e) => set((r) => r.placeholder, e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          <span>
+            Trazer também {plural(examples.length, 'nota', 'notas')} de nomes genéricos ({[...new Set(examples.map((r) => r.board))].slice(0, 2).join(', ')}…), que parecem exemplo da
+            planilha.
+          </span>
+        </label>
+      )}
+      {undated && (
+        <label className="mt-4 block max-w-xs">
+          <span className="label">A planilha não diz quando você fez. Usar a data</span>
+          <input type="date" className="input" max={today} value={date} onChange={(e) => e.target.value && onDate(e.target.value)} />
+        </label>
+      )}
+    </Card>
   );
 }
 
@@ -106,16 +218,20 @@ export default function ImportPage() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [finished, setFinished] = useState<{ created: number; duplicates: number; subjects: number } | null>(null);
+  const [finished, setFinished] = useState<RunResult | null>(null);
+  const [results, setResults] = useState<FoundResult[]>([]);
+  const [resultsDate, setResultsDate] = useState(today);
 
   const grid = sheets[sheetIndex]?.grid ?? [];
   const built = useMemo(() => (mapping ? buildEvents(grid, mapping, today) : null), [grid, mapping, today]);
-  const columns = useMemo(() => {
-    if (!mapping) return [];
-    const header = grid[mapping.headerRow] ?? [];
-    const width = Math.max(header.length, ...grid.slice(mapping.headerRow, mapping.headerRow + 30).map((r) => r.length), 0);
-    return Array.from({ length: width }, (_, i) => `${colName(i)} · ${String(header[i] ?? '').trim() || '(sem título)'}`);
-  }, [grid, mapping]);
+  const headerRow = mapping?.headerRow;
+  const columns = useMemo(
+    () => (headerRow === undefined ? [] : columnTitles(grid, headerRow).map((t, i) => `${colName(i)} · ${t || '(sem título)'}`)),
+    [grid, headerRow],
+  );
+  const payloadResults = useMemo(() => resultPayload(results, resultsDate), [results, resultsDate]);
+  const resultCount = payloadResults.mocks.length + payloadResults.exams.length;
+  const events = built?.events ?? [];
 
   const update = (patch: Partial<Mapping>) => {
     setMapping((m) => (m ? { ...m, ...patch } : m));
@@ -130,10 +246,11 @@ export default function ImportPage() {
     try {
       const data = (await readFile(file)).filter((s) => s.grid.length > 0);
       if (!data.length) throw new Error('A planilha está vazia.');
-      const best = bestSheet(data, today);
+      const best = pickSheet(data, today);
       setSheets(data);
       setSheetIndex(best);
       setMapping(guessMapping(data[best].grid));
+      setResults(findResults(data, today).map((r) => ({ ...r, include: !r.placeholder })));
       setFileName(file.name);
     } catch (err) {
       toast.error(err);
@@ -149,10 +266,10 @@ export default function ImportPage() {
   }
 
   async function check() {
-    if (!built?.events.length) return;
+    if (!events.length && !resultCount) return;
     setChecking(true);
     try {
-      setPreview(await api.post<Preview>('/import/preview', { events: built.events }));
+      setPreview(await api.post<Preview>('/import/preview', { events, ...payloadResults }));
     } catch (err) {
       toast.error(err);
     } finally {
@@ -161,28 +278,37 @@ export default function ImportPage() {
   }
 
   async function run() {
-    if (!built?.events.length) return;
-    const parts = batches(built.events);
-    const total = built.events.length;
+    if (!events.length && !resultCount) return;
+    // Poucos assuntos por vez: cada lote termina rápido mesmo com o banco longe
+    const parts: { events: ImportEvent[]; mocks?: unknown[]; exams?: unknown[] }[] = batches(events).map((part) => ({ events: part }));
+    if (resultCount) parts.push({ events: [], ...payloadResults });
+    const total = events.length + resultCount;
     let done = 0;
-    const sum = { created: 0, duplicates: 0, subjects: 0 };
+    const sum: RunResult = { created: 0, duplicates: 0, subjects: 0, mocks: 0, exams: 0 };
     setProgress({ done, total });
     try {
       for (const part of parts) {
-        const r = await api.post<{ created: number; duplicates: number; subjects: number }>('/import/run', { events: part });
+        const r = await api.post<RunResult>('/import/run', part);
         sum.created += r.created;
         sum.duplicates += r.duplicates;
         sum.subjects += r.subjects;
-        done += part.length;
+        sum.mocks += r.mocks;
+        sum.exams += r.exams;
+        done += part.events.length + (part.mocks?.length ?? 0) + (part.exams?.length ?? 0);
         setProgress({ done, total });
       }
       setFinished(sum);
-      await qc.invalidateQueries();
       toast.success('Planilha importada!');
     } catch (err) {
-      toast.error(err);
+      toast.error(
+        done > 0
+          ? new Error(`A importação parou no meio (${done} de ${total} registros já entraram). Tente de novo: o que já foi importado não se repete.`)
+          : err,
+      );
+      if (done > 0) setPreview(null);
     } finally {
       setProgress(null);
+      if (done > 0) await qc.invalidateQueries();
     }
   }
 
@@ -204,8 +330,8 @@ export default function ImportPage() {
       <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4 text-sm text-ink2">
         <Lock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
         <p>
-          A planilha é lida <strong className="text-ink">no seu navegador</strong>. Só os estudos reconhecidos (data, assunto, questões, acertos, tempo e tipo) vão para a{' '}
-          <strong className="text-ink">sua</strong> conta, e as revisões são recalculadas pelo algoritmo do site. Importar de novo a mesma planilha não duplica nada.
+          A planilha é lida <strong className="text-ink">no seu navegador</strong>. Só os estudos reconhecidos (data, assunto, questões, acertos, tempo e tipo) e as notas de simulados e provas vão
+          para a <strong className="text-ink">sua</strong> conta, e as revisões são recalculadas pelo algoritmo do site. Importar de novo a mesma planilha não duplica nada.
         </p>
       </div>
 
@@ -294,6 +420,21 @@ export default function ImportPage() {
                 ]}
               />
             </div>
+            {built && built.percentOnly > 0 && (
+              <label className="block">
+                <span className="label">Registros só com o % de acertos</span>
+                <select className="input" value={mapping.percentOnly} onChange={(e) => update({ percentOnly: e.target.value as Mapping['percentOnly'] })}>
+                  <option value="quality">Autoavaliação</option>
+                  <option value="estimate">Estimar nº de questões</option>
+                </select>
+              </label>
+            )}
+            {mapping.area !== null && (
+              <label className="flex items-center gap-2 self-end pb-2 text-sm text-ink2 sm:col-span-2">
+                <input type="checkbox" checked={mapping.bigAreas} onChange={(e) => update({ bigAreas: e.target.checked })} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
+                Organizar nas grandes áreas (ex.: “NEFRO 2” → Clínica Médica › Nefrologia)
+              </label>
+            )}
           </div>
 
           <h3 className="mb-2 mt-5 text-sm font-semibold text-ink">Registros em cada linha</h3>
@@ -349,9 +490,25 @@ export default function ImportPage() {
         </Card>
       )}
 
+      {results.length > 0 && (
+        <ResultsCard
+          results={results}
+          onChange={(next) => {
+            setResults(next);
+            setPreview(null);
+          }}
+          date={resultsDate}
+          onDate={(d) => {
+            setResultsDate(d);
+            setPreview(null);
+          }}
+          today={today}
+        />
+      )}
+
       {built && mapping && (
         <Card
-          title="3. Prévia"
+          title={`${results.length ? 4 : 3}. Prévia`}
           subtitle={
             built.events.length
               ? `${plural(built.events.length, 'estudo reconhecido', 'estudos reconhecidos')} em ${plural(new Set(built.events.map((e) => `${e.area}|${e.subarea}|${e.subject}`.toLowerCase())).size, 'assunto', 'assuntos')}.`
@@ -392,7 +549,12 @@ export default function ImportPage() {
             <ul className="mt-3 space-y-1 text-xs text-ink2">
               {built.future > 0 && <li>• {plural(built.future, 'registro com data futura foi ignorado', 'registros com data futura foram ignorados')} (revisões ainda não feitas).</li>}
               {built.percentOnly > 0 && (
-                <li>• {plural(built.percentOnly, 'registro tem', 'registros têm')} só o percentual, sem a quantidade de questões: entram como autoavaliação.</li>
+                <li>
+                  • {plural(built.percentOnly, 'registro tem', 'registros têm')} só o percentual, sem a quantidade de questões:{' '}
+                  {mapping.percentOnly === 'estimate'
+                    ? 'recebem uma quantidade estimada (a das outras revisões do mesmo assunto), anotada no estudo.'
+                    : 'entram como questões com autoavaliação (o % fica anotado no estudo).'}
+                </li>
               )}
               {built.skipped.slice(0, 6).map((s, i) => (
                 <li key={i} className="flex items-start gap-1">
@@ -403,7 +565,7 @@ export default function ImportPage() {
             </ul>
           )}
 
-          {built.events.length > 0 && !finished && (
+          {(events.length > 0 || resultCount > 0) && !finished && (
             <div className="mt-4 space-y-3">
               {!preview ? (
                 <Button loading={checking} onClick={check}>
@@ -411,22 +573,43 @@ export default function ImportPage() {
                 </Button>
               ) : (
                 <div className="rounded-2xl bg-subtle p-4 text-sm text-ink">
-                  <p>
-                    <strong>{plural(preview.studies, 'estudo novo', 'estudos novos')}</strong> em {plural(preview.subjects, 'assunto', 'assuntos')} ({preview.newSubjects} novos)
-                    {preview.questions > 0 && <>, com {preview.questions} questões</>}
-                    {preview.firstDate && preview.lastDate && (
-                      <>
-                        {' '}
-                        — de {fmtShort(preview.firstDate)} a {fmtShort(preview.lastDate)}
-                      </>
-                    )}
-                    .
-                  </p>
-                  {preview.duplicates > 0 && <p className="mt-1 text-ink2">{plural(preview.duplicates, 'estudo já existe', 'estudos já existem')} na sua conta e será ignorado.</p>}
+                  {events.length > 0 && (
+                    <p>
+                      <strong>{plural(preview.studies, 'estudo novo', 'estudos novos')}</strong> em {plural(preview.subjects, 'assunto', 'assuntos')} ({preview.newSubjects} novos)
+                      {preview.questions > 0 && <>, com {preview.questions} questões</>}
+                      {preview.firstDate && preview.lastDate && (
+                        <>
+                          {' '}
+                          — de {fmtShort(preview.firstDate)} a {fmtShort(preview.lastDate)}
+                        </>
+                      )}
+                      .
+                    </p>
+                  )}
+                  {resultCount > 0 && (
+                    <p className={cx(events.length > 0 && 'mt-1')}>
+                      <strong>{plural(preview.mocks, 'simulado novo', 'simulados novos')}</strong> e{' '}
+                      <strong>{plural(preview.exams, 'nota de prova antiga', 'notas de provas antigas')}</strong>
+                      {preview.newBoards.length > 0 && <> (bancas novas: {preview.newBoards.join(', ')})</>}.
+                    </p>
+                  )}
+                  {preview.duplicates + preview.mockDuplicates + preview.examDuplicates > 0 && (
+                    <p className="mt-1 text-ink2">
+                      Já estão na sua conta e serão ignorados:{' '}
+                      {[
+                        preview.duplicates && plural(preview.duplicates, 'estudo', 'estudos'),
+                        preview.mockDuplicates && plural(preview.mockDuplicates, 'simulado', 'simulados'),
+                        preview.examDuplicates && plural(preview.examDuplicates, 'nota de prova', 'notas de provas'),
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
+                      .
+                    </p>
+                  )}
                   {preview.newAreas.length > 0 && <p className="mt-1 text-ink2">Áreas que serão criadas: {preview.newAreas.join(', ')}.</p>}
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <Button loading={!!progress} disabled={preview.studies === 0} onClick={run} icon={<Upload className="h-4 w-4" />}>
-                      Importar {plural(preview.studies, 'estudo', 'estudos')}
+                    <Button loading={!!progress} disabled={preview.studies + preview.mocks + preview.exams === 0} onClick={run} icon={<Upload className="h-4 w-4" />}>
+                      Importar
                     </Button>
                     <Button variant="ghost" onClick={() => setPreview(null)} disabled={!!progress}>
                       Voltar
@@ -449,8 +632,16 @@ export default function ImportPage() {
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" style={{ color: 'var(--good)' }} />
               <div>
                 <p className="font-medium text-ink">
-                  Pronto! {plural(finished.created, 'estudo importado', 'estudos importados')}
-                  {finished.duplicates > 0 && ` (${finished.duplicates} já existiam)`}. As revisões foram recalculadas.
+                  Pronto!{' '}
+                  {[
+                    (finished.created > 0 || finished.duplicates > 0 || !(finished.mocks || finished.exams)) &&
+                      plural(finished.created, 'estudo importado', 'estudos importados') + (finished.duplicates > 0 ? ` (${finished.duplicates} já existiam)` : ''),
+                    finished.mocks > 0 && plural(finished.mocks, 'simulado', 'simulados'),
+                    finished.exams > 0 && plural(finished.exams, 'nota de prova antiga', 'notas de provas antigas'),
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
+                  .{finished.created > 0 && ' As revisões foram recalculadas.'}
                 </p>
                 <p className="mt-1 flex flex-wrap gap-3">
                   <Link to="/revisoes" className="font-medium text-accent">
@@ -462,6 +653,16 @@ export default function ImportPage() {
                   <Link to="/estudos" className="font-medium text-accent">
                     Estudos →
                   </Link>
+                  {finished.mocks > 0 && (
+                    <Link to="/simulados" className="font-medium text-accent">
+                      Simulados →
+                    </Link>
+                  )}
+                  {finished.exams > 0 && (
+                    <Link to="/provas" className="font-medium text-accent">
+                      Provas →
+                    </Link>
+                  )}
                 </p>
               </div>
             </div>

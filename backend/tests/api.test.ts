@@ -299,6 +299,49 @@ describe('importar planilha', () => {
     expect((await agent.post('/api/import/preview').send({ events })).body).toMatchObject({ studies: 0, duplicates: 4 });
   });
 
+  it('importa simulados e provas só com a nota, sem duplicar', async () => {
+    const { agent } = await signup('Antonio');
+    const mocks = [
+      { name: 'SUS BA 2022', board: 'SUS BA', year: 2022, date: today, accuracy: 57 },
+      { name: 'ENARE 2026', board: 'ENARE', year: 2026, date: today, accuracy: 90 },
+    ];
+    const exams = [
+      { board: 'SES', year: 2021, date: today, accuracy: 72 },
+      { board: 'enare', year: 2021, date: today, accuracy: 80 },
+    ];
+    const preview = await agent.post('/api/import/preview').send({ mocks, exams });
+    expect(preview.status).toBe(200);
+    // ENARE já existe entre as bancas do modelo
+    expect(preview.body).toMatchObject({ studies: 0, mocks: 2, exams: 2, newBoards: ['SES'] });
+
+    const run = await agent.post('/api/import/run').send({ mocks, exams });
+    expect(run.status).toBe(200);
+    expect(run.body).toMatchObject({ created: 0, mocks: 2, exams: 2 });
+
+    const list = (await agent.get('/api/mock-exams')).body;
+    // Mesma data: a ordem da planilha é mantida na evolução
+    expect(list.evolution.map((m: { name: string }) => m.name)).toEqual(['SUS BA 2022', 'ENARE 2026']);
+    expect(list.stats).toMatchObject({ done: 2, avgAccuracy: 73.5 });
+    const sus = list.items.find((m: { name: string }) => m.name === 'SUS BA 2022');
+    expect(sus).toMatchObject({ totalQuestions: null, correct: null, accuracy: 57 });
+    // Editar só o nome mantém a nota
+    await agent.patch(`/api/mock-exams/${sus.id}`).send({ name: 'SUS-BA 2022' });
+    expect((await agent.get(`/api/mock-exams/${sus.id}`)).body).toMatchObject({ name: 'SUS-BA 2022', accuracy: 57 });
+
+    const boards = (await agent.get('/api/exams/boards')).body as { name: string; exams: { name: string; bestAccuracy: number; attempts: { totalQuestions: number | null; wrong: number | null }[] }[] }[];
+    const ses = boards.find((b) => b.name === 'SES')!.exams[0];
+    expect(ses).toMatchObject({ name: 'SES 2021', bestAccuracy: 72 });
+    expect(ses.attempts[0]).toMatchObject({ totalQuestions: null, wrong: null });
+    expect(boards.find((b) => b.name === 'ENARE')!.exams.map((e) => e.name)).toEqual(['ENARE 2021']);
+    // Notas sem quantidade não entram na soma de questões
+    const overview = await agent.get('/api/metrics/overview?days=7');
+    expect(overview.status).toBe(200);
+
+    const again = await agent.post('/api/import/run').send({ mocks: [{ ...mocks[1] }], exams });
+    expect(again.body).toMatchObject({ mocks: 0, mockDuplicates: 1, exams: 0, examDuplicates: 2 });
+    expect((await agent.post('/api/import/run').send({})).status).toBe(400);
+  });
+
   it('valida datas futuras e acertos maiores que o total', async () => {
     const { agent } = await signup('Validador');
     const future = await agent.post('/api/import/run').send({ events: [{ subject: 'X', date: addDays(today, 1) }] });

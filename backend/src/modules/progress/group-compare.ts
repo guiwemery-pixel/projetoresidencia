@@ -102,8 +102,8 @@ async function loadStats(userId: string, timezone: string, period: Period) {
       days.add(fromDb(m.takenOn));
     }
     for (const a of attempts.filter((a) => inside(a.takenOn))) {
-      s.questions += a.totalQuestions;
-      s.correct += a.correct;
+      s.questions += a.totalQuestions ?? 0;
+      s.correct += a.correct ?? 0;
       days.add(fromDb(a.takenOn));
     }
     s.reviews = reviews.filter((r) => inside(r.completedOn)).length;

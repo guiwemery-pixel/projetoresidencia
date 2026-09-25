@@ -15,6 +15,8 @@ const fields = {
   status: z.enum(['PLANNED', 'DONE']).optional(),
   totalQuestions: z.number().int().min(1).max(1000).nullish(),
   correct: z.number().int().min(0).max(1000).nullish(),
+  // Só a nota em %, quando não se sabe a quantidade de questões
+  accuracy: z.number().min(0).max(100).nullish(),
   durationMinutes: z.number().int().min(0).max(1440).nullish(),
   notes: optionalText(),
   examId: id.nullish(),

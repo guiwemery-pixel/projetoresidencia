@@ -258,7 +258,8 @@ export default function ExamsPage() {
                             {a.durationMinutes ? ` · ${duration(a.durationMinutes)}` : ''}
                           </span>
                           <span className="flex items-center gap-2 text-ink">
-                            {a.correct}/{a.totalQuestions} · <strong>{pct(a.accuracy, 1)}</strong>
+                            {a.totalQuestions !== null && `${a.correct}/${a.totalQuestions} · `}
+                            <strong>{pct(a.accuracy, 1)}</strong>
                             <LevelBadge level={levelForPercent(a.accuracy)} compact />
                             <IconButton label="Excluir resultado" onClick={() => setConfirm({ title: 'Excluir resultado?', message: `Resultado de ${fmtShort(a.takenOn)}.`, run: () => api.del(`/exams/attempts/${a.id}`) })}>
                               <Trash2 className="h-3.5 w-3.5" />

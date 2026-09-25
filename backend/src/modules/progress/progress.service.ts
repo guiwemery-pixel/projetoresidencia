@@ -175,9 +175,9 @@ export async function computeProgress(userId: string, today: string) {
 
   // ── Questões: acerto (70%) + volume (30%) ────────────────────────────────
   const qTotal30 =
-    sum(act30.questions.map((q) => q.total)) + sum(act30.mocks.map((m) => m.totalQuestions ?? 0)) + sum(act30.attempts.map((a) => a.totalQuestions));
+    sum(act30.questions.map((q) => q.total)) + sum(act30.mocks.map((m) => m.totalQuestions ?? 0)) + sum(act30.attempts.map((a) => a.totalQuestions ?? 0));
   const qCorrect30 =
-    sum(act30.questions.map((q) => q.correct)) + sum(act30.mocks.map((m) => m.correct ?? 0)) + sum(act30.attempts.map((a) => a.correct));
+    sum(act30.questions.map((q) => q.correct)) + sum(act30.mocks.map((m) => m.correct ?? 0)) + sum(act30.attempts.map((a) => a.correct ?? 0));
   const q14 = sum(act30.questions.filter((q) => inRange(q.doneOn, from14)).map((q) => q.total));
   const acc30 = percent(qCorrect30, qTotal30);
   const expected14 = user.dailyQuestionsTarget * user.weeklyStudyDaysTarget * 2;

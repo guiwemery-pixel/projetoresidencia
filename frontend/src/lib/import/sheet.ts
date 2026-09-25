@@ -3,7 +3,8 @@
 // Aceita os dois formatos mais comuns:
 // - uma linha por estudo (Data | Área | Assunto | Questões | Acertos | Tempo…);
 // - uma linha por assunto, com várias revisões na mesma linha
-//   (Assunto | Data | % | Data R1 | % R1 | Data R2 | % R2…).
+//   (Assunto | Data | % | Data R1 | % R1 | Data R2 | % R2…), inclusive com
+//   cabeçalho em duas linhas ("1ª REVISÃO" mesclado sobre Data | Questões | %).
 // A detecção é só um palpite: a pessoa confere e ajusta o mapeamento na tela.
 
 export type Cell = string | number | boolean | Date | null;
@@ -22,7 +23,12 @@ export interface GroupMap {
   percent: number | null;
   minutes: number | null;
   method: number | null;
+  /** Data prevista: só usada se a realizada estiver vazia mas houver resultado */
+  planned?: number | null;
 }
+
+/** O que fazer com registros que só têm o % de acertos (sem a quantidade de questões). */
+export type PercentOnlyMode = 'quality' | 'estimate';
 
 export interface Mapping {
   headerRow: number;
@@ -34,6 +40,9 @@ export interface Mapping {
   minutesUnit: 'min' | 'h';
   /** Usada quando a planilha não tem coluna de data */
   fallbackDate: string | null;
+  percentOnly: PercentOnlyMode;
+  /** "NEFRO 2" → Clínica Médica › Nefrologia (em vez de criar uma área para cada módulo) */
+  bigAreas: boolean;
 }
 
 export interface ImportEvent {
@@ -54,6 +63,8 @@ export interface BuildResult {
   skipped: { row: number; reason: string }[];
   future: number;
   percentOnly: number;
+  /** Registros só com % que ganharam uma quantidade estimada de questões */
+  estimated: number;
 }
 
 export const GROUP_FIELDS = ['date', 'total', 'correct', 'wrong', 'percent', 'minutes', 'method'] as const;
@@ -107,6 +118,17 @@ function groupKey(header: string): string | null {
   if (m) return `d${m[1]}`;
   return null;
 }
+
+/** Título de etapa num cabeçalho de cima ("CONTATO INICIAL", "1ª REVISÃO"…) → chave do grupo. */
+function stageKey(text: string): string | null {
+  return groupKey(text) ?? (/contato|inicial|primeiro estudo|1o estudo/.test(norm(text)) ? 'r0' : null);
+}
+
+/** "1ª REVISÃO" → "1ª revisão" (títulos em caixa-alta ficam mais legíveis). */
+const tidyLabel = (s: string) => {
+  const t = s.replace(/\s+/g, ' ').trim();
+  return t === t.toUpperCase() ? t.charAt(0) + t.slice(1).toLowerCase() : t;
+};
 
 // ── Conversão de valores ─────────────────────────────────────────────────
 
@@ -216,6 +238,63 @@ export function parseMethods(c: Cell): StudyMethod[] {
 /** Percentual sem quantidade de questões → autoavaliação aproximada. */
 const qualityFromPercent = (p: number) => (p >= 90 ? 5 : p >= 80 ? 4 : p >= 70 ? 3 : p >= 50 ? 2 : 1);
 
+// ── Grandes áreas ────────────────────────────────────────────────────────
+
+const CM = 'Clínica Médica';
+const CIR = 'Cirurgia';
+const PED = 'Pediatria';
+const GO = 'Ginecologia e Obstetrícia';
+const PREV = 'Medicina Preventiva';
+
+/** Especialidade/módulo (sem o número) → grande área e subárea, nos nomes do modelo de Medicina. */
+const SPECIALTIES: [RegExp, string, string | null][] = [
+  [/^(cm|clinica|clinica medica)$/, CM, null],
+  [/^cardio/, CM, 'Cardiologia'],
+  [/^pneumo/, CM, 'Pneumologia'],
+  [/^gastro/, CM, 'Gastroenterologia'],
+  [/^hepato/, CM, 'Hepatologia'],
+  [/^nefro/, CM, 'Nefrologia'],
+  [/^endocrino/, CM, 'Endocrinologia'],
+  [/^reumato/, CM, 'Reumatologia'],
+  [/^hemato/, CM, 'Hematologia'],
+  [/^infecto/, CM, 'Infectologia'],
+  [/^neuro(logia)?$/, CM, 'Neurologia'],
+  [/^psiq/, CM, 'Psiquiatria'],
+  [/^(cir|cirurgia|cirurgia geral)$/, CIR, null],
+  [/^trauma/, CIR, 'Trauma'],
+  [/^uro(logia)?$/, CIR, 'Urologia'],
+  [/^orto(pedia)?$/, CIR, 'Ortopedia'],
+  [/^(ped|pedi|pediatria)$/, PED, null],
+  [/^neo(nato|natologia)?$/, PED, 'Neonatologia'],
+  [/^(go|gineco e obstetricia|ginecologia e obstetricia|ginecologia\/obstetricia)$/, GO, null],
+  [/^gin(eco|ecologia)?$/, GO, 'Ginecologia'],
+  [/^(obs|obst|obstetricia)$/, GO, 'Obstetrícia'],
+  [/^masto/, GO, 'Mastologia'],
+  [/^(prev|preventiva|medicina preventiva|mp|saude coletiva)$/, PREV, null],
+  [/^sus$/, PREV, 'SUS e Políticas de Saúde'],
+  [/^epidemio/, PREV, 'Epidemiologia'],
+  [/^bioestat/, PREV, 'Bioestatística'],
+  [/^etica/, PREV, 'Ética Médica'],
+];
+
+/**
+ * Coloca siglas de especialidade/módulo nas grandes áreas: "NEFRO 2" →
+ * Clínica Médica › Nefrologia; "PED BONUS" → Pediatria; "OBS1" → GO › Obstetrícia.
+ * O que não for reconhecido fica como está.
+ */
+export function bigArea(area: string | null, subarea: string | null): { area: string | null; subarea: string | null } {
+  if (!area) return { area, subarea };
+  const base = norm(area)
+    .replace(/[-_.]/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\b(bonus|extra|modulo|mod|parte|bloco)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const hit = SPECIALTIES.find(([re]) => re.test(base));
+  if (!hit) return { area, subarea };
+  return { area: hit[1], subarea: subarea || hit[2] };
+}
+
 // ── Detecção automática ──────────────────────────────────────────────────
 
 export function detectHeaderRow(grid: Grid): number {
@@ -234,9 +313,13 @@ export function detectHeaderRow(grid: Grid): number {
   return best;
 }
 
+function columnValues(grid: Grid, headerRow: number, col: number, rows = 60) {
+  return grid.slice(headerRow + 1, headerRow + 1 + rows).map((r) => r[col]).filter((c) => !isEmpty(c ?? null)) as Cell[];
+}
+
 function columnLooksLikeDate(grid: Grid, headerRow: number, col: number) {
-  const values = grid.slice(headerRow + 1, headerRow + 60).map((r) => r[col]).filter((c) => !isEmpty(c));
-  return values.length > 0 && values.filter((c) => parseDate(c ?? null) !== null).length / values.length >= 0.6;
+  const values = columnValues(grid, headerRow, col);
+  return values.length > 0 && values.filter((c) => parseDate(c) !== null).length / values.length >= 0.6;
 }
 
 function columnDistinctText(grid: Grid, headerRow: number, col: number) {
@@ -244,21 +327,63 @@ function columnDistinctText(grid: Grid, headerRow: number, col: number) {
   return new Set(values.map(norm)).size;
 }
 
-const emptyGroup = (label: string): GroupMap => ({ label, include: true, date: null, total: null, correct: null, wrong: null, percent: null, minutes: null, method: null });
+interface ColumnInfo {
+  col: number;
+  /** Título na linha do cabeçalho (ou, se vazio, na linha de cima — célula mesclada na vertical) */
+  title: string;
+  /** Etapa a que a coluna pertence pelo cabeçalho de cima ("1ª REVISÃO" mesclado sobre várias colunas) */
+  stage: { key: string; label: string } | null;
+}
+
+/**
+ * Lê o cabeçalho considerando a linha de cima quando ela agrupa colunas
+ * (Grande Área | Assunto | CONTATO INICIAL | 1ª REVISÃO… com Data | Questões |
+ * Acertos | % embaixo de cada etapa).
+ */
+export function headerColumns(grid: Grid, headerRow: number): ColumnInfo[] {
+  const header = grid[headerRow] ?? [];
+  const above = headerRow > 0 ? (grid[headerRow - 1] ?? []) : [];
+  const width = Math.max(header.length, ...grid.slice(Math.max(0, headerRow - 1), headerRow + 30).map((r) => r.length), 0);
+  const text = (c: Cell | undefined) => (typeof c === 'string' ? c.replace(/\s+/g, ' ').trim() : '');
+  // A linha de cima só vale como agrupamento se nomear ao menos duas etapas
+  const stagesAbove = new Set(above.map((c) => stageKey(text(c))).filter(Boolean));
+  const grouped = stagesAbove.size >= 2;
+  const cols: ColumnInfo[] = [];
+  let span: ColumnInfo['stage'] = null;
+  for (let col = 0; col < width; col++) {
+    const own = text(header[col]);
+    const up = text(above[col]);
+    if (grouped && up) {
+      const key = stageKey(up);
+      span = key ? { key, label: tidyLabel(up) } : null;
+    }
+    cols.push({ col, title: own || (grouped ? up : ''), stage: grouped && own ? span : null });
+  }
+  return cols;
+}
+
+/** Nome de cada coluna para os seletores ("1ª revisão · Data Realizada"). */
+export function columnTitles(grid: Grid, headerRow: number): string[] {
+  return headerColumns(grid, headerRow).map((c) => [c.stage?.label, c.title].filter(Boolean).join(' · '));
+}
+
+const emptyGroup = (label: string): GroupMap => ({ label, include: true, date: null, total: null, correct: null, wrong: null, percent: null, minutes: null, method: null, planned: null });
 
 export function guessMapping(grid: Grid, headerRow = detectHeaderRow(grid)): Mapping {
-  const header = grid[headerRow] ?? [];
-  const width = Math.max(header.length, ...grid.slice(headerRow, headerRow + 30).map((r) => r.length));
-  const mapping: Mapping = { headerRow, area: null, subarea: null, subject: null, notes: null, groups: [], minutesUnit: 'min', fallbackDate: null };
+  const mapping: Mapping = { headerRow, area: null, subarea: null, subject: null, notes: null, groups: [], minutesUnit: 'min', fallbackDate: null, percentOnly: 'quality', bigAreas: true };
 
   // 1) Classifica cada coluna
-  const cols: { col: number; kind: Kind | null; key: string | null; title: string }[] = [];
-  for (let col = 0; col < width; col++) {
-    const title = String(header[col] ?? '').trim();
+  const cols: (ColumnInfo & { kind: Kind | null; key: string | null })[] = [];
+  for (const info of headerColumns(grid, headerRow)) {
+    const { col, title } = info;
     let kind = kindOf(title);
-    if (kind === 'date' && !columnLooksLikeDate(grid, headerRow, col) && /revis|^r ?\d/.test(norm(title))) kind = null;
+    const values = columnValues(grid, headerRow, col);
+    // "Dia" com "seg", "ter"… (dia da semana) não é data
+    if (kind === 'date' && values.length > 0 && !columnLooksLikeDate(grid, headerRow, col)) kind = null;
     if (!kind && columnLooksLikeDate(grid, headerRow, col)) kind = 'date';
-    cols.push({ col, kind, key: groupKey(title), title });
+    // "R1", "D7", "2ª revisão" com números embaixo → % de acertos daquela etapa
+    if (!kind && groupKey(title) && values.length > 0 && values.every((c) => parsePercent(c) !== null)) kind = 'percent';
+    cols.push({ ...info, kind, key: groupKey(title) });
   }
   for (const c of cols) {
     if (c.kind === 'area' && mapping.area === null) mapping.area = c.col;
@@ -274,20 +399,35 @@ export function guessMapping(grid: Grid, headerRow = detectHeaderRow(grid)): Map
   }
   if (cols.some((c) => c.kind === 'minutes' && /\bhoras?\b|\bh\b/.test(norm(c.title)) && !/min/.test(norm(c.title)))) mapping.minutesUnit = 'h';
 
-  // 2) Agrupa as colunas de cada registro: cada coluna de data abre um grupo;
-  //    colunas com a mesma chave (R1, D7…) vão para o grupo dessa chave.
+  // 2) Agrupa as colunas de cada registro. Com cabeçalho de etapas em cima, cada
+  //    etapa é um registro (a data realizada vale; a programada só se faltar a
+  //    realizada). Sem ele, cada coluna de data abre um grupo e colunas com a
+  //    mesma chave (R1, D7…) vão para o grupo dessa chave.
   const groups: (GroupMap & { key: string | null })[] = [];
   const pendingBeforeFirstDate: typeof cols = [];
   let current: (typeof groups)[number] | null = null;
   for (const c of cols) {
     if (!c.kind || ['area', 'subarea', 'subject', 'notes'].includes(c.kind)) continue;
-    if (c.kind === 'date') {
+    const field = c.kind as GroupField;
+    if (c.stage) {
+      let g = groups.find((x) => x.key === `etapa:${c.stage!.key}`);
+      if (!g) {
+        g = { ...emptyGroup(c.stage.label), key: `etapa:${c.stage.key}` };
+        groups.push(g);
+      }
+      if (field === 'date') {
+        if (isPlanned(c.title)) g.planned ??= c.col;
+        else if (g.date === null) g.date = c.col;
+      } else if (g[field] === null) g[field] = c.col;
+      current = g;
+      continue;
+    }
+    if (field === 'date') {
       const g = { ...emptyGroup(c.title || `Registro ${groups.length + 1}`), key: c.key, date: c.col, include: !isPlanned(c.title) };
       groups.push(g);
       current = g;
       continue;
     }
-    const field = c.kind as GroupField;
     const byKey = c.key ? groups.find((g) => g.key === c.key) : undefined;
     const target = byKey ?? current;
     if (!target) {
@@ -302,7 +442,8 @@ export function guessMapping(grid: Grid, headerRow = detectHeaderRow(grid)): Map
     const target = (c.key && groups.find((g) => g.key === c.key)) || groups[0];
     if (target[field] === null) target[field] = c.col;
   }
-  // Grupos sem nenhum número e marcados como previstos continuam desmarcados
+  // Etapa só com data programada (nenhuma realizada) é plano, não estudo feito
+  for (const g of groups) if (g.date === null && g.planned != null) g.include = false;
   mapping.groups = groups.map(({ key: _key, ...g }) => g);
   return mapping;
 }
@@ -311,9 +452,23 @@ export function guessMapping(grid: Grid, headerRow = detectHeaderRow(grid)): Map
 
 const cellText = (c: Cell) => (c instanceof Date ? '' : String(c ?? '').replace(/\s+/g, ' ').trim());
 
+const median = (xs: number[]) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor((s.length - 1) / 2)];
+};
+
+/** Quantidade usada quando não há nenhuma referência na planilha (a mesma do algoritmo). */
+export const REFERENCE_QUESTIONS = 20;
+
 export function buildEvents(grid: Grid, m: Mapping, today: string): BuildResult {
-  const result: BuildResult = { events: [], skipped: [], future: 0, percentOnly: 0 };
+  const result: BuildResult = { events: [], skipped: [], future: 0, percentOnly: 0, estimated: 0 };
   const header = grid[m.headerRow] ?? [];
+  // Planilha de revisões lado a lado (várias etapas por linha) com colunas de questões:
+  // etapa com data e sem resultado anotado continua sendo uma revisão com questões.
+  const ladder = m.groups.filter((g) => g.include).length > 1;
+  const allTotals: number[] = [];
+  const toEstimate: { event: ImportEvent; percent: number; rowTotals: number[] }[] = [];
   let lastArea = '';
   let lastSubarea = '';
   let lastSubject = '';
@@ -328,16 +483,20 @@ export function buildEvents(grid: Grid, m: Mapping, today: string): BuildResult 
     const notes = m.notes !== null ? cellText(row[m.notes]) || null : null;
 
     const rowEvents: ImportEvent[] = [];
+    const rowTotals: number[] = [];
+    const rowEstimates: typeof toEstimate = [];
     let groupIndex = 0;
     for (const g of m.groups) {
       if (!g.include) continue;
-      const get = (col: number | null) => (col === null ? null : (row[col] ?? null));
-      const hasAny = [g.total, g.correct, g.wrong, g.percent, g.minutes, g.method, g.date].some((c) => c !== null && !isEmpty(get(c)));
-      if (!hasAny) continue;
-      const date = g.date !== null ? parseDate(get(g.date)) : m.fallbackDate;
+      const get = (col: number | null | undefined) => (col == null ? null : (row[col] ?? null));
+      const hasResult = [g.total, g.correct, g.wrong, g.percent, g.minutes, g.method].some((c) => c !== null && !isEmpty(get(c)));
+      if (!hasResult && (g.date === null || isEmpty(get(g.date)))) continue;
+      let date = g.date !== null ? parseDate(get(g.date)) : m.fallbackDate;
+      // Resultado anotado sem a data realizada: vale a data programada (se já passou)
+      if (!date && hasResult && g.planned != null && (g.date === null || isEmpty(get(g.date)))) date = parseDate(get(g.planned));
       if (!date) {
         if (g.date !== null && !isEmpty(get(g.date))) result.skipped.push({ row: rowNumber, reason: `data não reconhecida em "${g.label}"` });
-        else if (g.date === null) result.skipped.push({ row: rowNumber, reason: 'sem data' });
+        else result.skipped.push({ row: rowNumber, reason: `sem data em "${g.label}"` });
         continue;
       }
       if (date > today) {
@@ -365,26 +524,27 @@ export function buildEvents(grid: Grid, m: Mapping, today: string): BuildResult 
           continue;
         }
       }
-      let quality: number | null = null;
-      if (total === null && p !== null) {
-        quality = qualityFromPercent(p);
-        result.percentOnly++;
-      }
+      if (total !== null) rowTotals.push(total);
+      const percentOnly = total === null && p !== null;
+      if (percentOnly) result.percentOnly++;
       const minutes = g.minutes !== null ? parseMinutes(get(g.minutes), m.minutesUnit) : null;
       let methods = g.method !== null ? parseMethods(get(g.method)) : [];
-      if (!methods.length) methods = total !== null || p !== null ? ['QUESTOES'] : groupIndex === 0 ? ['TEORIA'] : ['REVISAO'];
-      rowEvents.push({
-        area: area || null,
-        subarea: subarea || null,
+      const questionColumns = [g.total, g.correct, g.wrong, g.percent].some((col) => col !== null);
+      if (!methods.length) methods = total !== null || p !== null || (ladder && questionColumns) ? ['QUESTOES'] : groupIndex === 0 ? ['TEORIA'] : ['REVISAO'];
+      const event: ImportEvent = {
+        ...(m.bigAreas ? bigArea(area || null, subarea || null) : { area: area || null, subarea: subarea || null }),
         subject,
         date,
         total,
         correct: total === null ? null : correct,
         minutes: minutes === null ? null : Math.min(1440, minutes),
         methods,
-        quality,
-        notes: [notes, total === null && p !== null ? `Percentual importado: ${Math.round(p)}% (sem quantidade de questões)` : null].filter(Boolean).join(' · ') || null,
-      });
+        // Só o %: vira autoavaliação aproximada (ou ganha uma quantidade estimada, abaixo)
+        quality: percentOnly && m.percentOnly === 'quality' ? qualityFromPercent(p!) : null,
+        notes: percentOnly && m.percentOnly === 'quality' ? `Percentual importado: ${Math.round(p!)}% (sem quantidade de questões)` : null,
+      };
+      if (percentOnly && m.percentOnly === 'estimate') rowEstimates.push({ event, percent: p!, rowTotals });
+      rowEvents.push(event);
       groupIndex++;
     }
     if (!rowEvents.length) continue;
@@ -393,20 +553,55 @@ export function buildEvents(grid: Grid, m: Mapping, today: string): BuildResult 
       result.skipped.push({ row: rowNumber, reason: 'sem assunto' });
       continue;
     }
-    for (const e of rowEvents) result.events.push({ ...e, subject: subject.slice(0, 160) });
+    // A observação da linha vai só no primeiro estudo (não repete em cada revisão)
+    if (notes) rowEvents[0].notes = [notes, rowEvents[0].notes].filter(Boolean).join(' · ');
+    for (const e of rowEvents) {
+      e.subject = subject.slice(0, 160);
+      result.events.push(e);
+    }
+    allTotals.push(...rowTotals);
+    toEstimate.push(...rowEstimates);
     lastArea = area;
     lastSubarea = subarea;
     lastSubject = subject;
   }
+  // Quantidade estimada: a mediana das outras etapas do mesmo assunto; sem nenhuma, a da planilha
+  const sheetMedian = median(allTotals) ?? REFERENCE_QUESTIONS;
+  for (const { event, percent, rowTotals } of toEstimate) {
+    const total = median(rowTotals) ?? sheetMedian;
+    event.total = total;
+    event.correct = Math.round((total * percent) / 100);
+    event.notes = [event.notes, `Nº de questões estimado (${total}): a planilha só tinha o percentual, ${Math.round(percent)}%`].filter(Boolean).join(' · ');
+    result.estimated++;
+  }
   return result;
+}
+
+/** Aba mais provável de conter o histórico: a com mais estudos com resultado (questões ou %). */
+export function pickSheet(sheets: { name: string; grid: Grid }[], today: string) {
+  let best = 0;
+  let bestScore = -1;
+  sheets.forEach((s, i) => {
+    const events = buildEvents(s.grid, guessMapping(s.grid), today).events;
+    const measured = events.filter((e) => e.total !== null || e.quality !== null).length;
+    // Abas de resumo (calendário, mapa, painel…) repetem as datas sem os resultados
+    const derived = /calend|mapa|menu|param|painel|dashboard|resumo|grafico|instruc/.test(norm(s.name));
+    const score = (measured * 3 + events.length) * (derived ? 0.5 : 1);
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  });
+  return best;
 }
 
 /**
  * Lotes para enviar ao servidor, mantendo os estudos de um assunto juntos sempre
  * que couberem (um assunto grande pode ser dividido: o histórico é recalculado
- * inteiro a cada lote).
+ * inteiro a cada lote). Poucos assuntos por lote: cada assunto tem o histórico
+ * recalculado no servidor, e o lote precisa terminar em poucos segundos.
  */
-export function batches(events: ImportEvent[], max = 300): ImportEvent[][] {
+export function batches(events: ImportEvent[], maxEvents = 150, maxSubjects = 8): ImportEvent[][] {
   const bySubject = new Map<string, ImportEvent[]>();
   for (const e of events) {
     const k = [norm(e.area), norm(e.subarea), norm(e.subject)].join('|');
@@ -414,19 +609,23 @@ export function batches(events: ImportEvent[], max = 300): ImportEvent[][] {
   }
   const out: ImportEvent[][] = [];
   let cur: ImportEvent[] = [];
+  let subjects = 0;
+  const flush = () => {
+    if (cur.length) out.push(cur);
+    cur = [];
+    subjects = 0;
+  };
   for (const list of bySubject.values()) {
-    if (cur.length && cur.length + list.length > max) {
-      out.push(cur);
-      cur = [];
-    }
+    if (cur.length && (cur.length + list.length > maxEvents || subjects >= maxSubjects)) flush();
+    subjects++;
     for (const e of list) {
-      if (cur.length >= max) {
-        out.push(cur);
-        cur = [];
+      if (cur.length >= maxEvents) {
+        flush();
+        subjects = 1;
       }
       cur.push(e);
     }
   }
-  if (cur.length) out.push(cur);
+  flush();
   return out;
 }

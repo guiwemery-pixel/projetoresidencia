@@ -4,6 +4,11 @@
   "installCommand": "npm ci",
   "buildCommand": "sh scripts/vercel-build.sh",
   "outputDirectory": "frontend/dist",
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",

@@ -14,6 +14,8 @@ export interface MockExamInput {
   status?: MockExamStatus;
   totalQuestions?: number | null;
   correct?: number | null;
+  /** Nota em % quando não há a quantidade de questões (ex.: importada de planilha) */
+  accuracy?: number | null;
   durationMinutes?: number | null;
   notes?: string | null;
   examId?: string | null;
@@ -50,7 +52,14 @@ function data(input: Partial<MockExamInput>) {
     status: input.status,
     totalQuestions: input.totalQuestions,
     correct: input.correct,
-    accuracy: input.totalQuestions !== undefined || input.correct !== undefined ? (total && correct !== null ? percent(correct, total) : null) : undefined,
+    accuracy:
+      total && correct !== null
+        ? percent(correct, total)
+        : input.accuracy != null
+          ? Math.round(input.accuracy * 10) / 10
+          : input.totalQuestions !== undefined || input.correct !== undefined || input.accuracy !== undefined
+            ? null
+            : undefined,
     durationMinutes: input.durationMinutes,
     notes: input.notes,
     examId: input.examId,
@@ -78,6 +87,8 @@ export async function updateMockExam(userId: string, id: string, input: Partial<
   const merged = {
     totalQuestions: input.totalQuestions !== undefined ? input.totalQuestions : existing.totalQuestions,
     correct: input.correct !== undefined ? input.correct : existing.correct,
+    // Simulado só com a nota: a nota continua a mesma se o pedido não falar dela
+    accuracy: input.accuracy !== undefined ? input.accuracy : existing.totalQuestions == null ? existing.accuracy : undefined,
   };
   await prisma.$transaction(async (tx) => {
     await tx.mockExam.update({ where: { id }, data: { ...data({ ...input, ...merged }) } });
@@ -137,7 +148,7 @@ export async function getMockExam(userId: string, id: string) {
 
 export async function listMockExams(userId: string) {
   const [rows, areaMap] = await Promise.all([
-    prisma.mockExam.findMany({ where: { userId }, include: { areaResults: true }, orderBy: { takenOn: 'desc' } }),
+    prisma.mockExam.findMany({ where: { userId }, include: { areaResults: true }, orderBy: [{ takenOn: 'desc' }, { createdAt: 'desc' }] }),
     getAreaMap(userId),
   ]);
   const items = rows.map((m) => serialize(m, areaMap));

@@ -42,7 +42,7 @@ function questionTotals(a: Activity) {
     total: sum(a.mocks.map((m) => m.totalQuestions ?? 0)),
     correct: sum(a.mocks.map((m) => m.correct ?? 0)),
   };
-  const fromExams = { total: sum(a.attempts.map((x) => x.totalQuestions)), correct: sum(a.attempts.map((x) => x.correct)) };
+  const fromExams = { total: sum(a.attempts.map((x) => x.totalQuestions ?? 0)), correct: sum(a.attempts.map((x) => x.correct ?? 0)) };
   const total = fromSessions.total + fromMocks.total + fromExams.total;
   const correct = fromSessions.correct + fromMocks.correct + fromExams.correct;
   return { total, correct, wrong: total - correct, accuracy: percent(correct, total), bySource: { sessions: fromSessions, mocks: fromMocks, exams: fromExams } };
@@ -157,8 +157,8 @@ export async function timeseries(userId: string, from: string, to: string, granu
   }
   for (const x of a.attempts) {
     const b = at(x.takenOn);
-    b.questions += x.totalQuestions;
-    b.correct += x.correct;
+    b.questions += x.totalQuestions ?? 0;
+    b.correct += x.correct ?? 0;
   }
   for (const r of a.reviewsDone) at(r.completedOn!).reviewsDone++;
   return [...buckets.entries()].map(([start, b]) => ({

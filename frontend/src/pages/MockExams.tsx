@@ -24,12 +24,18 @@ function MockDialog({ mock, onClose }: { mock?: MockExam; onClose: () => void })
     status: mock?.status ?? ('DONE' as 'DONE' | 'PLANNED'),
     totalQuestions: mock?.totalQuestions ?? (100 as number | null),
     correct: mock?.correct ?? (null as number | null),
+    accuracy: mock?.accuracy ?? (null as number | null),
     durationMinutes: mock?.durationMinutes ?? (null as number | null),
     notes: mock?.notes ?? '',
   });
   const [areaRows, setAreaRows] = useState(mock?.areaResults.map((r) => ({ areaId: r.areaId, total: r.total as number | null, correct: r.correct as number | null })) ?? []);
   const done = f.status === 'DONE';
-  const invalid = done && (!f.totalQuestions || f.correct === null || f.correct > f.totalQuestions || f.takenOn > today);
+  // Só a nota em %: quando não se sabe quantas questões eram (ex.: simulado importado de planilha)
+  const [gradeOnly, setGradeOnly] = useState(!!mock && mock.totalQuestions === null && mock.accuracy !== null);
+  const byGrade = done && gradeOnly;
+  const invalid =
+    done &&
+    (f.takenOn > today || (byGrade ? f.accuracy === null || f.accuracy > 100 : !f.totalQuestions || f.correct === null || f.correct > f.totalQuestions));
   const save = useMutation({
     mutationFn: () => {
       const body = {
@@ -37,7 +43,9 @@ function MockDialog({ mock, onClose }: { mock?: MockExam; onClose: () => void })
         board: f.board || null,
         examName: f.examName || null,
         notes: f.notes || null,
-        correct: done ? f.correct : null,
+        totalQuestions: byGrade ? null : f.totalQuestions,
+        correct: done && !byGrade ? f.correct : null,
+        accuracy: byGrade ? f.accuracy : null,
         areaResults: areaRows.filter((r) => r.areaId && r.total && r.correct !== null).map((r) => ({ areaId: r.areaId, total: r.total!, correct: r.correct! })),
       };
       return mock ? api.patch(`/mock-exams/${mock.id}`, body) : api.post('/mock-exams', body);
@@ -81,8 +89,12 @@ function MockDialog({ mock, onClose }: { mock?: MockExam; onClose: () => void })
           <Input label="Prova" placeholder="Ex.: Simulado nacional 1" value={f.examName} onChange={(e) => setF({ ...f, examName: e.target.value })} maxLength={120} />
           <NumberInput label="Ano" min={1990} max={2100} value={f.year} onChange={(year) => setF({ ...f, year })} />
           <Input label={done ? 'Data realizada' : 'Data agendada'} type="date" max={done ? today : undefined} value={f.takenOn} onChange={(e) => setF({ ...f, takenOn: e.target.value })} />
-          <NumberInput label="Número de questões" min={1} value={f.totalQuestions} onChange={(totalQuestions) => setF({ ...f, totalQuestions })} />
-          {done && (
+          {byGrade ? (
+            <NumberInput label="Nota (% de acertos)" min={0} max={100} value={f.accuracy} onChange={(accuracy) => setF({ ...f, accuracy })} />
+          ) : (
+            <NumberInput label="Número de questões" min={1} value={f.totalQuestions} onChange={(totalQuestions) => setF({ ...f, totalQuestions })} />
+          )}
+          {done && !byGrade && (
             <>
               <NumberInput
                 label="Acertos"
@@ -94,6 +106,12 @@ function MockDialog({ mock, onClose }: { mock?: MockExam; onClose: () => void })
               />
               <NumberInput label="Tempo gasto (min)" min={0} value={f.durationMinutes} onChange={(durationMinutes) => setF({ ...f, durationMinutes })} />
             </>
+          )}
+          {done && (
+            <label className="flex items-center gap-2 text-sm text-ink2 sm:col-span-2">
+              <input type="checkbox" checked={gradeOnly} onChange={(e) => setGradeOnly(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />
+              Só sei a nota (% de acertos), não a quantidade de questões
+            </label>
           )}
         </div>
         {done && (
@@ -237,9 +255,7 @@ export default function MockExamsPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
-                  <p className="num text-sm text-ink2">
-                    {m.totalQuestions} questões · {m.correct} acertos
-                  </p>
+                  <p className="num text-sm text-ink2">{m.totalQuestions !== null ? `${m.totalQuestions} questões · ${m.correct} acertos` : 'Só a nota'}</p>
                   <div className="flex items-center gap-2">
                     <LevelBadge level={levelForPercent(m.accuracy)} compact />
                     <span className="num text-xl font-semibold text-ink">{pct(m.accuracy, 1)}</span>

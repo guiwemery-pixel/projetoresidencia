@@ -453,8 +453,9 @@ model ExamAttempt {
   userId          String   @map("user_id")
   examId          String   @map("exam_id")
   takenOn         DateTime @map("taken_on") @db.Date
-  totalQuestions  Int      @map("total_questions")
-  correct         Int
+  // Sem a quantidade (ex.: nota importada de planilha) fica só a % de acertos
+  totalQuestions  Int?     @map("total_questions")
+  correct         Int?
   accuracy        Float
   durationMinutes Int?     @map("duration_minutes")
   notes           String?

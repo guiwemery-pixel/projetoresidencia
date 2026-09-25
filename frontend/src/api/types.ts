@@ -403,9 +403,10 @@ export interface ExamAttempt {
   id: string;
   examId: string;
   takenOn: string;
-  totalQuestions: number;
-  correct: number;
-  wrong: number;
+  /** null quando só se sabe a nota (ex.: importada de planilha) */
+  totalQuestions: number | null;
+  correct: number | null;
+  wrong: number | null;
   accuracy: number;
   durationMinutes: number | null;
   notes: string | null;
