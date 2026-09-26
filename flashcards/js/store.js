@@ -35,7 +35,8 @@
           console.error(e);
         }
       }
-      if (event !== 'change') for (const fn of listeners.get('change') || []) fn({ event, payload });
+      // "sync" é só o estado da sincronização: não conta como alteração dos dados
+      if (event !== 'change' && event !== 'sync') for (const fn of listeners.get('change') || []) fn({ event, payload });
     },
 
     async load() {
@@ -91,7 +92,48 @@
     cardLogs(cardId) {
       return this.logsByCard.get(cardId) || [];
     },
+
+    /**
+     * Alterações vindas de outros aparelhos (já gravadas no banco local):
+     * [{store, id, value|null}]. Atualiza a memória e avisa as telas.
+     */
+    applyRemote(changes) {
+      const touched = new Set();
+      const maps = { cards: this.cards, nodes: this.nodes, decks: this.decks, sources: this.sources };
+      const lists = { quickSessions: 'quickSessions', sessions: 'sessions', drafts: 'drafts' };
+      const removedLogs = new Set();
+      const addedLogs = [];
+      for (const c of changes) {
+        touched.add(c.store);
+        if (maps[c.store]) {
+          if (c.value == null) maps[c.store].delete(c.id);
+          else maps[c.store].set(c.id, c.value);
+        } else if (lists[c.store]) {
+          const key = lists[c.store];
+          const list = this[key].filter((x) => x.id !== c.id);
+          if (c.value != null) list.push(c.value);
+          this[key] = list;
+        } else if (c.store === 'logs') {
+          removedLogs.add(c.id);
+          if (c.value != null) addedLogs.push(c.value);
+        }
+      }
+      if (removedLogs.size) {
+        this.logs = this.logs.filter((l) => !removedLogs.has(l.id)).concat(addedLogs).sort((a, b) => a.date - b.date);
+        this.reindexLogs();
+      }
+      this.quickSessions.sort((a, b) => a.startedAt - b.startedAt);
+      this.sessions.sort((a, b) => a.startedAt - b.startedAt);
+      this.drafts.sort((a, b) => (a.order || 0) - (b.order || 0));
+      if (touched.has('cards') || touched.has('logs')) this.emit('cards', { remote: true });
+      if (touched.has('decks')) this.emit('decks', { remote: true });
+      if (touched.has('nodes')) this.emit('nodes', { remote: true });
+      if (touched.has('drafts')) this.emit('drafts', { remote: true });
+      if (touched.has('sources')) this.emit('sources', { remote: true });
+      if (touched.has('quickSessions')) this.emit('quick', { remote: true });
+      return touched;
+    },
   };
 
   FC.store = store;
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

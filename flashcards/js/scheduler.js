@@ -20,7 +20,7 @@
   const mod = factory(util);
   if (typeof module === 'object' && module.exports) module.exports = mod;
   else (root.FC = root.FC || {}).scheduler = mod;
-})(typeof self !== 'undefined' ? self : this, function (util) {
+})(typeof self !== 'undefined' ? self : globalThis, function (util) {
   'use strict';
 
   const { MIN, DAY, clamp, dayStart, addDays, fmtNum } = util;

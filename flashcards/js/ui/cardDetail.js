@@ -27,7 +27,7 @@
     const content = h('div', { class: 'stack' });
     content.appendChild(h('p', { class: 'ink2' }, 'Arquivo: ', h('b', { text: (card.source && card.source.fileName) || '—' }), page ? ' · página ' + page : ''));
     if (!src) {
-      content.appendChild(FC.ui.callout('O texto deste arquivo não está guardado neste navegador (o card veio de importação ou o arquivo foi removido).', 'warn'));
+      content.appendChild(FC.ui.callout('O texto deste arquivo não está guardado na sua conta (o card veio de importação ou o arquivo foi removido).', 'warn'));
     } else if (page && src.pages[page - 1] != null) {
       const words = U.normalizeText(U.stripHtml(card.front))
         .split(' ')
@@ -59,7 +59,7 @@
           variant: 'primary',
           onClick: async () => {
             const ok = await FC.pdf.openPdf(src.id, page);
-            if (!ok) FC.ui.toast('O PDF não está guardado neste navegador.', { error: true });
+            if (!ok) FC.ui.toast('O PDF original está só no aparelho em que foi enviado. Veja o texto da página aqui mesmo.', { error: true });
           },
         }),
       );
@@ -261,4 +261,4 @@
   }
 
   FC.cardDetail = { open, showSource, sourceLink };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

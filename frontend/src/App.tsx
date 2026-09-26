@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { AppLayout } from './components/layout/AppLayout';
@@ -22,6 +22,7 @@ const ProfilePage = lazy(() => import('./pages/Profile'));
 const SearchPage = lazy(() => import('./pages/Search'));
 const PrintWeekPage = lazy(() => import('./pages/PrintWeek'));
 const ImportPage = lazy(() => import('./pages/Import'));
+const FlashcardsPage = lazy(() => import('./pages/Flashcards'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -43,8 +44,6 @@ export function App() {
     <Routes>
       <Route path="/entrar" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/cadastro" element={<PublicOnly><RegisterPage /></PublicOnly>} />
-      {/* O app de flashcards é estático (flashcards/ → dist/flashcards): sai do React */}
-      <Route path="/flashcards/*" element={<FlashcardsRedirect />} />
       {/* Folha de impressão: sem menu lateral */}
       <Route
         path="/calendario/imprimir"
@@ -81,6 +80,7 @@ export function App() {
           ['grupo/:id', <GroupPage />],
           ['perfil', <ProfilePage />],
           ['busca', <SearchPage />],
+          ['flashcards/*', <FlashcardsPage />],
         ].map(([path, el]) => (
           <Route key={path as string} path={path as string} element={<Suspense fallback={<Loading />}>{el}</Suspense>} />
         ))}
@@ -88,13 +88,6 @@ export function App() {
       </Route>
     </Routes>
   );
-}
-
-function FlashcardsRedirect() {
-  useEffect(() => {
-    window.location.replace('/flashcards/index.html' + window.location.hash);
-  }, []);
-  return <Loading />;
 }
 
 function NotFound() {

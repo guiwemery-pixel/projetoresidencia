@@ -11,7 +11,7 @@
   const mod = factory(util);
   if (typeof module === 'object' && module.exports) module.exports = mod;
   else (root.FC = root.FC || {}).formats = mod;
-})(typeof self !== 'undefined' ? self : this, function (util) {
+})(typeof self !== 'undefined' ? self : globalThis, function (util) {
   'use strict';
 
   const { parseCsv, toCsv, sniffDelimiter, stripHtml, escapeHtml, textToHtml, pascalTag, normalizeText, decodeEntities } = util;

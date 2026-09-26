@@ -58,6 +58,7 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | `notifications` | Notificações idempotentes (chave de deduplicação) + job periódico. |
 | `insights` | Recomendações automáticas e comparações com o próprio histórico. |
 | `search` / `dashboard` | Pesquisa global e agregação da tela inicial. |
+| `flashcards` | Cópia na conta dos dados da aba Flashcards: sincronização entre aparelhos (envio/recebimento por versão, com trava por usuário), cota, resumo do dia para o Início e busca nos cards. As regras (FSRS, análises) rodam no navegador — ver [`FLASHCARDS.md`](FLASHCARDS.md). |
 
 ### O motor de revisão é isolado
 
@@ -122,6 +123,7 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 | `mock_exams`, `mock_exam_area_results` | Simulados e resultado por área. |
 | `boards`, `exams`, `exam_attempts` | Banco de provas (tentativa com questões/acertos opcionais: pode guardar só a %). |
 | `notifications` | Notificações com chave de deduplicação única por usuário. |
+| `flashcard_sync`, `flashcard_records` | Flashcards: um documento JSON por registro do app (card, baralho, revisão…), numerado por versão, e o estado de sincronização (versão, epoch, cota, resumo do dia). |
 
 Datas “de calendário” (dia do estudo, dia previsto da revisão) usam colunas `DATE` e são calculadas
 no fuso do usuário, evitando o clássico bug do “estudei às 23h e contou para o dia seguinte”.
@@ -144,6 +146,9 @@ o usuário abre o app e pelo job diário, que também apaga sessões de login ve
 - Cores de status reservadas (bom/atenção/melhorar/crítico) sempre acompanhadas de ícone + rótulo;
   paleta categórica das áreas validada para daltonismo nos modos claro e escuro.
 - Páginas secundárias carregadas sob demanda (code splitting).
+- **Flashcards:** a página `/flashcards/*` monta o motor em JavaScript de [`flashcards/`](../flashcards)
+  (carregado só quando a aba abre) dentro do layout do site. O React continua dono da URL, do menu,
+  do tema e do login; o CSS do motor fica dentro de `.fc-root`. Detalhes em [`FLASHCARDS.md`](FLASHCARDS.md).
 
 ## Preparado para crescer
 
@@ -152,7 +157,7 @@ o usuário abre o app e pelo job diário, que também apaga sessões de login ve
 | Outras áreas (concursos, vestibular…) | Novo template em `taxonomy/templates/`; nada no domínio é específico de Medicina. |
 | Algoritmo melhor (FSRS, IA) | Nova implementação de `scheduleNext` em `scheduler/`; `algorithm_version` fica gravado em cada estado. |
 | IA para analisar desempenho | Novo gerador em `insights/` usando `metrics` como fonte; o contrato `Insight` já é genérico. |
-| Flashcards / banco de questões | Novos módulos que registram contatos via `studies` → o motor de revisão já os trata como “recuperação ativa”. |
+| Banco de questões | Novo módulo que registra contatos via `studies` → o motor de revisão já os trata como “recuperação ativa” (os flashcards já fazem isso pelo “Registrar estudo” ao fim de cada sessão). |
 | Importação de outros formatos | Novo leitor em `frontend/src/lib/import` que gere os mesmos registros; o endpoint `/api/import` e o reprocessamento já existem. |
 | Google Calendar | Exportar `reviews` pendentes (já por dia) via OAuth; a agenda já é calculada no backend. |
 | Upload de PDFs de provas | `exams.file_url` já existe; trocar por armazenamento de objetos (S3/R2) respeitando direitos autorais. |

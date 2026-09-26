@@ -318,7 +318,7 @@
         from.addEventListener('input', upd);
         to.addEventListener('input', upd);
         upd();
-        const keep = FC.ui.checkbox('Guardar o PDF neste navegador (para abrir a fonte na página certa)', state.keepPdf, (v) => (state.keepPdf = v));
+        const keep = FC.ui.checkbox('Guardar o PDF neste aparelho (para abrir a fonte na página certa; o texto vai para a conta)', state.keepPdf, (v) => (state.keepPdf = v));
         FC.ui.add(materialBox, 
           h('div', { class: 'row between' }, h('div', { class: 'row' }, icon('file', 20), h('div', null, h('strong', { text: ex.fileName }), h('div', { class: 'small muted', text: U.plural(ex.pageCount, 'página', 'páginas') + ' · ' + U.fmtNum(chars) + ' caracteres' }))), button('Trocar', { size: 'sm', variant: 'ghost', onClick: () => (FC.ui.clear(materialBox).appendChild(pickers()), settingsBox.classList.add('hidden')) })),
           ex.emptyPages > ex.pageCount / 2 ? FC.ui.callout('Muitas páginas sem texto: o PDF parece digitalizado (imagem). Sem OCR, a IA só vê o texto que existe.', 'warn') : null,
@@ -736,4 +736,4 @@
   };
 
   FC.generate = { runAI, Drafts };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

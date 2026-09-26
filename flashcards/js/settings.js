@@ -1,13 +1,12 @@
 /*
- * Configurações do usuário (guardadas no IndexedDB, tabela kv).
- * A chave de API da IA fica separada (kv "aiKey") e nunca entra no backup.
+ * Configurações do usuário (tabela kv, sincronizada com a conta).
+ * A chave de API da IA fica separada (kv "aiKey"): só neste navegador, fora da conta e do backup.
  */
 (function (root) {
   'use strict';
   const FC = (root.FC = root.FC || {});
 
   const DEFAULTS = {
-    theme: 'system', // 'light' | 'dark' | 'system'
     // Estudo diário
     newPerDay: 20,
     reviewsPerDay: 300,
@@ -89,4 +88,4 @@
   };
 
   FC.settings = settings;
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

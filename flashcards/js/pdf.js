@@ -11,15 +11,10 @@
   const CHUNK_CHARS = 100000;
 
   async function lib() {
-    await FC.loader.script('assets/vendor/pdf.min.js');
+    await FC.loader.script('pdf.min.js');
     const pdfjs = root.pdfjsLib;
     if (!pdfjs) throw new Error('Leitor de PDF indisponível.');
-    const workerUrl = FC.loader.url('assets/vendor/pdf.worker.min.js');
-    if (location.protocol === 'file:') {
-      // Aberto direto do computador: sem Web Worker; o pdf.js usa o "worker" na página
-      await FC.loader.script('assets/vendor/pdf.worker.min.js');
-    }
-    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+    pdfjs.GlobalWorkerOptions.workerSrc = FC.loader.url('pdf.worker.min.js');
     return pdfjs;
   }
 
@@ -155,4 +150,4 @@
   }
 
   FC.pdf = { CHUNK_CHARS, extract, chunk, fromText, saveSource, findSource, contextFor, openPdf, removeSource };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

@@ -14,7 +14,7 @@
   const mod = factory();
   if (typeof module === 'object' && module.exports) module.exports = mod;
   else (root.FC = root.FC || {}).difficulty = mod;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function () {
   'use strict';
 
   const LABELS = { facil: 'Fácil', media: 'Média', dificil: 'Difícil' };

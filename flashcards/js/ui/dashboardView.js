@@ -45,14 +45,6 @@
   if (FC.store) FC.store.on('change', () => (lastChange = Date.now()));
   FC.analysis = analysis;
 
-  function greeting() {
-    const hr = new Date().getHours();
-    if (hr < 5) return 'Boa noite!';
-    if (hr < 12) return 'Bom dia!';
-    if (hr < 18) return 'Boa tarde!';
-    return 'Boa noite!';
-  }
-
   function weakItem(agg, rank) {
     const names = FC.areas.path(agg.nodeId);
     const node = names[names.length - 1];
@@ -188,16 +180,6 @@
     );
   }
 
-  async function backupReminder() {
-    if (FC.store.cards.size < 30) return null;
-    const last = await FC.backup.lastBackupAt();
-    if (last && Date.now() - last < 14 * U.DAY) return null;
-    return FC.ui.callout(
-      h('span', null, last ? 'Seu último backup foi em ' + U.formatDate(last) + '. ' : 'Você ainda não fez backup. ', 'Os dados ficam só neste navegador — ', h('a', { href: '#/configuracoes', text: 'exporte um backup' }), '.'),
-      'warn',
-    );
-  }
-
   FC.views.dashboard = {
     title: 'Início',
     render(ctx) {
@@ -206,7 +188,7 @@
         FC.ui.clear(el);
         const raw = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
         const date = raw.charAt(0).toUpperCase() + raw.slice(1);
-        el.appendChild(h('div', { class: 'hello', style: { marginBottom: '18px' } }, h('div', null, h('h1', { text: greeting() }), h('p', { class: 'ink2', text: date }))));
+        el.appendChild(h('div', { class: 'hello', style: { marginBottom: '18px' } }, h('div', null, h('h1', { text: 'Seus flashcards hoje' }), h('p', { class: 'ink2', text: date }))));
         if (!FC.store.cards.size) {
           el.appendChild(onboarding());
           if (FC.store.drafts.length) el.appendChild(draftsNotice());
@@ -217,8 +199,6 @@
         if (FC.store.drafts.length) stack.appendChild(draftsNotice());
         stack.appendChild(h('div', { class: 'today' }, todayPanel(), focusPanel()));
         stack.appendChild(h('div', { class: 'grid side' }, weakPanel(), progressPanel()));
-        const reminder = await backupReminder();
-        if (reminder) stack.appendChild(reminder);
       };
       draw();
       ctx.on('cards', FC.util.debounce(draw, 400));
@@ -229,4 +209,4 @@
   function draftsNotice() {
     return FC.ui.callout(h('span', null, U.plural(FC.store.drafts.length, 'card gerado aguarda', 'cards gerados aguardam') + ' sua revisão antes de entrar na coleção. ', h('a', { href: '#/gerar/revisao', text: 'Revisar agora' })), '', 'sparkles');
   }
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

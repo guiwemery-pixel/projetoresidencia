@@ -24,6 +24,9 @@ O projeto já vem configurado para o Vercel (`vercel.json`):
    (nomes com prefixo, como `STORAGE_DATABASE_URL`, também funcionam).
 4. *(Opcional)* **Notificações diárias:** *Settings → Environment Variables* → adicione
    `CRON_SECRET` com um texto aleatório de pelo menos 16 caracteres.
+   *(Opcional)* **Espaço dos flashcards por pessoa:** `FLASHCARDS_QUOTA_MB` (padrão `100`). Cards e
+   histórico ocupam pouco; o que pesa são imagens de baralhos do Anki. O plano gratuito do Neon tem
+   0,5 GB no total — com muitos usuários, diminua a cota ou aumente o plano.
 5. **Publicar de novo:** aba *Deployments* → no último deploy, menu *⋯* → *Redeploy*.
 6. **Usar:** abra o endereço `https://<seu-projeto>.vercel.app`, crie sua conta, crie o grupo
    (aba *Grupo*) e envie o link de convite aos amigos.

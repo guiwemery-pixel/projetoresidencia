@@ -14,6 +14,8 @@ const schema = z.object({
   FRONTEND_DIST: z.string().optional(),
   // Segredo do agendador (Vercel Cron envia "Authorization: Bearer <CRON_SECRET>")
   CRON_SECRET: z.string().optional(),
+  // Espaço máximo dos flashcards de cada usuário na conta (MB)
+  FLASHCARDS_QUOTA_MB: z.coerce.number().positive().default(100),
 });
 
 // Aceita a URL do banco com outros nomes/prefixos (integrações do Vercel)

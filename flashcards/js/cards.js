@@ -349,4 +349,4 @@
     allTags,
     related,
   };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

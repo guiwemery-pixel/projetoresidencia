@@ -1,6 +1,7 @@
 /*
- * Configurações: aparência, estudo diário, algoritmo, pontos fracos, IA,
- * privacidade, backup e dados.
+ * Configurações: revisão, estudo diário, algoritmo, pontos fracos, IA,
+ * privacidade, sincronização com a conta, backup e dados.
+ * O tema segue o do Projeto Residente (botão no topo do site).
  */
 (function (root) {
   'use strict';
@@ -31,16 +32,6 @@
       const { el } = ctx;
       const s = FC.settings.get();
 
-      // Aparência
-      const theme = FC.ui.seg(
-        [
-          { value: 'light', label: 'Claro' },
-          { value: 'dark', label: 'Escuro' },
-          { value: 'system', label: 'Sistema' },
-        ],
-        s.theme,
-        (v) => FC.settings.set({ theme: v }),
-      );
       const showPath = FC.ui.checkbox('Mostrar área, assunto e tema no topo do card durante a revisão', s.showPathInReview, (v) => FC.settings.set({ showPathInReview: v }));
 
       // Estudo
@@ -90,7 +81,7 @@
         if (cur.aiProvider === 'anthropic') {
           const key = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: FC.settings.getApiKey() ? '•••••••• (chave salva)' : 'sk-ant-…', 'aria-label': 'Chave de API' });
           FC.ui.add(aiBox, 
-            FC.ui.field('Chave de API da Anthropic', key, 'Fica só neste navegador (IndexedDB) e nunca entra no backup nem em exportações. Crie em console.anthropic.com. Qualquer pessoa com acesso a este navegador pode usá-la.'),
+            FC.ui.field('Chave de API da Anthropic', key, 'Fica só neste navegador: não vai para a sua conta, para backups nem para exportações. Crie em console.anthropic.com. Qualquer pessoa com acesso a este navegador pode usá-la.'),
             h(
               'div',
               { class: 'row' },
@@ -133,10 +124,37 @@
       };
       drawAI();
 
+      // Conta e sincronização
+      const mb = (bytes) => (bytes / 1048576).toFixed(1).replace('.', ',') + ' MB';
+      const syncBox = h('div', { class: 'stack' });
+      const drawSync = (st) => {
+        FC.ui.clear(syncBox);
+        const statusText =
+          st.status === 'syncing' ? 'Sincronizando…' : st.status === 'offline' ? 'Sem conexão' : st.status === 'error' ? 'Com problema' : st.lastSyncAt ? 'Em dia' : 'Aguardando';
+        FC.ui.add(
+          syncBox,
+          h(
+            'div',
+            { class: 'tiles' },
+            FC.ui.tile('Sincronização', statusText, st.lastSyncAt ? 'última: ' + U.formatDateTime(st.lastSyncAt) : null),
+            FC.ui.tile('Alterações a enviar', U.fmtNum(st.pending || 0), st.pending ? 'guardadas neste aparelho' : 'tudo na conta'),
+            FC.ui.tile('Espaço na conta', st.bytes != null ? mb(st.bytes) : '—', st.quota ? 'de ' + Math.round(st.quota / 1048576) + ' MB' : null),
+          ),
+          st.error && st.status !== 'ok' ? FC.ui.callout(st.error, st.status === 'offline' ? 'warn' : 'crit') : null,
+          h(
+            'div',
+            { class: 'row' },
+            button('Sincronizar agora', { icon: 'refresh', onClick: () => FC.sync.now() }),
+            h('span', { class: 'small muted', text: 'Seus flashcards ficam na sua conta do Projeto Residente e aparecem em qualquer aparelho em que você entrar. Sem internet, tudo continua funcionando e é enviado quando a conexão voltar.' }),
+          ),
+        );
+      };
+      drawSync(FC.sync.status());
+      ctx.on('sync', drawSync);
+
       // Dados
       const dataBox = h('div', { class: 'stack' });
       const est = await FC.db.estimate();
-      const persisted = root.navigator && navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted().catch(() => false) : false;
       const last = await FC.backup.lastBackupAt();
       FC.ui.add(dataBox, 
         h(
@@ -144,10 +162,9 @@
           { class: 'tiles' },
           FC.ui.tile('Cards', U.fmtNum(FC.store.cards.size)),
           FC.ui.tile('Revisões registradas', U.fmtNum(FC.store.logs.length)),
-          FC.ui.tile('Espaço usado', est && est.usage != null ? (est.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : '—', est && est.quota ? 'de ' + Math.round(est.quota / 1048576) + ' MB disponíveis' : null),
+          FC.ui.tile('Cópia neste aparelho', est && est.usage != null ? mb(est.usage) : '—', 'para abrir rápido e sem internet'),
           FC.ui.tile('Último backup', last ? U.formatDate(last) : 'nunca'),
         ),
-        persisted ? FC.ui.callout('Armazenamento persistente ativo: o navegador não apaga seus dados para liberar espaço.', 'good', 'shield') : FC.ui.callout('O navegador pode apagar dados de sites pouco usados quando falta espaço. Faça backups periódicos (e instale o app na tela inicial, se possível).', 'warn'),
         h(
           'div',
           { class: 'row' },
@@ -175,9 +192,9 @@
               try {
                 const parsed = FC.formats.parseJson(await file.text());
                 if (parsed.kind !== 'backup') return FC.ui.toast('Este arquivo não é um backup completo. Para cards/baralhos use Importar.', { error: true });
-                if (!(await FC.ui.confirm('Restaurar o backup de ' + U.formatDateTime(Date.parse(parsed.data.exportedAt)) + '? Todos os dados atuais deste navegador serão substituídos.', { danger: true, okText: 'Restaurar' }))) return;
+                if (!(await FC.ui.confirm('Restaurar o backup de ' + U.formatDateTime(Date.parse(parsed.data.exportedAt)) + '? Todos os flashcards da sua conta serão substituídos por ele, em todos os aparelhos.', { danger: true, okText: 'Restaurar' }))) return;
                 await FC.backup.restore(parsed.data);
-                FC.ui.toast('Backup restaurado.');
+                FC.ui.toast(FC.sync.status().pending ? 'Backup restaurado neste aparelho; vai para a conta quando houver conexão.' : 'Backup restaurado na sua conta.');
                 FC.app.go('/');
               } catch (err) {
                 FC.ui.errorToast(err);
@@ -190,18 +207,19 @@
         h(
           'div',
           { class: 'row' },
-          button('Apagar todos os dados', {
+          button('Apagar todos os flashcards', {
             variant: 'danger',
             icon: 'trash',
             onClick: async () => {
-              const typed = await FC.ui.prompt('Apagar tudo', '', { label: 'Isso apaga cards, histórico, baralhos e configurações deste navegador. Digite APAGAR para confirmar.', okText: 'Apagar' });
+              const typed = await FC.ui.prompt('Apagar tudo', '', { label: 'Isso apaga cards, histórico, baralhos e configurações dos flashcards da sua conta, em todos os aparelhos. O resto do Projeto Residente não é afetado. Digite APAGAR para confirmar.', okText: 'Apagar' });
               if (typed !== 'APAGAR') return typed != null && FC.ui.toast('Nada foi apagado.');
               await FC.db.wipe();
               await FC.settings.load();
               await FC.store.load();
               await FC.decks.ensureDefault();
               FC.cards.invalidateIndex();
-              FC.ui.toast('Dados apagados.');
+              await FC.sync.flush();
+              FC.ui.toast('Flashcards apagados.');
               FC.app.go('/');
             },
           }),
@@ -216,6 +234,9 @@
       );
 
       const sources = [...FC.store.sources.values()].sort((a, b) => b.addedAt - a.addedAt);
+      // O PDF original fica só no aparelho em que foi enviado (o texto vai para a conta)
+      const localPdfs = new Set();
+      for (const src of sources) if (src.hasPdf && (await FC.db.get('sourceFiles', src.id))) localPdfs.add(src.id);
       const sourcesBox = sources.length
         ? h(
             'div',
@@ -225,7 +246,7 @@
                 'div',
                 { class: 'list-item' },
                 icon('file', 18),
-                h('div', { class: 'grow' }, h('div', { text: src.fileName }), h('div', { class: 'tiny muted', text: U.plural(src.pageCount, 'página', 'páginas') + ' · ' + U.formatDate(src.addedAt) + (src.hasPdf ? ' · PDF guardado' : ' · só o texto') })),
+                h('div', { class: 'grow' }, h('div', { text: src.fileName }), h('div', { class: 'tiny muted', text: U.plural(src.pageCount, 'página', 'páginas') + ' · ' + U.formatDate(src.addedAt) + (localPdfs.has(src.id) ? ' · PDF guardado neste aparelho' : ' · só o texto') })),
                 button('Remover', {
                   size: 'sm',
                   variant: 'ghost',
@@ -245,7 +266,7 @@
         h(
           'div',
           { class: 'stack loose' },
-          section('Aparência', null, h('div', { class: 'row' }, h('span', { class: 'label', text: 'Tema' }), theme), showPath.el),
+          section('Revisão', 'O tema claro/escuro segue o do Projeto Residente (botão no topo do site).', showPath.el),
           section(
             'Estudo diário',
             'Limites da revisão normal. O Quick Review não tem limite.',
@@ -269,13 +290,15 @@
             h(
               'ul',
               { class: 'small ink2', style: { margin: 0, paddingLeft: '18px' } },
-              h('li', { text: 'Cards, histórico, estatísticas e configurações ficam no banco local deste navegador (IndexedDB). Não há conta nem servidor.' }),
-              h('li', { text: 'PDFs são lidos no próprio navegador. O texto só sai daqui quando você manda gerar cards e o modo de IA não é o manual — e o app avisa antes.' }),
-              h('li', { text: 'A chave de API fica só neste navegador e não vai para backups.' }),
+              h('li', { text: 'Cards, histórico, estatísticas e configurações ficam na sua conta do Projeto Residente, visíveis só para você (nem os grupos veem), e numa cópia neste navegador para funcionar sem internet.' }),
+              h('li', { text: 'Ao sair da conta, a cópia deste navegador é apagada se tudo já tiver sido enviado.' }),
+              h('li', { text: 'PDFs são lidos no próprio navegador: o texto extraído vai para a sua conta; o arquivo original fica só neste aparelho. O texto só vai para a IA quando você manda gerar cards e o modo não é o manual — e o app avisa antes.' }),
+              h('li', { text: 'A chave de API fica só neste navegador: não vai para a conta nem para backups.' }),
               h('li', { text: 'Backups e exportações são arquivos que você baixa; guarde-os em local seguro.' }),
             ),
           ),
           section('Fontes (PDFs e textos)', 'Texto guardado para mostrar a página de origem de cada card.', sourcesBox),
+          section('Sua conta', null, syncBox),
           section('Dados e backup', null, dataBox),
           section(
             'Atalhos de teclado',
@@ -299,4 +322,4 @@
       );
     },
   };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

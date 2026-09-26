@@ -44,9 +44,12 @@
 
   const getOrCreate = (name) => create(name);
 
+  // Id fixo: dois aparelhos que criam o baralho padrão criam o mesmo registro
+  const DEFAULT_ID = 'd_default';
+
   async function ensureDefault() {
     if (store().decks.size) return all()[0];
-    return create(DEFAULT_NAME);
+    return create(DEFAULT_NAME, { id: DEFAULT_ID });
   }
 
   /** Ids do baralho e de todos os sub-baralhos ("Pai::Filho"). */
@@ -159,4 +162,4 @@
   const shortName = (deck) => (deck ? deck.name.split('::').pop() : '—');
 
   FC.decks = { DEFAULT_NAME, all, get, findByName, create, getOrCreate, ensureDefault, descendantIds, cardsIn, blockedIds, update, rename, duplicate, remove, tree, shortName, cleanName };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

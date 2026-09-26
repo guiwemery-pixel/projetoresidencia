@@ -3,6 +3,7 @@
  * (áreas, subáreas, assuntos, temas), tags, histórico de revisões, sessões,
  * Quick Reviews, dados do scheduler, fontes (texto dos PDFs), imagens,
  * rascunhos da IA e configurações. A chave de API da IA NÃO entra no backup.
+ * Restaurar substitui a coleção da conta (em todos os aparelhos).
  */
 (function (root) {
   'use strict';
@@ -47,7 +48,7 @@
     return JSON.stringify(data);
   }
 
-  /** Restaura um backup, substituindo tudo o que existe neste navegador. */
+  /** Restaura um backup, substituindo a coleção da conta. */
   async function restore(data, onProgress) {
     const progress = onProgress || (() => {});
     if (!data || data.format !== FC.formats.FORMAT_BACKUP || !data.stores) throw new Error('Arquivo de backup inválido.');
@@ -75,6 +76,10 @@
     FC.store.emit('cards', { restored: true });
     FC.store.emit('decks');
     FC.store.emit('nodes');
+    if (FC.sync) {
+      progress('Enviando para a sua conta…');
+      await FC.sync.flush();
+    }
     return data.counts || {};
   }
 
@@ -82,5 +87,5 @@
     return FC.db.getKV('lastBackupAt', null);
   }
 
-  FC.backup = { exportBackup, restore, lastBackupAt };
-})(typeof self !== 'undefined' ? self : this);
+  FC.backup = { exportBackup, restore, lastBackupAt, blobToDataUrl, dataUrlToBlob };
+})(typeof self !== 'undefined' ? self : globalThis);

@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
-const JSZip = require('../../assets/vendor/jszip.min.js');
+const JSZip = require('../../../frontend/public/flashcards/vendor/jszip.min.js');
 
 const OUT = __dirname;
 const DAY = 86400;

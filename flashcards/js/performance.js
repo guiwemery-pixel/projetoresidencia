@@ -23,7 +23,7 @@
   const mod = factory(util, scheduler, root);
   if (isNode) module.exports = mod;
   else (root.FC = root.FC || {}).performance = mod;
-})(typeof self !== 'undefined' ? self : this, function (util, scheduler, root) {
+})(typeof self !== 'undefined' ? self : globalThis, function (util, scheduler, root) {
   'use strict';
 
   const { DAY } = util;

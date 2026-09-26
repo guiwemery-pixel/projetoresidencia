@@ -181,7 +181,7 @@
       };
 
       FC.ui.add(el, 
-        h('div', { class: 'page-head' }, h('div', null, h('h1', { text: 'Estatísticas' }), h('p', { text: 'Tudo calculado do seu histórico de revisões neste navegador.' }))),
+        h('div', { class: 'page-head' }, h('div', null, h('h1', { text: 'Estatísticas' }), h('p', { text: 'Tudo calculado do seu histórico de revisões.' }))),
         h(
           'div',
           { class: 'row', style: { marginBottom: '18px' } },
@@ -197,4 +197,4 @@
       draw();
     },
   };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

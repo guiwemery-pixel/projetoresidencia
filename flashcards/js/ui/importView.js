@@ -83,7 +83,7 @@
           anki: 'Mesmo formato dos seus flashcards: no Anki use Arquivo → Importar. O agendamento não vai junto (o Anki não importa revisões de CSV).',
           csv: 'Separador ponto e vírgula, abre no Excel/Planilhas.',
           txt: 'Lista numerada de perguntas e respostas, boa para ler ou imprimir.',
-          'json-sched': 'Leva tudo: classificação, baralho, tags, fonte, agendamento (próxima revisão, estabilidade, dificuldade) e histórico. Importe em outro navegador/aparelho para continuar de onde parou.',
+          'json-sched': 'Leva tudo: classificação, baralho, tags, fonte, agendamento (próxima revisão, estabilidade, dificuldade) e histórico. Importe em outra conta ou reimporte depois para continuar de onde parou.',
           json: 'Lista de cards com os campos escolhidos, sem agendamento.',
         }[format] || '';
     };
@@ -195,14 +195,14 @@
       if (plan.kind === 'backup') {
         FC.ui.add(box, 
           h('div', { class: 'row' }, icon('database', 20), h('strong', { text: plan.fileName })),
-          FC.ui.callout('Este arquivo é um backup completo (' + U.plural(plan.stats.cards, 'card', 'cards') + ', ' + U.plural(plan.stats.logs, 'revisão', 'revisões') + '). Restaurar substitui TODOS os dados deste navegador.', 'warn'),
+          FC.ui.callout('Este arquivo é um backup completo (' + U.plural(plan.stats.cards, 'card', 'cards') + ', ' + U.plural(plan.stats.logs, 'revisão', 'revisões') + '). Restaurar substitui TODOS os flashcards da sua conta, em todos os aparelhos.', 'warn'),
           h(
             'div',
             { class: 'row' },
             button('Restaurar backup', {
               variant: 'danger',
               onClick: async () => {
-                if (!(await FC.ui.confirm('Substituir todos os cards, histórico e configurações deste navegador pelo backup?', { danger: true, okText: 'Restaurar' }))) return;
+                if (!(await FC.ui.confirm('Substituir todos os cards, histórico e configurações dos flashcards da sua conta pelo backup? Vale para todos os aparelhos.', { danger: true, okText: 'Restaurar' }))) return;
                 try {
                   await FC.backup.restore(plan.backup, (m) => FC.ui.toast(m, { duration: 1500 }));
                   FC.ui.toast('Backup restaurado.');
@@ -385,7 +385,7 @@
             'section',
             { class: 'panel stack' },
             h('h2', { text: 'Backup completo' }),
-            h('p', { class: 'ink2', text: 'Um único arquivo com tudo (cards, baralhos, hierarquia, histórico, estatísticas, configurações). Use para trocar de navegador/aparelho ou guardar uma cópia.' }),
+            h('p', { class: 'ink2', text: 'Um único arquivo com tudo (cards, baralhos, hierarquia, histórico, estatísticas, configurações). Use para guardar uma cópia fora da conta ou levar para outra conta.' }),
             h('div', { class: 'row' }, link('Abrir em Configurações', '#/configuracoes', { icon: 'database' })),
           ),
         ),
@@ -395,4 +395,4 @@
   };
 
   FC.importView = { exportDialog, buildExport, slug };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

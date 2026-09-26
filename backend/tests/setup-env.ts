@@ -12,3 +12,5 @@ const testUrl = process.env.TEST_DATABASE_URL;
 if (!testUrl) throw new Error('Defina TEST_DATABASE_URL (veja backend/.env.example)');
 process.env.DATABASE_URL = testUrl;
 process.env.NOTIFICATIONS_JOB_MINUTES = '0';
+// Cota pequena para o teste de limite dos flashcards não precisar de centenas de MB
+process.env.FLASHCARDS_QUOTA_MB = '20';

@@ -205,7 +205,7 @@
     const report = session.report();
     const hardest = hardestOf(report);
     saveSession(session, report, hardest);
-    document.body.classList.remove('focus-mode');
+    document.body.classList.remove('fc-focus-mode');
     const { el } = ctx;
     FC.ui.clear(el);
     el.appendChild(
@@ -237,7 +237,14 @@
           { class: 'row' },
           report.missedIds.length ? button('Revisar os que errei (' + report.missedIds.length + ')', { variant: 'primary', icon: 'refresh', onClick: () => FC.launch.quickIds(U.shuffle(report.missedIds), 'Quick Review · não sabia / quase') }) : null,
           hardest ? button('Revisar tema', { icon: 'target', onClick: () => FC.launch.quick({ nodeIds: [hardest.nodeId] }, 'Quick Review · ' + FC.areas.title(hardest.nodeId), 'hardest') }) : null,
-          link('Voltar ao dashboard', '#/', { variant: 'ghost', icon: 'home' }),
+          link('Início dos flashcards', '#/', { variant: 'ghost', icon: 'home' }),
+        ),
+        FC.reviewView.studyPanel(
+          FC.reviewView.studyInfo(
+            report.firstAnswers.map((x) => x.cardId),
+            report.durationMs,
+            'Flashcards · ' + session.meta.label + ': ' + U.plural(report.reviewed, 'card', 'cards') + ', ' + U.pct(report.accuracy) + ' de aproveitamento.',
+          ),
         ),
       ),
     );
@@ -261,7 +268,7 @@
       const stage = h('div', { class: 'stack' });
       const foot = h('div', { class: 'study-foot' }, h('div', { class: 'keys' }, h('span', null, h('kbd', { text: 'Espaço' }), ' mostrar'), h('span', null, h('kbd', { text: '1' }), ' não sei'), h('span', null, h('kbd', { text: '2' }), ' quase'), h('span', null, h('kbd', { text: '3' }), ' sei')), h('span', { class: 'tiny', text: 'Quick Review não altera o agendamento' }));
       el.appendChild(h('div', { class: 'study' }, top, stage, foot));
-      document.body.classList.add('focus-mode');
+      document.body.classList.add('fc-focus-mode');
 
       function draw() {
         revealed = false;
@@ -345,4 +352,4 @@
       draw();
     },
   };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

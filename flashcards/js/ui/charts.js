@@ -336,4 +336,4 @@
 
   FC.charts = { line, bars, sparkline, card, niceMax, niceScale };
   void icon;
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

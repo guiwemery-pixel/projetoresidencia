@@ -86,4 +86,4 @@
   }
 
   FC.launch = { filterToQuery, queryToFilter, review, quick, quickIds, choose, order };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

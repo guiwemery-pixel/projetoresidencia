@@ -1,24 +1,35 @@
 /*
- * Teste de ponta a ponta no navegador (Chromium via Playwright).
- * Sobe um servidor estático próprio, abre o app e percorre os fluxos principais:
- * importação (CSV no modelo e .apkg com revisões), revisão normal com os 5 botões,
- * desfazer, Quick Review sem alterar o agendamento, pontos fracos, estatísticas,
- * exportação no modelo Anki (idêntica ao arquivo original) e backup/restauração.
+ * Teste de ponta a ponta da aba Flashcards dentro do Projeto Residente
+ * (Chromium via Playwright, backend Express + PostgreSQL de teste, frontend compilado).
  *
- * Uso:  node tests/e2e.mjs [pasta-para-screenshots]
- * Requer o pacote "playwright" (global ou local) e um Chromium instalado.
+ * Percorre os fluxos do app (importação do CSV no modelo e dos .apkg com revisões,
+ * revisão com os 5 botões, desfazer, Quick Review sem mexer no agendamento, pontos
+ * fracos, IA manual e pela chave com PDF, JSON com revisões, backup) e a integração:
+ * navegação pelo menu do site, dados na conta sincronizados entre dois aparelhos,
+ * offline, isolamento entre usuários, dados da versão antiga levados para a conta,
+ * widget do Início, contador no menu, "Registrar estudo", busca global, tema do site,
+ * celular e "Sair" apagando a cópia local.
+ *
+ * Uso:  node flashcards/tests/e2e.mjs [pasta-para-screenshots]
+ * Requer: TEST_DATABASE_URL (ou backend/.env), Playwright e Chromium.
+ *         E2E_NO_BUILD=1 pula o build do frontend (usa frontend/dist como está).
  */
-import { createServer } from 'node:http';
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { spawn, execSync } from 'node:child_process';
+import { createServer } from 'node:net';
+import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
 const require = createRequire(import.meta.url);
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const FLASH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(FLASH, '..');
+const BACKEND = path.join(ROOT, 'backend');
 const SHOTS = process.argv[2] || null;
-const MODEL_CSV = process.env.MODEL_CSV || path.join(ROOT, 'tests/fixtures/modelo-cancer-gastrico.csv');
+const MODEL_CSV = process.env.MODEL_CSV || path.join(FLASH, 'tests/fixtures/modelo-cancer-gastrico.csv');
+const PASSWORD = 'senha-segura-123';
 
 let playwright;
 for (const p of ['playwright', '/opt/node22/lib/node_modules/playwright']) {
@@ -34,30 +45,91 @@ if (!playwright) {
   process.exit(1);
 }
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
-const server = createServer(async (req, res) => {
-  const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const file = path.join(ROOT, url === '/' ? 'index.html' : url);
-  if (!file.startsWith(ROOT)) return res.writeHead(403).end();
-  try {
-    const data = await readFile(file);
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-    res.end(data);
-  } catch (e) {
-    res.writeHead(404).end();
+// ── Servidor (API + frontend compilado) no banco de teste ─────────────────────
+function envFile() {
+  const file = path.join(BACKEND, '.env');
+  const out = {};
+  if (!existsSync(file)) return out;
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z_]+)\s*=\s*"?([^"]*)"?\s*$/);
+    if (m) out[m[1]] = m[2];
   }
+  return out;
+}
+const TEST_DB = process.env.TEST_DATABASE_URL || envFile().TEST_DATABASE_URL;
+if (!TEST_DB) {
+  console.error('Defina TEST_DATABASE_URL (veja backend/.env.example).');
+  process.exit(1);
+}
+
+const freePort = () =>
+  new Promise((resolve) => {
+    const s = createServer();
+    s.listen(0, '127.0.0.1', () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
+
+if (!process.env.E2E_NO_BUILD) execSync('npm run build -w frontend', { cwd: ROOT, stdio: 'inherit' });
+execSync('npx prisma migrate deploy', { cwd: BACKEND, stdio: 'ignore', env: { ...process.env, DATABASE_URL: TEST_DB } });
+
+const PORT = await freePort();
+const BASE = 'http://127.0.0.1:' + PORT;
+const server = spawn('npx', ['tsx', 'src/index.ts'], {
+  cwd: BACKEND,
+  env: { ...process.env, DATABASE_URL: TEST_DB, PORT: String(PORT), NODE_ENV: 'test', NOTIFICATIONS_JOB_MINUTES: '0', FRONTEND_DIST: path.join(ROOT, 'frontend/dist'), CORS_ORIGIN: BASE, COOKIE_SECURE: 'false' },
+  stdio: ['ignore', 'pipe', 'pipe'],
+  detached: true, // encerra o grupo inteiro (npx → tsx → node) no fim
 });
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const BASE = 'http://127.0.0.1:' + server.address().port + '/index.html';
+let serverLog = '';
+server.stdout.on('data', (d) => (serverLog += d));
+server.stderr.on('data', (d) => (serverLog += d));
+for (let i = 0; ; i++) {
+  try {
+    if ((await fetch(BASE + '/api/health')).ok) break;
+  } catch (e) {
+    /* subindo */
+  }
+  if (i > 120) throw new Error('Servidor não subiu:\n' + serverLog);
+  await new Promise((r) => setTimeout(r, 250));
+}
 
+// ── Navegador ─────────────────────────────────────────────────────────────────
 const browser = await playwright.chromium.launch();
-const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
-const page = await context.newPage();
 const errors = [];
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-page.on('pageerror', (e) => errors.push(e.message));
+const stamp = Date.now().toString(36);
 
-const shot = async (name, opts = {}) => {
+function watch(page, who) {
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    const text = m.text();
+    const url = (m.location() && m.location().url) || '';
+    // Esperados: sem internet de propósito, e /auth/me 401 depois de sair
+    if (/ERR_INTERNET_DISCONNECTED/.test(text)) return;
+    if (/status of 401/.test(text) && /\/api\/auth\/me/.test(url)) return;
+    errors.push(who + ': ' + text + (url ? ' @ ' + url : ''));
+  });
+  page.on('pageerror', (e) => errors.push(who + ' pageerror: ' + e.message));
+}
+
+/** Um "aparelho" (contexto de navegador) com login. */
+async function device(name, email, opts = {}) {
+  const { register, ...ctxOpts } = opts;
+  const context = await browser.newContext(Object.assign({ viewport: { width: 1360, height: 900 }, acceptDownloads: true }, ctxOpts));
+  const res = register
+    ? await context.request.post(BASE + '/api/auth/register', { data: { name, email, password: PASSWORD } })
+    : await context.request.post(BASE + '/api/auth/login', { data: { email, password: PASSWORD } });
+  assert.ok(res.ok(), 'login/cadastro de ' + name + ': ' + res.status());
+  const user = (await res.json()).user;
+  const page = await context.newPage();
+  watch(page, name);
+  return { context, page, user, email };
+}
+
+const step = (name) => console.log('•', name);
+let shotPage = null;
+const shot = async (name, opts = {}, page = shotPage) => {
   // Nenhuma tela pode mostrar "null", "undefined" ou "NaN" vindos de dados faltando
   const text = await page.evaluate(() => document.body.innerText);
   const leak = text.match(/\b(null|undefined|NaN)\b/);
@@ -66,12 +138,45 @@ const shot = async (name, opts = {}) => {
   await mkdir(SHOTS, { recursive: true });
   await page.screenshot(Object.assign({ path: path.join(SHOTS, name + '.png'), fullPage: true }, opts));
 };
-const go = async (hash) => {
+
+async function openFlashcards(page, sub = '') {
+  await page.goto(BASE + '/flashcards' + sub);
+  await page.waitForSelector('.fc-root .fc-tabs', { timeout: 30000 });
+  await page.waitForTimeout(300);
+}
+
+const goFor = (page) => async (p) => {
   // Usa o roteador do app: navegar para a mesma rota também redesenha a tela
-  await page.evaluate((p) => FC.app.go(p), hash);
+  await page.evaluate((x) => FC.app.go(x), p);
   await page.waitForTimeout(350);
 };
-const step = (name) => console.log('•', name);
+
+const flush = (page) => page.evaluate(() => FC.sync.flush());
+/** Baixa o que mudou na conta. Durante uma revisão nada é aplicado na tela: sai dela antes. */
+async function pull(page) {
+  if (await page.evaluate(() => FC.app.inSession())) {
+    await page.evaluate(() => FC.app.go('/'));
+    await page.waitForTimeout(400);
+  }
+  await page.evaluate(() => FC.sync.now());
+}
+const counts = (page) =>
+  page.evaluate(() => ({ cards: FC.store.cards.size, logs: FC.store.logs.length, nodes: FC.store.nodes.size, decks: FC.store.decks.size, quick: FC.store.quickSessions.length }));
+
+async function answerOne(page, key = '4') {
+  await page.evaluate(() => FC.app.go('/revisar'));
+  await page.waitForSelector('.show-answer .btn', { timeout: 10000 });
+  await page.keyboard.press('Space');
+  await page.waitForSelector('.rating-bar');
+  await page.keyboard.press(key);
+  await page.waitForTimeout(300);
+}
+
+// ── Aparelho principal ───────────────────────────────────────────────────────
+const A = await device('Ana Teste', 'ana.' + stamp + '@teste.com', { register: true });
+const page = A.page;
+shotPage = page;
+const go = goFor(page);
 const evalFC = (fn, arg) => page.evaluate(fn, arg);
 
 async function importFile(file, opts = {}) {
@@ -84,6 +189,7 @@ async function importFile(file, opts = {}) {
     await page.fill('input[list="imp-area"]', opts.area);
     await page.fill('input[list="imp-sub"]', opts.subarea);
   }
+  if (opts.update) await page.selectOption('select:has(option[value="update"])', 'update');
   if (opts.shot) await shot(opts.shot);
   await page.click('button:has-text("Importar ")');
   await page.waitForSelector('text=Importação concluída', { timeout: 30000 });
@@ -91,10 +197,30 @@ async function importFile(file, opts = {}) {
 }
 
 try {
-  step('abre o app vazio');
-  await page.goto(BASE);
-  await page.waitForSelector('.hello');
+  step('o menu do site leva à aba Flashcards sem recarregar a página');
+  await page.goto(BASE + '/');
+  await page.waitForSelector('aside a[href="/flashcards"]');
+  await page.evaluate(() => (window.__semRecarregar = true));
+  await page.click('aside a[href="/flashcards"]');
+  await page.waitForSelector('.fc-root .hello', { timeout: 30000 });
+  assert.equal(new URL(page.url()).pathname, '/flashcards');
+  assert.equal(await page.evaluate(() => window.__semRecarregar), true, 'navegação dentro do site');
+  assert.equal(await page.getAttribute('aside a[href="/flashcards"]', 'aria-current'), 'page');
   await shot('01-inicio-vazio');
+
+  step('abas internas e voltar do navegador mudam a URL /flashcards/...');
+  await page.click('.fc-tab[data-nav="decks"]');
+  await page.waitForTimeout(300);
+  assert.equal(new URL(page.url()).pathname, '/flashcards/decks');
+  await page.click('.fc-head .fc-settings');
+  await page.waitForTimeout(300);
+  await page.goBack();
+  await page.waitForTimeout(400);
+  assert.equal(await page.$eval('.fc-tab[aria-current="page"]', (e) => e.dataset.nav), 'decks');
+  // Endereço antigo do app separado
+  await page.goto(BASE + '/flashcards/index.html#/decks');
+  await page.waitForSelector('.fc-tab[aria-current="page"][data-nav="decks"]', { timeout: 20000 });
+  assert.equal(new URL(page.url()).pathname, '/flashcards/decks');
 
   step('HTML dos cards é limpo (sem scripts, eventos ou javascript:)');
   {
@@ -103,14 +229,13 @@ try {
     assert.doesNotMatch(clean, /onerror|onload|<script|javascript:|<iframe|<svg|position|url\(/i);
     assert.match(clean, /<b>ok<\/b>/);
     assert.match(clean, /color: ?red/);
-    await evalFC((html) => document.body.appendChild(FC.ui.rich(html)), dirty);
+    await evalFC((html) => document.querySelector('#fc-content').appendChild(FC.ui.rich(html)), dirty);
     await page.waitForTimeout(200);
     assert.equal(await evalFC(() => window.__xss), undefined);
-    await page.reload();
-    await page.waitForSelector('.hello');
   }
 
   step('importa o CSV no modelo');
+  await openFlashcards(page);
   const r1 = await importFile(MODEL_CSV, { area: 'Cirurgia', subarea: 'Cirurgia Geral', shot: '02-importar-previa' });
   assert.match(r1, /80 cards importados/);
   let info = await evalFC(() => ({
@@ -125,8 +250,7 @@ try {
   assert.ok(!/Pergunta:|assunto-tag/.test(info.front), 'frente limpa');
 
   step('reimportar o mesmo CSV não duplica');
-  const r1b = await importFile(MODEL_CSV, { area: 'Cirurgia', subarea: 'Cirurgia Geral' });
-  assert.match(r1b, /80 já existentes pulados/);
+  assert.match(await importFile(MODEL_CSV, { area: 'Cirurgia', subarea: 'Cirurgia Geral' }), /80 já existentes pulados/);
 
   step('exporta no modelo Anki e confere com o original (byte a byte)');
   const original = (await readFile(MODEL_CSV, 'utf8')).replace(/\r/g, '');
@@ -138,8 +262,7 @@ try {
   assert.equal(exported.trim(), original.trim());
 
   step('importa o .apkg (formato novo, zstd) com revisões');
-  const r2 = await importFile(path.join(ROOT, 'tests/fixtures/modern.apkg'), { shot: '03-importar-anki' });
-  // O card de Borrmann do Anki tem o mesmo conteúdo de um card do CSV: é reconhecido como repetido
+  const r2 = await importFile(path.join(FLASH, 'tests/fixtures/modern.apkg'), { shot: '03-importar-anki' });
   assert.match(r2, /4 cards importados/);
   assert.match(r2, /1 já existente pulado/);
   assert.match(r2, /4 revisões do histórico/);
@@ -164,21 +287,10 @@ try {
   assert.deepEqual(info.cloze.path, ['Cirurgia', 'Digestiva', 'Estômago'], 'classificado pelos nomes dos baralhos');
 
   step('importa o .apkg antigo atualizando os existentes: o card do CSV recebe as revisões do Anki');
-  await go('/importar');
-  {
-    const chooser = page.waitForEvent('filechooser');
-    await page.click('.dropzone');
-    await (await chooser).setFiles(path.join(ROOT, 'tests/fixtures/legacy.apkg'));
-    await page.waitForSelector('text=Prévia');
-    await page.selectOption('select:has(option[value="update"])', 'update');
-    await page.click('button:has-text("Importar ")');
-    await page.waitForSelector('text=Importação concluída');
-    const r3 = await page.textContent('.callout.good');
-    assert.match(r3, /5 atualizados/);
-  }
+  assert.match(await importFile(path.join(FLASH, 'tests/fixtures/legacy.apkg'), { update: true }), /5 atualizados/);
   info = await evalFC(() => {
     const b = [...FC.store.cards.values()].filter((c) => /Classificação de Borrmann/.test(c.front));
-    return { n: b.length, origin: b[0].origin, state: b[0].state, ivl: b[0].scheduledDays, logs: FC.store.cardLogs(b[0].id).length, path: FC.areas.pathNames(b[0].nodeId) };
+    return { n: b.length, state: b[0].state, ivl: b[0].scheduledDays, logs: FC.store.cardLogs(b[0].id).length, path: FC.areas.pathNames(b[0].nodeId) };
   });
   assert.equal(info.n, 1, 'sem duplicar');
   assert.equal(info.state, 'review');
@@ -186,26 +298,36 @@ try {
   assert.equal(info.logs, 6);
   assert.deepEqual(info.path.slice(2), ['Câncer gástrico', 'Patologia', 'Câncer avançado']);
 
-  step('cria um card manualmente');
+  step('cria um card manualmente (botão "Novo card" do cabeçalho da aba)');
   await go('/decks');
-  await page.click('.topbar button:has-text("Novo card")');
-  await page.waitForSelector('.modal .editor-area');
+  await page.click('.fc-head button:has-text("Novo card")');
+  await page.waitForSelector('.fc-portal .modal .editor-area');
   const areas = await page.$$('.modal .editor-area');
   await areas[0].click();
   await page.keyboard.type('Qual o exame padrão-ouro para acalasia?');
   await areas[1].click();
   await page.keyboard.type('Manometria esofágica de alta resolução');
   const pathInputs = await page.$$('.modal .form-grid input.input[list]');
-  const names = ['Cirurgia', 'Cirurgia Digestiva', 'Esôfago', 'Acalasia', ''];
+  const names = ['Cirurgia', 'Cirurgia Digestiva', 'Esôfago', 'Acalasia'];
   for (let i = 0; i < 4; i++) await pathInputs[i].fill(names[i]);
   await shot('04-editor');
   await page.click('.modal button:has-text("Criar card")');
   await page.waitForTimeout(400);
   info = await evalFC(() => {
     const c = [...FC.store.cards.values()].find((x) => /padrão-ouro/.test(x.front));
-    return { path: FC.areas.pathNames(c.nodeId), state: c.state };
+    return { path: FC.areas.pathNames(c.nodeId) };
   });
   assert.deepEqual(info.path, ['Cirurgia', 'Cirurgia Digestiva', 'Esôfago', 'Acalasia']);
+
+  step('assuntos com os mesmos nomes na plataforma (para o "Registrar estudo")');
+  {
+    const areasRes = await A.context.request.get(BASE + '/api/areas');
+    const cir = (await areasRes.json()).find((a) => a.name === 'Cirurgia');
+    for (const name of ['Câncer gástrico', 'Estômago', 'Esôfago']) {
+      const r = await A.context.request.post(BASE + '/api/subjects', { data: { areaId: cir.id, name } });
+      assert.equal(r.status(), 201);
+    }
+  }
 
   step('revisão normal: intervalos da primeira aprendizagem');
   await go('/');
@@ -218,16 +340,13 @@ try {
   const labels = await page.$$eval('.rating-bar .rate', (els) => els.map((e) => e.querySelector('.name').textContent + ' ' + e.querySelector('.ivl').textContent));
   await shot('07-revisao-resposta');
   console.log('   botões:', labels.join(' | '));
-  // O primeiro card pode ser de revisão (vindo do Anki) ou novo; os intervalos fixos valem para novos
   const reviewDue = await evalFC(() => FC.review.counts({}).dueNow);
   if (reviewDue === 0) assert.deepEqual(labels, ['Errei 1 min', 'Difícil 5 min', 'Quase 10 min', 'Bom 1 dia', 'Fácil 2 dias']);
   await page.keyboard.press('4');
   await page.waitForTimeout(300);
   let answered = 1;
-  // Responde mais alguns cards alternando respostas
   for (const key of ['1', '4', '2', '5', '1', '3', '4']) {
-    const hasCard = await page.$('.show-answer .btn');
-    if (!hasCard) break;
+    if (!(await page.$('.show-answer .btn'))) break;
     await page.keyboard.press('Space');
     await page.waitForSelector('.rating-bar');
     const newLabels = await page.$$eval('.rating-bar .ivl', (els) => els.map((e) => e.textContent));
@@ -236,15 +355,46 @@ try {
     await page.waitForTimeout(250);
     answered++;
   }
+
   step('desfazer (Z) volta o card e apaga o registro');
   const before = await evalFC(() => FC.store.logs.length);
   await page.keyboard.press('z');
   await page.waitForTimeout(300);
-  const after = await evalFC(() => FC.store.logs.length);
-  assert.equal(after, before - 1);
+  assert.equal(await evalFC(() => FC.store.logs.length), before - 1);
   await page.click('button:has-text("Encerrar")');
   await page.waitForSelector('text=Sessão concluída!');
   await shot('08-resumo-sessao');
+
+  step('"Registrar estudo" abre o diálogo do site com Flashcards, tempo e assunto');
+  {
+    await evalFC(() => {
+      const orig = FC.host.registerStudy;
+      FC.host.registerStudy = (x) => {
+        window.__studyInfo = x;
+        return orig(x);
+      };
+    });
+    await page.click('.fc-register button:has-text("Registrar estudo")');
+    const dialog = page.locator('[role="dialog"]:has-text("Registrar estudo")');
+    await dialog.waitFor({ timeout: 10000 });
+    const sent = await evalFC(() => window.__studyInfo);
+    assert.equal(sent.method, 'FLASHCARDS');
+    assert.ok(sent.minutes >= 1);
+    assert.match(sent.notes, /Flashcards · Revisão de hoje: \d+ respostas?, \d+% de acerto/);
+    assert.ok(sent.subject && ['Câncer gástrico', 'Estômago', 'Esôfago'].includes(sent.subject.name), 'assunto da sessão: ' + JSON.stringify(sent.subject));
+    await page.waitForFunction((n) => document.querySelector('[role="dialog"]').innerText.includes(n), sent.subject.name, { timeout: 10000 });
+    assert.equal(await dialog.locator('input[type="number"]').first().inputValue(), String(sent.minutes));
+    await shot('09-registrar-estudo');
+    await dialog.locator('button:has-text("Registrar")').last().click();
+    await page.waitForSelector('text=Estudo registrado', { timeout: 10000 });
+    await page.keyboard.press('Escape');
+    const studies = await (await A.context.request.get(BASE + '/api/studies')).json();
+    const list = Array.isArray(studies) ? studies : studies.items || studies.studies || [];
+    const study = list.find((s) => (s.methods || []).includes('FLASHCARDS'));
+    assert.ok(study, 'estudo registrado com o método Flashcards: ' + JSON.stringify(studies).slice(0, 300));
+    assert.equal(study.subject.name, sent.subject.name);
+    assert.equal(study.durationMinutes, sent.minutes);
+  }
 
   step('Quick Review não altera o agendamento');
   const snapshot = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
@@ -252,30 +402,26 @@ try {
   await go('/quick');
   await page.click('.check:has-text("Câncer gástrico")');
   await page.waitForTimeout(200);
-  await shot('09-quick-selecao');
+  await shot('10-quick-selecao');
   await page.click('button:has-text("Começar")');
   await page.waitForSelector('.flashcard');
-  const answers = ['1', '3', '2', '3', '3', '1'];
-  for (const a of answers) {
+  for (const a of ['1', '3', '2', '3', '3', '1']) {
     await page.keyboard.press('Space');
     await page.waitForSelector('.rating-bar.quick');
     await page.keyboard.press(a);
     await page.waitForTimeout(120);
   }
-  await shot('10-quick-card');
   await page.click('button:has-text("Encerrar")');
   await page.waitForSelector('text=Quick Review concluído');
   await shot('11-quick-relatorio');
-  const quickText = await page.textContent('.summary');
-  assert.match(quickText, /Cards revisados/);
-  const snapshotAfter = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
-  assert.equal(snapshotAfter, snapshot, 'agendamento intacto');
+  assert.match(await page.textContent('.summary'), /Cards revisados/);
+  assert.ok(await page.$('.summary .fc-register'), '"Registrar estudo" também no Quick Review');
+  assert.equal(await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions]))), snapshot, 'agendamento intacto');
   assert.equal(await evalFC(() => FC.store.logs.length), logsBefore, 'histórico principal intacto');
   assert.equal(await evalFC(() => FC.store.quickSessions.length), 1);
 
   step('simula meses de histórico para ver pontos fracos e estatísticas');
   await evalFC(async () => {
-    // Taxa de acerto por tema (só para o teste): Estadiamento vai mal, Patologia bem
     const rate = { Estadiamento: 0.45, Patologia: 0.92, 'Tratamento cirúrgico': 0.8, Epidemiologia: 0.85 };
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -314,7 +460,7 @@ try {
   await page.waitForSelector('text=Revisar cards que errei');
   await shot('13-ponto-fraco-detalhe');
 
-  step('dashboard, estatísticas, calendário, decks, busca, gerar, configurações');
+  step('telas: início, estatísticas, calendário, decks, busca, gerar, configurações');
   await go('/');
   await page.waitForSelector('.today');
   await shot('14-inicio-com-dados');
@@ -329,12 +475,12 @@ try {
   await shot('17-decks');
   await go('/busca?q=Borrmann');
   await page.waitForTimeout(500);
-  const found = await page.textContent('.page-head + .panel');
-  assert.match(found, /cards? encontrados?/);
+  assert.match(await page.textContent('.page-head + .panel'), /cards? encontrados?/);
   await shot('18-busca');
   await go('/gerar');
   await shot('19-gerar');
   await go('/configuracoes');
+  await page.waitForSelector('text=Sua conta');
   await shot('20-configuracoes');
 
   step('gerar com IA no modo manual (resposta colada)');
@@ -358,34 +504,22 @@ try {
   await page.waitForTimeout(500);
   info = await evalFC(() => {
     const c = [...FC.store.cards.values()].find((x) => x.front === 'Tratamentos da acalasia?');
-    return c && { path: FC.areas.pathNames(c.nodeId), est: c.estDifficulty, by: c.estDifficultyBy, src: c.source };
+    return c && { path: FC.areas.pathNames(c.nodeId), by: c.estDifficultyBy, src: c.source };
   });
   assert.deepEqual(info.path, ['Cirurgia', 'Cirurgia Digestiva', 'Acalasia', 'Tratamento']);
   assert.equal(info.by, 'ia');
   assert.equal(info.src.page, 2);
 
-  step('backup: exporta, apaga tudo e restaura');
-  const counts = await evalFC(() => ({ cards: FC.store.cards.size, logs: FC.store.logs.length, nodes: FC.store.nodes.size }));
-  const backup = await evalFC(() => FC.backup.exportBackup());
-  await evalFC(async () => {
-    await FC.db.wipe();
-    await FC.store.load();
-  });
-  assert.equal(await evalFC(() => FC.store.cards.size), 0);
-  await evalFC((json) => FC.backup.restore(JSON.parse(json)), backup);
-  const restored = await evalFC(() => ({ cards: FC.store.cards.size, logs: FC.store.logs.length, nodes: FC.store.nodes.size }));
-  assert.deepEqual(restored, counts);
-
   step('PDF → texto por página → IA pela chave (API simulada) → card com fonte e página');
   {
-    const pdfPage = await context.newPage();
+    const pdfPage = await A.context.newPage();
     await pdfPage.setContent(
       '<style>section{page-break-after:always;font:14px sans-serif}</style>' +
         '<section><h1>Acalasia</h1><p>Distúrbio motor primário do esôfago com perda de neurônios do plexo mioentérico.</p></section>' +
         '<section><h2>Diagnóstico</h2><p>A manometria esofágica de alta resolução é o padrão-ouro. A classificação de Chicago define os tipos I, II e III.</p></section>' +
         '<section><h2>Tratamento</h2><p>Opções: miotomia de Heller com fundoplicatura, POEM e dilatação pneumática.</p></section>',
     );
-    const pdfFile = path.join(ROOT, 'tests/.tmp-acalasia.pdf');
+    const pdfFile = path.join(FLASH, 'tests/.tmp-acalasia.pdf');
     await writeFile(pdfFile, await pdfPage.pdf({ format: 'A5' }));
     await pdfPage.close();
     await evalFC(async () => {
@@ -433,82 +567,272 @@ try {
     await evalFC((id) => FC.cardDetail.open(id), cardId);
     await page.click('.modal .link-btn:has-text("p. 2")');
     await page.waitForSelector('text=Abrir PDF na página');
-    const pageText = await page.textContent('.modal:last-of-type .prompt-box');
-    assert.match(pageText, /padrão-ouro/);
+    assert.match(await page.textContent('.modal:last-of-type .prompt-box'), /padrão-ouro/);
     await shot('28-fonte-do-card');
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await page.unroute('https://api.anthropic.com/**');
     await evalFC(() => FC.settings.set({ aiProvider: 'manual' }));
-    await import('node:fs/promises').then((fs) => fs.rm(pdfFile, { force: true }));
+    await rm(pdfFile, { force: true });
   }
 
   step('baralho em JSON com revisões: exporta, apaga e reimporta mantendo o agendamento');
   {
-    const before = await evalFC(() => {
+    const pick = () => {
       const deck = FC.decks.findByName('Cirurgia::Digestiva::Estômago');
       const cards = FC.decks.cardsIn(deck.id);
-      const json = FC.importView.buildExport(cards, 'json-sched', [], true).content;
-      const pick = (c) => [c.front, c.state, c.dueDate, c.stability, c.difficulty, c.lapses, c.suspended, FC.store.cardLogs(c.id).length];
-      return { json, rows: cards.map(pick).sort(), deckId: deck.id };
-    });
-    await evalFC((id) => FC.decks.remove(id, 'delete'), before.deckId);
-    const jsonFile = path.join(ROOT, 'tests/.tmp-deck.json');
-    await writeFile(jsonFile, before.json);
-    const r = await importFile(jsonFile);
-    assert.match(r, /cards? importados?/);
-    const after = await evalFC(() => {
-      const deck = FC.decks.findByName('Cirurgia::Digestiva::Estômago');
-      const pick = (c) => [c.front, c.state, c.dueDate, c.stability, c.difficulty, c.lapses, c.suspended, FC.store.cardLogs(c.id).length];
-      return FC.decks.cardsIn(deck.id).map(pick).sort();
-    });
-    assert.deepEqual(after, before.rows);
-    await import('node:fs/promises').then((fs) => fs.rm(jsonFile, { force: true }));
+      return { json: FC.importView.buildExport(cards, 'json-sched', [], true).content, rows: cards.map((c) => [c.front, c.state, c.dueDate, c.stability, c.difficulty, c.lapses, c.suspended, FC.store.cardLogs(c.id).length]).sort(), deckId: deck.id };
+    };
+    const b = await evalFC(pick);
+    await evalFC((id) => FC.decks.remove(id, 'delete'), b.deckId);
+    const jsonFile = path.join(FLASH, 'tests/.tmp-deck.json');
+    await writeFile(jsonFile, b.json);
+    assert.match(await importFile(jsonFile), /cards? importados?/);
+    assert.deepEqual((await evalFC(pick)).rows, b.rows);
+    await rm(jsonFile, { force: true });
   }
 
-  step('abre direto do arquivo (file://), sem servidor');
+  // ── Conta: sincronização entre aparelhos ─────────────────────────────────
+  step('tudo vai para a conta; um segundo aparelho baixa a coleção inteira');
+  assert.equal(await flush(page), 0, 'nada pendente');
+  const onA = await counts(page);
+  const B = await device('Ana (celular)', A.email);
+  await openFlashcards(B.page);
+  await B.page.waitForSelector('.fc-root .hello');
+  const onB = await counts(B.page);
+  assert.deepEqual(onB, onA, 'mesma coleção nos dois aparelhos');
+  const sample = (p) =>
+    p.evaluate(() => {
+      const c = [...FC.store.cards.values()].find((x) => /Classificação de Borrmann/.test(x.front));
+      return [c.state, c.dueDate, c.stability, c.difficulty, c.lapses, FC.store.cardLogs(c.id).length, FC.areas.pathNames(c.nodeId).join(' › ')];
+    });
+  assert.deepEqual(await sample(B.page), await sample(page), 'agendamento FSRS e histórico iguais');
+  const media = await B.page.evaluate(async () => (await FC.db.getAll('media')).map((m) => m.name));
+  assert.equal(media.length, 1, 'a imagem do Anki também chegou');
+  assert.equal(await B.page.evaluate(() => FC.settings.getApiKey()), '', 'a chave da IA não sai do aparelho');
+  await shot('29-segundo-aparelho', {}, B.page);
+
+  step('revisão feita no outro aparelho aparece aqui');
+  await answerOne(B.page, '3');
+  assert.equal(await flush(B.page), 0);
+  await pull(page);
+  assert.equal((await counts(page)).logs, onA.logs + 1);
+
+  step('sem internet: responde, fica pendente e envia quando a conexão volta');
+  await A.context.setOffline(true);
+  await answerOne(page, '4');
+  await page.waitForTimeout(2500);
+  const offline = await evalFC(() => FC.sync.status());
+  assert.equal(offline.status, 'offline');
+  assert.ok(offline.pending > 0, 'alterações pendentes');
+  assert.ok(await page.$('.fc-sync.warn'), 'aviso de offline no cabeçalho');
+  await shot('30-offline');
+  await A.context.setOffline(false);
+  await page.waitForFunction(() => FC.sync.status().status === 'ok' && FC.sync.status().pending === 0, null, { timeout: 20000 });
+  await pull(B.page);
+  assert.equal((await counts(B.page)).logs, onA.logs + 2);
+  // A aplica o que chegou só depois de sair da revisão
+  await page.click('button:has-text("Encerrar")');
+  await page.waitForSelector('text=Sessão concluída!');
+
+  step('durante uma revisão a tela não muda; o que chegou aparece ao terminar');
   {
-    const local = await context.newPage();
-    const localErrors = [];
-    local.on('pageerror', (e) => localErrors.push(e.message));
-    await local.goto('file://' + path.join(ROOT, 'index.html'));
-    await local.waitForSelector('.hello, .empty', { timeout: 15000 });
-    assert.deepEqual(localErrors, []);
-    await local.close();
+    const n = (await counts(page)).logs;
+    await answerOne(B.page, '4');
+    assert.equal(await flush(B.page), 0);
+    await answerOne(page, '3');
+    await page.evaluate(() => FC.sync.now());
+    assert.equal((await counts(page)).logs, n + 1, 'só a resposta daqui durante a sessão');
+    await page.click('button:has-text("Encerrar")');
+    await page.waitForSelector('text=Sessão concluída!');
+    await page.evaluate(() => FC.app.go('/'));
+    await page.waitForFunction((x) => FC.store.logs.length === x, n + 2, { timeout: 10000 });
   }
 
-  step('celular: revisão e início');
+  step('entrar de novo na aba (sai e volta) não duplica atalhos nem telas');
+  await page.click('aside a[href="/metricas"]');
+  await page.waitForTimeout(500);
+  assert.equal(await page.$('.fc-root .fc-tabs'), null, 'a aba desmonta ao sair');
+  await page.click('aside a[href="/flashcards"]');
+  await page.waitForSelector('.fc-root .hello');
+  assert.equal(await page.$$eval('.fc-root .fc-tabs', (els) => els.length), 1);
+  {
+    const n = (await counts(page)).logs;
+    await answerOne(page, '3');
+    assert.equal((await counts(page)).logs, n + 1, 'uma tecla = uma resposta');
+    await page.click('button:has-text("Encerrar")');
+    await page.waitForSelector('text=Sessão concluída!');
+  }
+
+  step('restaurar backup substitui a coleção da conta e o outro aparelho acompanha');
+  {
+    await pull(page);
+    const beforeBackup = await counts(page);
+    const backup = await evalFC(() => FC.backup.exportBackup());
+    await evalFC(async () => {
+      await FC.db.wipe();
+      await FC.store.load();
+    });
+    assert.equal(await evalFC(() => FC.store.cards.size), 0);
+    await evalFC((json) => FC.backup.restore(JSON.parse(json)), backup);
+    assert.deepEqual(await counts(page), beforeBackup);
+    assert.equal(await evalFC(() => FC.sync.status().pending), 0, 'restauração enviada para a conta');
+    await pull(B.page);
+    assert.deepEqual(await counts(B.page), beforeBackup, 'o outro aparelho recomeçou com a coleção restaurada');
+  }
+
+  step('outro usuário não vê nada destes flashcards');
+  {
+    const C = await device('Caio Teste', 'caio.' + stamp + '@teste.com', { register: true });
+    await openFlashcards(C.page);
+    await C.page.waitForSelector('.fc-root .hello');
+    assert.equal(await C.page.evaluate(() => FC.store.cards.size), 0);
+    const s = await (await C.context.request.get(BASE + '/api/search?q=Borrmann')).json();
+    assert.equal(s.flashcards.total, 0);
+    await C.context.close();
+  }
+
+  step('flashcards salvos só no navegador (versão anterior) vão para a conta');
+  {
+    const D = await device('Dora Teste', 'dora.' + stamp + '@teste.com', { register: true });
+    await D.page.goto(BASE + '/');
+    await D.page.waitForSelector('aside a[href="/flashcards"]');
+    await D.page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const req = indexedDB.open('flashcards-medicina', 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            for (const [name, key] of [['cards', 'id'], ['nodes', 'id'], ['decks', 'id'], ['logs', 'id'], ['kv', 'key']]) db.createObjectStore(name, { keyPath: key });
+          };
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction(['cards', 'nodes', 'decks', 'logs', 'kv'], 'readwrite');
+            const now = Date.now();
+            tx.objectStore('decks').put({ id: 'd_old', name: 'Meus cards', createdAt: now - 1e9 });
+            tx.objectStore('nodes').put({ id: 'n1', name: 'Clínica Médica', level: 0, parentId: null });
+            tx.objectStore('cards').put({ id: 'old1', front: 'Card antigo 1?', back: 'Resposta 1', deckId: 'd_old', nodeId: 'n1', tags: [], state: 'new', createdAt: now - 1e9, updatedAt: now - 1e9 });
+            tx.objectStore('cards').put({ id: 'old2', front: 'Card antigo 2?', back: 'Resposta 2', deckId: 'd_old', nodeId: 'n1', tags: [], state: 'review', dueDate: now + 86400000, stability: 5, difficulty: 5, repetitions: 2, lapses: 0, scheduledDays: 5, lastReview: now - 86400000, createdAt: now - 1e9, updatedAt: now - 1e9 });
+            tx.objectStore('logs').put({ id: 'lo1', cardId: 'old2', date: now - 86400000, rating: 4, source: 'review' });
+            tx.objectStore('kv').put({ key: 'aiKey', value: 'sk-ant-antiga' });
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+    );
+    await D.page.click('aside a[href="/flashcards"]');
+    await D.page.waitForSelector('.fc-legacy', { timeout: 20000 });
+    assert.match(await D.page.textContent('.fc-legacy'), /2 cards e 1 revisão/);
+    await shot('31-versao-anterior', {}, D.page);
+    await D.page.click('.fc-legacy button:has-text("Levar para a minha conta")');
+    await D.page.waitForSelector('.fc-legacy', { state: 'detached', timeout: 20000 });
+    assert.equal(await D.page.evaluate(() => FC.store.cards.size), 2);
+    assert.deepEqual(await D.page.evaluate(() => FC.decks.all().map((d) => d.name)), ['Meus cards'], 'sem baralho padrão repetido');
+    assert.equal(await D.page.evaluate(() => FC.settings.getApiKey()), 'sk-ant-antiga', 'a chave antiga continua neste navegador');
+    assert.equal(await flush(D.page), 0);
+    const pulled = await (await D.context.request.get(BASE + '/api/flashcards/sync?since=0')).json();
+    assert.equal(pulled.records.filter((r) => r.s === 'cards').length, 2);
+    assert.ok(!pulled.records.some((r) => r.s === 'kv' && r.id === 'aiKey'), 'a chave não vai para a conta');
+    await D.page.reload();
+    await D.page.waitForSelector('.fc-root .hello');
+    await D.page.waitForTimeout(800);
+    assert.equal(await D.page.$('.fc-legacy'), null, 'não pergunta de novo');
+    await D.context.close();
+  }
+
+  step('Início do site: widget e contador do menu com os números da aba');
+  {
+    await go('/');
+    const expected = await evalFC(() => {
+      const c = FC.review.counts({});
+      return c.dueToday + c.overdue + c.newToday;
+    });
+    await evalFC(() => FC.summary.send());
+    await page.click('aside a[href="/"]');
+    await page.waitForSelector('text=Para revisar hoje');
+    await page.waitForFunction((n) => document.body.innerText.includes('Revisar agora (' + n + ')'), expected, { timeout: 10000 });
+    const badge = await page.textContent('aside a[href="/flashcards"] span.num');
+    assert.equal(badge.trim(), String(expected));
+    await shot('32-inicio-do-site');
+    // O resumo fica na conta: outro aparelho vê o mesmo número no Início
+    await B.page.goto(BASE + '/');
+    await B.page.waitForFunction((n) => document.body.innerText.includes('Revisar agora (' + n + ')'), expected, { timeout: 10000 });
+    await page.click('text=Revisar agora');
+    await page.waitForSelector('.flashcard', { timeout: 20000 });
+    assert.equal(new URL(page.url()).pathname, '/flashcards/revisar');
+    await page.click('button:has-text("Encerrar")');
+  }
+
+  step('busca global do site encontra os cards');
+  await page.goto(BASE + '/busca?q=Borrmann');
+  await page.waitForSelector('main a[href^="/flashcards/busca"]');
+  assert.match(await page.textContent('main'), /Classificação de Borrmann/);
+  await shot('33-busca-global');
+  await page.click('main a[href^="/flashcards/busca"] >> nth=0');
+  await page.waitForSelector('.fc-root .page-head');
+  await page.waitForTimeout(500);
+  assert.match(await page.textContent('.page-head + .panel'), /cards? encontrados?/);
+
+  step('tema do site vale para os flashcards');
+  {
+    const toggle = page.locator('header button[aria-label^="Tema:"]');
+    for (let i = 0; i < 3 && (await page.evaluate(() => document.documentElement.getAttribute('data-theme'))) !== 'dark'; i++) await toggle.click();
+    await go('/estatisticas');
+    await page.waitForTimeout(400);
+    const bg = await page.$eval('.fc-root .panel', (el) => getComputedStyle(el).backgroundColor);
+    assert.equal(bg, 'rgb(26, 26, 25)', 'painel no tema escuro');
+    await shot('25-escuro-estatisticas');
+    await go('/revisar');
+    await page.waitForTimeout(300);
+    await shot('26-escuro-revisao');
+    for (let i = 0; i < 3 && (await page.evaluate(() => document.documentElement.getAttribute('data-theme'))) !== 'light'; i++) await toggle.click();
+  }
+
+  step('celular: revisão em tela cheia e sem rolagem lateral');
   await page.setViewportSize({ width: 390, height: 844 });
   await go('/revisar');
   await page.waitForTimeout(400);
   if (await page.$('.show-answer .btn')) {
     await page.keyboard.press('Space');
     await page.waitForSelector('.rating-bar');
+    assert.equal(await page.$eval('.app-bottom-nav', (el) => getComputedStyle(el).display), 'none', 'barra do site some durante a revisão');
   }
   await shot('23-celular-revisao', { fullPage: false });
   await go('/');
+  assert.notEqual(await page.$eval('.app-bottom-nav', (el) => getComputedStyle(el).display), 'none', 'barra do site volta depois');
   await shot('24-celular-inicio', { fullPage: false });
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
-  assert.equal(overflow, false, 'sem rolagem horizontal no celular');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false, 'sem rolagem horizontal no celular');
+  await page.setViewportSize({ width: 1360, height: 900 });
 
-  step('tema escuro');
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await evalFC(() => FC.settings.set({ theme: 'dark' }));
-  await go('/estatisticas');
-  await page.waitForTimeout(400);
-  await shot('25-escuro-estatisticas');
-  await go('/revisar');
-  await page.waitForTimeout(300);
-  await shot('26-escuro-revisao');
+  step('"Sair" envia o que falta e apaga a cópia local deste navegador');
+  {
+    await page.waitForTimeout(300);
+    await page.click('header button[aria-label="Sair"]');
+    await page.waitForURL('**/entrar', { timeout: 15000 });
+    const dbs = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+    assert.ok(!dbs.includes('fc:' + A.user.id), 'banco local apagado: ' + dbs.join(', '));
+    assert.equal(await page.evaluate(() => FC.app.userId()), null);
+  }
 
   assert.deepEqual(errors, [], 'sem erros no console');
-  console.log('\nOK — ' + answered + ' respostas na revisão, todos os fluxos passaram.');
+  console.log('\nOK — ' + answered + ' respostas na primeira revisão, todos os fluxos passaram.');
 } catch (e) {
   console.error('\nFALHOU:', e.message);
   console.error('Erros do console:', errors);
-  await shot('zz-falha');
+  try {
+    await shot('zz-falha');
+  } catch (err) {
+    /* tela quebrada */
+  }
   process.exitCode = 1;
 } finally {
   await browser.close();
-  server.close();
+  try {
+    process.kill(-server.pid, 'SIGTERM');
+  } catch (e) {
+    server.kill('SIGTERM');
+  }
 }

@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Flame, PenLine, RefreshCcw, Target } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Flame, Layers, PenLine, RefreshCcw, Target } from 'lucide-react';
 import type { Dashboard } from '../../api/types';
 import { duration, fmtShort, fmtWeekday, pct, plural, relativeDay } from '../../lib/format';
 import { Card, EmptyState, ProgressBar, cx } from '../ui';
 import { ReviewCard } from '../study/ReviewCard';
 import { FavoriteGroups } from '../groups/FavoriteGroups';
 import { InsightList, ProgressOverview } from './shared';
+import { useFlashcardsSummary } from '../../hooks/flashcards';
+import { flashcardsToday } from '../../flashcards/today';
 
 // "Balões" da página inicial. Cada um sabe se desenhar na coluna larga
 // (principal) ou estreita (lateral). A ordem é escolhida pelo usuário.
@@ -14,6 +16,7 @@ import { InsightList, ProgressOverview } from './shared';
 export type WidgetId =
   | 'hoje'
   | 'revisoes'
+  | 'flashcards'
   | 'semana'
   | 'proximas'
   | 'recentes'
@@ -31,9 +34,11 @@ export interface Layout {
   hidden: WidgetId[];
 }
 
-export const WIDGETS: Record<WidgetId, { title: string; emoji: string; column: Column }> = {
+// `after`: onde um balão novo entra para quem já tinha personalizado a página
+export const WIDGETS: Record<WidgetId, { title: string; emoji: string; column: Column; after?: WidgetId }> = {
   hoje: { title: 'Resumo de hoje', emoji: '📌', column: 'main' },
   revisoes: { title: 'Revisões de hoje', emoji: '🔄', column: 'main' },
+  flashcards: { title: 'Flashcards', emoji: '🗂️', column: 'main', after: 'revisoes' },
   semana: { title: 'Esta semana', emoji: '📅', column: 'main' },
   proximas: { title: 'Próximas atividades', emoji: '⏭️', column: 'main' },
   recentes: { title: 'Estudos recentes', emoji: '📚', column: 'main' },
@@ -47,7 +52,7 @@ export const WIDGETS: Record<WidgetId, { title: string; emoji: string; column: C
 const IDS = Object.keys(WIDGETS) as WidgetId[];
 
 export const DEFAULT_LAYOUT: Layout = {
-  main: ['hoje', 'revisoes', 'semana', 'proximas', 'recentes'],
+  main: ['hoje', 'revisoes', 'flashcards', 'semana', 'proximas', 'recentes'],
   side: ['progresso', 'grupos', 'recomendacoes', 'comparacoes', 'metas'],
   hidden: [],
 };
@@ -59,7 +64,13 @@ export function normalizeLayout(raw: { main?: string[]; side?: string[]; hidden?
   const clean = (list: string[] | undefined) =>
     (list ?? []).filter((id): id is WidgetId => (IDS as string[]).includes(id) && !seen.has(id as WidgetId) && !!seen.add(id as WidgetId));
   const layout: Layout = { main: clean(raw.main), side: clean(raw.side), hidden: clean(raw.hidden) };
-  for (const id of IDS) if (!seen.has(id)) layout[WIDGETS[id].column].push(id);
+  for (const id of IDS) {
+    if (seen.has(id)) continue;
+    const { column, after } = WIDGETS[id];
+    const at = after ? layout[column].indexOf(after) : -1;
+    if (at >= 0) layout[column].splice(at + 1, 0, id);
+    else layout[column].push(id);
+  }
   return layout;
 }
 
@@ -72,6 +83,81 @@ function TodayTile({ icon, value, label, tone, to }: { icon: ReactNode; value: R
         <span className="block truncate text-xs text-ink2">{label}</span>
       </span>
     </Link>
+  );
+}
+
+function FlashcardsWidget({ narrow }: { narrow: boolean }) {
+  const { data, isLoading } = useFlashcardsSummary();
+  const action = (
+    <Link to="/flashcards" className="text-xs font-medium text-accent">
+      Abrir
+    </Link>
+  );
+  if (isLoading) return null;
+  const summary = data?.summary;
+  if (!summary || !summary.total) {
+    return (
+      <Card title="Flashcards" action={action}>
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-wash">
+            <Layers className="h-5 w-5 text-accent" />
+          </span>
+          <p className="text-sm text-ink2">
+            Crie, importe (inclusive do Anki, com o histórico) ou gere cards com IA a partir dos seus PDFs, e revise com repetição espaçada.{' '}
+            <Link to="/flashcards" className="font-medium text-accent">
+              Começar →
+            </Link>
+          </p>
+        </div>
+      </Card>
+    );
+  }
+  const t = flashcardsToday(summary);
+  const accuracy = t.reviewed ? t.correct / t.reviewed : null;
+  return (
+    <Card title="Flashcards" subtitle={!narrow ? `${plural(t.cards, 'card', 'cards')} na sua coleção` : undefined} action={action}>
+      <div className={cx('grid gap-3', narrow ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4')}>
+        <div>
+          <p className="text-xs text-muted">Para revisar hoje</p>
+          <p className="num text-2xl font-semibold text-ink">{t.due}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Novos hoje</p>
+          <p className="num text-2xl font-semibold text-ink">{t.newToday}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Revisados hoje</p>
+          <p className="num text-2xl font-semibold text-ink">
+            {t.reviewed}
+            {accuracy !== null && <span className="text-sm font-normal text-ink2"> · {pct(accuracy * 100)}</span>}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Sequência</p>
+          <p className="flex items-center gap-1 text-2xl font-semibold text-ink">
+            <Flame className="h-5 w-5" style={{ color: t.streak ? 'var(--serious)' : 'var(--muted)' }} />
+            <span className="num">{t.streak}</span>
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {t.total > 0 ? (
+          <Link to="/flashcards/revisar" className="inline-flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-strong">
+            <RefreshCcw className="h-4 w-4" /> Revisar agora ({t.total})
+          </Link>
+        ) : (
+          <span className="text-sm text-ink2">🎉 Nada para revisar hoje.</span>
+        )}
+        <Link to="/flashcards/quick" className="rounded-xl px-3 py-2 text-sm font-medium text-ink2 hover:bg-subtle">
+          Quick Review
+        </Link>
+        {summary.drafts > 0 && (
+          <Link to="/flashcards/gerar/revisao" className="rounded-xl px-3 py-2 text-sm font-medium text-ink2 hover:bg-subtle">
+            {plural(summary.drafts, 'card gerado', 'cards gerados')} para revisar
+          </Link>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -161,6 +247,9 @@ export function DashboardWidget({
         </Card>
       );
     }
+
+    case 'flashcards':
+      return <FlashcardsWidget narrow={narrow} />;
 
     case 'semana':
       return (

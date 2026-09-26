@@ -1,0 +1,261 @@
+/*
+ * Flashcards dentro do Projeto Residente: cabeçalho da aba (abas internas,
+ * sincronização, busca, novo card) e ajustes para conviver com o CSS do site.
+ */
+
+/* ── Convivência com o Tailwind do site ────────────────────────────────────
+ * O "preflight" do Tailwind zera alguns elementos (ícones SVG viram bloco,
+ * listas perdem marcadores, links perdem sublinhado) e o site tem .input/.label
+ * próprios. Dentro dos flashcards volta o comportamento para o qual o app foi
+ * desenhado. :where() mantém a especificidade baixa: as regras do app vencem. */
+.fc-root :where(svg, img, video, canvas) {
+  display: revert;
+  vertical-align: revert;
+}
+
+.fc-root :where(ul, ol, menu) {
+  list-style: revert;
+  margin: revert;
+  padding: revert;
+}
+
+.fc-root :where(h5, h6) {
+  font-size: revert;
+  font-weight: revert;
+}
+
+.fc-root :where(a) {
+  text-decoration: revert;
+}
+
+.fc-root .rich :where(blockquote, pre, figure, dl, dd) {
+  margin: revert;
+}
+
+.fc-root .label {
+  display: revert;
+  margin-bottom: 0;
+  line-height: inherit;
+}
+
+/* ── Cabeçalho da aba ─────────────────────────────────────────────────────── */
+.fc-root .fc-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.fc-root .fc-head-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fc-root .fc-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 650;
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
+  margin-right: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.fc-root .fc-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.fc-root .fc-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 4px 11px;
+  min-height: 30px;
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fc-root .fc-sync:hover {
+  background: var(--subtle);
+}
+
+.fc-root .fc-sync.ok svg {
+  color: var(--good);
+}
+
+.fc-root .fc-sync.warn {
+  color: var(--warn-text);
+  background: var(--warn-wash);
+}
+
+.fc-root .fc-sync.crit {
+  color: var(--crit-text);
+  background: var(--crit-wash);
+}
+
+.fc-root .fc-sync.busy svg {
+  animation: spin 1s linear infinite;
+}
+
+.fc-root .fc-search {
+  position: relative;
+  flex: 0 1 280px;
+  min-width: 120px;
+}
+
+.fc-root .fc-search svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.fc-root .fc-search input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 12px 6px 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.88rem;
+}
+
+.fc-root .fc-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+.fc-root .fc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fc-root .fc-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.fc-root .fc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-weight: 560;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.fc-root .fc-tab:hover {
+  color: var(--ink);
+  background: var(--subtle);
+}
+
+.fc-root .fc-tab[aria-current='page'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.fc-root .fc-tab .count {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--accent-wash);
+  color: var(--accent-strong);
+  padding: 0 7px;
+  border-radius: 999px;
+  line-height: 1.5;
+}
+
+.fc-root .fc-settings[aria-current='page'] {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.fc-root .fc-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.fc-root .fc-banners:empty {
+  display: none;
+}
+
+.fc-root .fc-loading {
+  max-width: 520px;
+  margin: 48px auto;
+}
+
+.fc-root .fc-register {
+  align-items: center;
+}
+
+/* ── Celular ──────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .fc-root .fc-search {
+    display: none;
+  }
+
+  /* Celular: uma linha só, rolando para o lado */
+  .fc-root .fc-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .fc-root .fc-head {
+    margin-bottom: 14px;
+  }
+
+  /* Na revisão, a tela é do card: some a barra de abas (o "Encerrar" continua) */
+  body.fc-focus-mode .fc-root .fc-tabs {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .fc-root .fc-sync span,
+  .fc-root .fc-head-row .btn.primary span {
+    display: none;
+  }
+
+  .fc-root .fc-sync {
+    padding: 4px 8px;
+  }
+
+  .fc-root .fc-head-row .btn.primary {
+    padding: 0;
+    width: 32px;
+  }
+
+  .fc-root .fc-brand {
+    font-size: 1.08rem;
+  }
+}

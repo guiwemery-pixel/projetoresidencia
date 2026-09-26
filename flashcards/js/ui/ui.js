@@ -9,6 +9,13 @@
   const FC = (root.FC = root.FC || {});
   const U = FC.util;
   FC.views = FC.views || {}; // cada tela (js/ui/*View.js) se registra aqui
+  FC.config = Object.assign({ base: '/flashcards', assets: '/flashcards/vendor/', api: '/api/flashcards' }, FC.config || {});
+
+  /** Endereço de uma tela do app: "#/decks" ou "/decks" → "/flashcards/decks". */
+  function href(path) {
+    const p = String(path || '/').replace(/^#/, '');
+    return FC.config.base + (p === '/' ? '' : p.startsWith('/') ? p : '/' + p);
+  }
 
   // ── Elementos ──────────────────────────────────────────────────────────────
   function h(tag, props, ...children) {
@@ -22,6 +29,7 @@
         else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
         else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
         else if (k === 'dataset') Object.assign(el.dataset, v);
+        else if (k === 'href' && typeof v === 'string' && v.startsWith('#/')) el.setAttribute('href', href(v));
         else if (k in el && typeof v !== 'string') el[k] = v;
         else el.setAttribute(k, v === true ? '' : v);
       }
@@ -130,12 +138,33 @@
     return h('a', { class: ['btn', opts.variant || '', opts.size || ''].filter(Boolean).join(' '), href }, opts.icon ? icon(opts.icon, 17) : null, h('span', null, label));
   }
 
+  // ── Camada de sobreposição ─────────────────────────────────────────────────
+  // Avisos, janelas e menus ficam fora da página (sobre o site inteiro), num
+  // contêiner com a classe .fc-root para receber os estilos do app.
+  let portalEl = null;
+  function portal() {
+    if (!portalEl || !portalEl.isConnected) {
+      portalEl = h('div', { class: 'fc-root fc-portal' });
+      document.body.appendChild(portalEl);
+    }
+    return portalEl;
+  }
+
+  /** Fecha tudo o que estiver aberto (ao sair da aba de flashcards). */
+  function destroyPortal() {
+    closeMenus();
+    for (const m of openModals.slice().reverse()) m.close(null);
+    if (portalEl) portalEl.remove();
+    portalEl = null;
+    toastBox = null;
+  }
+
   // ── Avisos ─────────────────────────────────────────────────────────────────
   let toastBox = null;
   function toast(message, opts = {}) {
-    if (!toastBox) {
+    if (!toastBox || !toastBox.isConnected) {
       toastBox = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
-      document.body.appendChild(toastBox);
+      portal().appendChild(toastBox);
     }
     const el = h('div', { class: 'toast' + (opts.error ? ' error' : '') }, h('span', null, message));
     if (opts.action) {
@@ -211,7 +240,7 @@
     if (opts.content) append(body, [opts.content]);
     if (opts.actions) append(foot, opts.actions);
     else foot.remove();
-    document.body.appendChild(backdrop);
+    portal().appendChild(backdrop);
     document.addEventListener('keydown', onKey, true);
     setTimeout(() => {
       const target = dialog.querySelector('[autofocus], input, textarea, select, .editor-area') || dialog.querySelector('.modal-foot .btn.primary') || dialog;
@@ -293,7 +322,7 @@
         ),
       );
     }
-    document.body.appendChild(el);
+    portal().appendChild(el);
     const r = anchor.getBoundingClientRect();
     const w = el.offsetWidth;
     const hgt = el.offsetHeight;
@@ -327,7 +356,8 @@
   }
 
   function closeMenus() {
-    document.querySelectorAll('.menu').forEach((m) => {
+    if (!portalEl) return;
+    portalEl.querySelectorAll('.menu').forEach((m) => {
       if (m._cleanup) m._cleanup();
       m.remove();
     });
@@ -358,7 +388,14 @@
       });
     })();
     mediaCache.set(name, p);
+    // Imagem ainda não baixada da conta: tenta de novo na próxima vez
+    p.then((url) => url || mediaCache.delete(name)).catch(() => mediaCache.delete(name));
     return p;
+  }
+
+  function forgetMedia(names) {
+    if (!names) mediaCache.clear();
+    else for (const n of names) mediaCache.delete(n);
   }
 
   /** Elemento com o HTML do card já limpo; imagens do Anki carregadas do banco local. */
@@ -651,6 +688,10 @@
 
   FC.ui = {
     h,
+    href,
+    portal,
+    destroyPortal,
+    forgetMedia,
     append,
     add,
     clear,
@@ -691,4 +732,4 @@
     diffBadge,
     stateBadge,
   };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

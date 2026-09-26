@@ -1,6 +1,6 @@
 /* Telas de estudo: revisão normal e Quick Review (foco: pergunta → resposta → avaliação) */
 
-.study {
+.fc-root .study {
   max-width: 780px;
   margin: 0 auto;
   display: flex;
@@ -8,14 +8,14 @@
   gap: 14px;
 }
 
-.study-top {
+.fc-root .study-top {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.study-top .title {
+.fc-root .study-top .title {
   font-weight: 620;
   min-width: 0;
   flex: 1 1 0;
@@ -24,7 +24,7 @@
   text-overflow: ellipsis;
 }
 
-.queue-counts {
+.fc-root .queue-counts {
   display: flex;
   gap: 12px;
   font-variant-numeric: tabular-nums;
@@ -32,18 +32,18 @@
   font-size: 0.92rem;
 }
 
-.queue-counts span {
+.fc-root .queue-counts span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-.queue-counts .current {
+.fc-root .queue-counts .current {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 
-.flashcard {
+.fc-root .flashcard {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -55,13 +55,13 @@
   gap: 14px;
 }
 
-.flashcard .fc-path {
+.fc-root .flashcard .fc-path {
   font-size: 0.8rem;
   color: var(--muted);
   line-height: 1.4;
 }
 
-.flashcard .fc-path .subject {
+.fc-root .flashcard .fc-path .subject {
   display: block;
   font-weight: 700;
   font-size: 0.78rem;
@@ -70,29 +70,29 @@
   color: var(--ink-2);
 }
 
-.flashcard .fc-path .topics {
+.fc-root .flashcard .fc-path .topics {
   font-style: italic;
 }
 
-.flashcard .fc-front {
+.fc-root .flashcard .fc-front {
   font-size: 1.28rem;
   line-height: 1.55;
   font-weight: 520;
 }
 
-.flashcard .fc-sep {
+.fc-root .flashcard .fc-sep {
   border: 0;
   height: 1px;
   background: var(--border);
   margin: 6px 0;
 }
 
-.flashcard .fc-back {
+.fc-root .flashcard .fc-back {
   font-size: 1.1rem;
   line-height: 1.65;
 }
 
-.flashcard .fc-meta {
+.fc-root .flashcard .fc-meta {
   margin-top: auto;
   display: flex;
   gap: 8px;
@@ -102,27 +102,27 @@
   color: var(--muted);
 }
 
-.show-answer {
+.fc-root .show-answer {
   display: flex;
   justify-content: center;
 }
 
-.show-answer .btn {
+.fc-root .show-answer .btn {
   min-width: 260px;
 }
 
 /* Botões de avaliação */
-.rating-bar {
+.fc-root .rating-bar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
-.rating-bar.quick {
+.fc-root .rating-bar.quick {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.rate {
+.fc-root .rate {
   --c: var(--accent);
   --w: var(--accent-wash);
   border: 1px solid color-mix(in srgb, var(--c) 45%, var(--border));
@@ -138,16 +138,16 @@
   transition: background 0.1s, transform 0.05s;
 }
 
-.rate:hover,
-.rate:focus-visible {
+.fc-root .rate:hover,
+.fc-root .rate:focus-visible {
   background: var(--w);
 }
 
-.rate:active {
+.fc-root .rate:active {
   transform: translateY(1px);
 }
 
-.rate .name {
+.fc-root .rate .name {
   font-weight: 650;
   font-size: 0.98rem;
   display: flex;
@@ -155,7 +155,7 @@
   gap: 6px;
 }
 
-.rate .name::before {
+.fc-root .rate .name::before {
   content: '';
   width: 8px;
   height: 8px;
@@ -163,43 +163,43 @@
   background: var(--c);
 }
 
-.rate .ivl {
+.fc-root .rate .ivl {
   font-size: 0.8rem;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 
-.rate .key {
+.fc-root .rate .key {
   font-size: 0.7rem;
   color: var(--muted);
   font-family: var(--mono);
 }
 
-.rate.r1,
-.rate.q-naosei {
+.fc-root .rate.r1,
+.fc-root .rate.q-naosei {
   --c: var(--crit);
   --w: var(--crit-wash);
 }
-.rate.r2 {
+.fc-root .rate.r2 {
   --c: var(--serious);
   --w: var(--serious-wash);
 }
-.rate.r3,
-.rate.q-quase {
+.fc-root .rate.r3,
+.fc-root .rate.q-quase {
   --c: var(--warn);
   --w: var(--warn-wash);
 }
-.rate.r4,
-.rate.q-sei {
+.fc-root .rate.r4,
+.fc-root .rate.q-sei {
   --c: var(--good);
   --w: var(--good-wash);
 }
-.rate.r5 {
+.fc-root .rate.r5 {
   --c: var(--accent);
   --w: var(--accent-wash);
 }
 
-.study-foot {
+.fc-root .study-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -209,48 +209,48 @@
   font-size: 0.8rem;
 }
 
-.study-foot .keys {
+.fc-root .study-foot .keys {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
 }
 
-.wait-card {
+.fc-root .wait-card {
   text-align: center;
   padding: 36px 20px;
 }
 
 /* Resumo da sessão */
-.summary {
+.fc-root .summary {
   max-width: 680px;
   margin: 0 auto;
 }
 
-.summary-figs {
+.fc-root .summary-figs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin: 16px 0;
 }
 
-.summary-figs .tile .value {
+.fc-root .summary-figs .tile .value {
   font-size: 1.6rem;
 }
 
-.hero {
+.fc-root .hero {
   font-size: 3rem;
   font-weight: 650;
   line-height: 1;
 }
 
-.related-list {
+.fc-root .related-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.related-list button {
+.fc-root .related-list button {
   text-align: left;
   border: 0;
   background: var(--subtle);
@@ -260,11 +260,8 @@
   font-size: 0.88rem;
 }
 
-.related-list button:hover {
+.fc-root .related-list button:hover {
   background: var(--accent-wash);
 }
 
 /* Modo foco: durante a revisão esconde a navegação no celular */
-body.focus-mode .bottom-nav {
-  display: none !important;
-}

@@ -24,10 +24,44 @@
     );
   }
 
+  /**
+   * Dados para registrar a sessão no histórico de estudos do Projeto Residente:
+   * tempo, o assunto mais frequente (Grande área › Subárea › Assunto) e um resumo.
+   */
+  function studyInfo(cardIds, durationMs, notes) {
+    const bySubject = new Map();
+    for (const id of cardIds) {
+      const card = FC.cards.get(id);
+      const path = card ? FC.areas.path(card.nodeId) : [];
+      if (path.length < 3) continue;
+      const key = path[2].id;
+      if (!bySubject.has(key)) bySubject.set(key, { n: 0, names: path.slice(0, 3).map((n) => n.name) });
+      bySubject.get(key).n++;
+    }
+    const top = [...bySubject.values()].sort((a, b) => b.n - a.n)[0];
+    return {
+      method: 'FLASHCARDS',
+      minutes: Math.max(1, Math.round(durationMs / 60000)),
+      subject: top ? { area: top.names[0], subarea: top.names[1], name: top.names[2] } : null,
+      notes,
+    };
+  }
+
+  /** "Registrar estudo": só aparece dentro do site (o React fornece host.registerStudy). */
+  function studyPanel(info) {
+    if (!FC.host || !FC.host.registerStudy) return null;
+    return h(
+      'div',
+      { class: 'panel row between fc-register' },
+      h('div', { class: 'grow', style: { minWidth: '220px' } }, h('strong', { text: 'Contar no seu histórico de estudos' }), h('p', { class: 'small ink2', text: 'Registra esta sessão no Projeto Residente (método Flashcards) com o tempo' + (info.subject ? ' e o assunto (' + info.subject.name + ')' : '') + ' já preenchidos.' })),
+      button('Registrar estudo', { icon: 'book', onClick: () => FC.host.registerStudy(info) }),
+    );
+  }
+
   function summaryView(ctx, sum, label, extra) {
     const { el } = ctx;
     FC.ui.clear(el);
-    document.body.classList.remove('focus-mode');
+    document.body.classList.remove('fc-focus-mode');
     const hardest = sum.hardest;
     const box = h(
       'div',
@@ -57,7 +91,7 @@
         { class: 'row' },
         sum.errorIds.length ? button('Revisar erros (' + sum.errorIds.length + ')', { variant: 'primary', icon: 'refresh', onClick: () => FC.launch.quickIds(sum.errorIds, 'Erros da sessão') }) : null,
         hardest ? button('Revisar tema', { icon: 'zap', onClick: () => FC.launch.quick({ nodeIds: [hardest.nodeId] }, 'Tema · ' + FC.areas.title(hardest.nodeId), 'hardest') }) : null,
-        link('Voltar ao dashboard', '#/', { variant: 'ghost', icon: 'home' }),
+        link('Início dos flashcards', '#/', { variant: 'ghost', icon: 'home' }),
       ),
       extra || null,
     );
@@ -90,7 +124,7 @@
       );
       const wrap = h('div', { class: 'study' }, top, stage, foot);
       el.appendChild(wrap);
-      document.body.classList.add('focus-mode');
+      document.body.classList.add('fc-focus-mode');
 
       function renderCounts(rem, kind) {
         FC.ui.clear(counts);
@@ -214,11 +248,13 @@
         clearTimeout(waitTimer);
         if (!session.answers.length) return FC.app.go('/');
         await session.finish();
-        summaryView(ctx, session.summary(), label);
+        const sum = session.summary();
+        const notes = 'Flashcards · ' + label + ': ' + U.plural(sum.reviewed, 'resposta', 'respostas') + ', ' + U.pct(sum.accuracy) + ' de acerto.';
+        summaryView(ctx, sum, label, studyPanel(studyInfo(session.answers.map((a) => a.cardId), sum.durationMs, notes)));
       }
 
       function emptyState() {
-        document.body.classList.remove('focus-mode');
+        document.body.classList.remove('fc-focus-mode');
         const c = FC.review.counts(filter);
         const all = FC.cards.select(filter).length;
         FC.ui.clear(el).appendChild(
@@ -269,5 +305,5 @@
     },
   };
 
-  FC.reviewView = { summaryView, pathHeader };
-})(typeof self !== 'undefined' ? self : this);
+  FC.reviewView = { summaryView, pathHeader, studyInfo, studyPanel };
+})(typeof self !== 'undefined' ? self : globalThis);

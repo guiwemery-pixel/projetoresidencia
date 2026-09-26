@@ -154,4 +154,4 @@
 
   FC.cardList = { create, moveDialog };
   void icon;
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

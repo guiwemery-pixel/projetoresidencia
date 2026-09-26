@@ -219,4 +219,4 @@
   }
 
   FC.review = { counts, todayCounts, Session, createSession: (filter, label) => new Session(filter, label) };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

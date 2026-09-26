@@ -18,7 +18,7 @@
   const mod = factory(util, scheduler, root);
   if (isNode) module.exports = mod;
   else (root.FC = root.FC || {}).anki = mod;
-})(typeof self !== 'undefined' ? self : this, function (util, scheduler, root) {
+})(typeof self !== 'undefined' ? self : globalThis, function (util, scheduler, root) {
   'use strict';
 
   const { DAY, HOUR, clamp, dayStart, stripHtml } = util;
@@ -234,7 +234,7 @@
 
   async function libs() {
     const L = root.FC.loader;
-    await Promise.all([L.script('assets/vendor/jszip.min.js'), L.script('assets/vendor/fzstd.js'), L.script('assets/vendor/sql-asm.js')]);
+    await Promise.all([L.script('jszip.min.js'), L.script('fzstd.js'), L.script('sql-asm.js')]);
     if (!root.__sqlPromise) root.__sqlPromise = root.initSqlJs();
     return { JSZip: root.JSZip, fzstd: root.fzstd, SQL: await root.__sqlPromise };
   }

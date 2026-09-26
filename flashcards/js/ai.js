@@ -299,7 +299,7 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
   }
 
   async function sdk() {
-    await FC.loader.script('assets/vendor/anthropic-sdk.min.js');
+    await FC.loader.script('anthropic-sdk.min.js');
     const mod = root.AnthropicSDK;
     const Anthropic = mod && (mod.default || mod.Anthropic || mod);
     if (!Anthropic) throw new Error('SDK da Anthropic indisponível.');
@@ -438,4 +438,4 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
     normalizeCards,
     normalizeSuggestions,
   };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

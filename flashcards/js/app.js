@@ -1,7 +1,15 @@
 /*
- * Aplicação: inicialização, layout (menu lateral, barra superior, navegação
- * inferior no celular), rotas por hash (#/...), tema e atalhos globais.
- * Cada tela fica em js/ui/*View.js e se registra em FC.views.
+ * Aba "Flashcards" do Projeto Residente.
+ *
+ * O site (React) desenha o menu, o cabeçalho e o tema, e chama
+ * FC.app.mount(elemento, opções) na rota /flashcards/*. Aqui ficam: a barra de
+ * abas dos flashcards, as rotas internas (/flashcards/decks, /flashcards/revisar…),
+ * os atalhos e o início da sincronização com a conta. Cada tela fica em
+ * js/ui/*View.js e se registra em FC.views.
+ *
+ * Endereços: o React é dono da URL. FC.app.go('/decks') pede a navegação ao
+ * React (host.navigate) e o React avisa de volta (FC.app.onLocation) — assim o
+ * voltar/avançar do navegador funciona igual ao resto do site.
  */
 (function (root) {
   'use strict';
@@ -30,42 +38,22 @@
     { re: /^\/configuracoes\/?$/, view: 'settings', nav: 'settings' },
   ];
 
-  const NAV = [
-    { group: null, items: [{ key: 'dashboard', label: 'Início', icon: 'home', href: '#/' }] },
-    {
-      group: 'Revisar',
-      items: [
-        { key: 'review', label: 'Revisão normal', icon: 'play', href: '#/revisar', count: 'due' },
-        { key: 'quick', label: 'Quick Review', icon: 'zap', href: '#/quick' },
-      ],
-    },
-    {
-      group: 'Conteúdo',
-      items: [
-        { key: 'decks', label: 'Decks', icon: 'layers', href: '#/decks' },
-        { key: 'generate', label: 'Gerar com IA', icon: 'sparkles', href: '#/gerar', count: 'drafts' },
-        { key: 'import', label: 'Importar e exportar', icon: 'upload', href: '#/importar' },
-        { key: 'search', label: 'Busca', icon: 'search', href: '#/busca' },
-        { key: 'favorites', label: 'Favoritos', icon: 'star', href: '#/favoritos' },
-        { key: 'suspended', label: 'Cards suspensos', icon: 'pause', href: '#/suspensos' },
-      ],
-    },
-    {
-      group: 'Análise',
-      items: [
-        { key: 'weak', label: 'Pontos fracos', icon: 'target', href: '#/pontos-fracos' },
-        { key: 'stats', label: 'Estatísticas', icon: 'chart', href: '#/estatisticas' },
-        { key: 'calendar', label: 'Calendário', icon: 'calendar', href: '#/calendario' },
-      ],
-    },
-    { group: null, items: [{ key: 'settings', label: 'Configurações', icon: 'settings', href: '#/configuracoes' }] },
+  const TABS = [
+    { key: 'dashboard', label: 'Início', path: '/' },
+    { key: 'review', label: 'Revisar', path: '/revisar', count: 'due' },
+    { key: 'quick', label: 'Quick Review', path: '/quick' },
+    { key: 'decks', label: 'Decks', path: '/decks' },
+    { key: 'generate', label: 'Gerar com IA', path: '/gerar', count: 'drafts' },
+    { key: 'import', label: 'Importar', path: '/importar' },
+    { key: 'weak', label: 'Pontos fracos', path: '/pontos-fracos' },
+    { key: 'stats', label: 'Estatísticas', path: '/estatisticas' },
+    { key: 'calendar', label: 'Calendário', path: '/calendario' },
   ];
 
-  const BOTTOM = [
-    { key: 'dashboard', label: 'Início', icon: 'home', href: '#/' },
-    { key: 'review', label: 'Revisar', icon: 'play', href: '#/revisar' },
-    { key: 'quick', label: 'Quick', icon: 'zap', href: '#/quick' },
-    { key: 'decks', label: 'Decks', icon: 'layers', href: '#/decks' },
+  const MORE = [
+    { key: 'search', label: 'Buscar cards', icon: 'search', path: '/busca' },
+    { key: 'favorites', label: 'Favoritos', icon: 'star', path: '/favoritos' },
+    { key: 'suspended', label: 'Cards suspensos', icon: 'pause', path: '/suspensos' },
   ];
 
   const app = {
@@ -74,39 +62,51 @@
     cleanup: [],
   };
 
+  let host = {};
+  let rootEl = null;
   let els = {};
+  let mounted = false;
+  let userId = null;
+  let bootingFor = null;
+  let booting = null;
+  let mountSeq = 0;
+  let lastRouted = null;
+  let savedTitle = null;
+  let detach = [];
 
-  // ── Tema ───────────────────────────────────────────────────────────────────
-  function applyTheme(theme) {
-    const html = document.documentElement;
-    if (theme === 'light' || theme === 'dark') html.setAttribute('data-theme', theme);
-    else html.removeAttribute('data-theme');
-    try {
-      localStorage.setItem('fc-theme', theme || 'system');
-    } catch (e) {
-      /* sem localStorage */
+  // ── Endereços ──────────────────────────────────────────────────────────────
+  function currentLocation() {
+    const base = FC.config.base;
+    let path = location.pathname.startsWith(base) ? location.pathname.slice(base.length) : '/';
+    if (!path || path === '/index.html') path = '/';
+    const query = {};
+    new URLSearchParams(location.search).forEach((v, k) => (query[k] = v));
+    return { path: decodeURI(path), query, key: location.pathname + location.search };
+  }
+
+  /** Vai para uma tela do app: go('/decks'), go('/busca?q=tb'). */
+  function go(path, opts = {}) {
+    const url = FC.ui.href(path);
+    if (url === location.pathname + location.search && !opts.replace) return route();
+    if (host.navigate) host.navigate(url, { replace: !!opts.replace });
+    else {
+      history[opts.replace ? 'replaceState' : 'pushState'](null, '', url);
+      route();
     }
   }
 
-  // ── Rotas ──────────────────────────────────────────────────────────────────
-  function parseHash() {
-    const raw = decodeURI(location.hash.replace(/^#/, '')) || '/';
-    const [path, qs] = raw.split('?');
-    const query = {};
-    new URLSearchParams(qs || '').forEach((v, k) => (query[k] = v));
-    return { path: path || '/', query };
-  }
-
-  function go(path) {
-    const target = '#' + path;
-    if (location.hash === target) route();
-    else location.hash = target;
+  /** O React avisa que a URL mudou (link, voltar/avançar, navegação do app). */
+  function onLocation() {
+    if (!mounted) return;
+    if (currentLocation().key !== lastRouted) route();
   }
 
   function route() {
-    const { path, query } = parseHash();
+    if (!mounted) return;
+    const { path, query, key } = currentLocation();
+    lastRouted = key;
     let match = null;
-    let params = {};
+    const params = {};
     for (const r of ROUTES) {
       const m = path.match(r.re);
       if (m) {
@@ -115,24 +115,13 @@
         break;
       }
     }
-    if (!match) {
-      go('/');
-      return;
-    }
-    for (const fn of app.cleanup) {
-      try {
-        fn();
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    app.cleanup = [];
+    if (!match) return go('/', { replace: true });
+    runCleanup();
     FC.ui.closeMenus();
-    document.body.classList.remove('nav-open', 'focus-mode');
+    document.body.classList.remove('fc-focus-mode');
     setActiveNav(match.nav);
     const view = FC.views[match.view];
     clear(els.content);
-    els.content.scrollTop = 0;
     window.scrollTo(0, 0);
     app.current = match.view;
     const ctx = {
@@ -140,7 +129,6 @@
       params,
       query,
       setTitle(t) {
-        els.title.textContent = t;
         document.title = t + ' · Flashcards';
       },
       on(event, fn) {
@@ -160,6 +148,18 @@
     } catch (e) {
       showViewError(e);
     }
+    if (!inSession()) FC.sync.resume();
+  }
+
+  function runCleanup() {
+    for (const fn of app.cleanup) {
+      try {
+        fn();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    app.cleanup = [];
   }
 
   function showViewError(e) {
@@ -168,68 +168,159 @@
   }
 
   function setActiveNav(key) {
-    document.querySelectorAll('[data-nav]').forEach((a) => {
+    rootEl.querySelectorAll('[data-nav]').forEach((a) => {
       if (a.dataset.nav === key) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
+    const active = rootEl.querySelector('.fc-tabs [aria-current="page"]');
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  /** Revisão ou Quick Review em andamento: a sincronização não mexe na tela. */
+  function inSession() {
+    return mounted && (app.current === 'review' || app.current === 'quickSession');
   }
 
   // ── Layout ─────────────────────────────────────────────────────────────────
-  function navLink(item) {
+  function tab(item) {
     const count = item.count ? h('span', { class: 'count hidden', dataset: { count: item.count } }) : null;
-    return h('a', { class: 'nav-link', href: item.href, dataset: { nav: item.key } }, icon(item.icon, 18), h('span', null, item.label), count);
+    return h('a', { class: 'fc-tab', href: '#' + item.path, dataset: { nav: item.key } }, h('span', null, item.label), count);
   }
 
   function buildLayout() {
-    const sidebar = h(
-      'aside',
-      { class: 'sidebar', 'aria-label': 'Menu' },
-      h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('layers', 18)), h('span', null, 'Flashcards', h('small', { text: 'Projeto Residente' }))),
-      NAV.map((g) => h('nav', { class: 'nav-group', 'aria-label': g.group || 'Principal' }, g.group ? h('div', { class: 'nav-label', text: g.group }) : null, g.items.map(navLink))),
-      h('div', { class: 'sidebar-foot' }, h('p', { class: 'tiny muted', text: 'Seus dados ficam neste navegador. Faça backups em Configurações.' })),
-    );
-    const title = h('span', { class: 'page-title' });
-    const search = h('input', { type: 'search', placeholder: 'Buscar cards (tecla /)', 'aria-label': 'Buscar cards' });
+    const search = h('input', { type: 'search', class: 'fc-search-input', placeholder: 'Buscar cards (tecla /)', 'aria-label': 'Buscar cards' });
     search.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && search.value.trim()) {
         go('/busca?q=' + encodeURIComponent(search.value.trim()));
         search.blur();
       }
     });
-    const topbar = h(
-      'header',
-      { class: 'topbar' },
-      h('button', { class: 'btn ghost icon menu-btn', type: 'button', 'aria-label': 'Abrir menu', onclick: () => document.body.classList.toggle('nav-open') }, icon('menu', 20)),
-      title,
-      h('div', { class: 'topbar-search' }, icon('search', 16), search),
-      FC.ui.button('Novo card', { icon: 'plus', variant: 'primary', size: 'sm', onClick: () => FC.cardEditor.open({}) }),
+    const syncBtn = h('button', { type: 'button', class: 'fc-sync', onclick: () => FC.sync.now() });
+    const more = FC.ui.moreButton(
+      () => MORE.map((m) => ({ label: m.label, icon: m.icon, run: () => go(m.path) })).concat(['-', { label: 'Sincronizar agora', icon: 'refresh', run: () => FC.sync.now() }]),
+      'Mais opções dos flashcards',
     );
-    const content = h('main', { class: 'content', id: 'content', tabindex: '-1' });
-    const bottom = h(
-      'nav',
-      { class: 'bottom-nav', 'aria-label': 'Navegação rápida' },
-      BOTTOM.map((b) => h('a', { href: b.href, dataset: { nav: b.key } }, icon(b.icon, 20), h('span', { text: b.label }))),
-      h('button', { type: 'button', onclick: () => document.body.classList.add('nav-open') }, icon('menu', 20), h('span', { text: 'Mais' })),
+    const head = h(
+      'div',
+      { class: 'fc-head' },
+      h(
+        'div',
+        { class: 'fc-head-row' },
+        h('div', { class: 'fc-brand' }, h('span', { class: 'fc-brand-mark' }, icon('layers', 16)), h('span', { text: 'Flashcards' })),
+        syncBtn,
+        h('div', { class: 'fc-search' }, icon('search', 15), search),
+        FC.ui.button('Novo card', { icon: 'plus', variant: 'primary', size: 'sm', onClick: () => FC.cardEditor.open({}) }),
+        h('a', { class: 'btn ghost icon sm fc-settings', href: '#/configuracoes', title: 'Configurações dos flashcards', 'aria-label': 'Configurações dos flashcards', dataset: { nav: 'settings' } }, icon('settings', 17)),
+        more,
+      ),
+      h('nav', { class: 'fc-tabs', 'aria-label': 'Seções dos flashcards' }, TABS.map(tab)),
     );
-    const scrim = h('div', { class: 'nav-scrim', onclick: () => document.body.classList.remove('nav-open') });
-    const shell = h('div', { class: 'app' }, sidebar, h('div', { class: 'main' }, topbar, content), bottom, scrim);
-    const rootEl = document.getElementById('app');
-    clear(rootEl).appendChild(shell);
-    els = { content, title, search, sidebar };
+    const banner = h('div', { class: 'fc-banners' });
+    const content = h('div', { class: 'content', id: 'fc-content', tabindex: '-1' });
+    clear(rootEl);
+    FC.ui.add(rootEl, head, banner, content);
+    els = { content, search, banner, syncBtn };
+    renderSync(FC.sync.status());
   }
 
   function updateCounts() {
+    if (!mounted) return;
+    // O mesmo número do menu do site e do widget do Início (tudo o que vence hoje + novos)
     const counts = FC.review.counts({});
-    const due = counts.dueNow + counts.newToday;
-    for (const el of document.querySelectorAll('[data-count="due"]')) {
+    const due = counts.dueToday + counts.overdue + counts.newToday;
+    for (const el of rootEl.querySelectorAll('[data-count="due"]')) {
       el.textContent = due > 999 ? '999+' : String(due);
       el.classList.toggle('hidden', !due);
     }
     const drafts = FC.store.drafts.length;
-    for (const el of document.querySelectorAll('[data-count="drafts"]')) {
+    for (const el of rootEl.querySelectorAll('[data-count="drafts"]')) {
       el.textContent = String(drafts);
       el.classList.toggle('hidden', !drafts);
     }
+  }
+
+  // ── Sincronização e avisos ─────────────────────────────────────────────────
+  function renderSync(st) {
+    if (!els.syncBtn) return;
+    const btn = els.syncBtn;
+    let text = 'Salvo na conta';
+    let ic = 'check';
+    let cls = 'ok';
+    if (st.status === 'syncing') {
+      text = 'Sincronizando…';
+      ic = 'refresh';
+      cls = 'busy';
+    } else if (st.status === 'offline') {
+      text = st.pending ? 'Offline · ' + st.pending + ' pendente' + (st.pending > 1 ? 's' : '') : 'Offline';
+      ic = 'alert';
+      cls = 'warn';
+    } else if (st.status === 'error') {
+      text = 'Não sincronizado';
+      ic = 'alert';
+      cls = 'crit';
+    } else if (st.pending) {
+      text = 'Enviando…';
+      ic = 'refresh';
+      cls = 'busy';
+    }
+    btn.className = 'fc-sync ' + cls;
+    btn.title = (st.error || text) + (st.lastSyncAt ? ' · última sincronização ' + FC.util.formatDateTime(st.lastSyncAt) : '') + '. Clique para sincronizar agora.';
+    clear(btn);
+    FC.ui.add(btn, icon(ic, 14), h('span', { text }));
+    renderBanners(st);
+  }
+
+  let legacyInfo = null;
+
+  function renderBanners(st) {
+    if (!els.banner) return;
+    const box = clear(els.banner);
+    if (legacyInfo) {
+      const doImport = FC.ui.button('Levar para a minha conta', {
+        variant: 'primary',
+        size: 'sm',
+        onClick: async (e) => {
+          const b = e.currentTarget;
+          FC.ui.busy(b, true, 'Copiando…');
+          try {
+            const counts = await FC.legacy.importAll(userId, (msg) => (b.lastChild.textContent = msg));
+            legacyInfo = null;
+            renderBanners(FC.sync.status());
+            FC.ui.toast(FC.util.plural((counts && counts.cards) || 0, 'card levado', 'cards levados') + ' para a sua conta.');
+            route();
+            FC.sync.now();
+          } catch (err) {
+            FC.ui.busy(b, false);
+            FC.ui.errorToast(err);
+          }
+        },
+      });
+      const skip = FC.ui.button('Agora não', {
+        variant: 'ghost',
+        size: 'sm',
+        onClick: async () => {
+          await FC.legacy.dismiss();
+          legacyInfo = null;
+          renderBanners(FC.sync.status());
+        },
+      });
+      box.appendChild(
+        h(
+          'div',
+          { class: 'callout fc-legacy' },
+          icon('database', 18),
+          h(
+            'div',
+            { class: 'grow stack tight' },
+            h('strong', { text: 'Encontramos flashcards salvos só neste navegador' }),
+            h('span', { text: FC.util.plural(legacyInfo.cards, 'card', 'cards') + ' e ' + FC.util.plural(legacyInfo.logs, 'revisão', 'revisões') + ' da versão anterior, que não tinha conta. Leve para a sua conta para ver em todos os aparelhos (nada é apagado deste navegador).' }),
+            h('div', { class: 'row tight' }, doImport, skip),
+          ),
+        ),
+      );
+    }
+    if (st.quotaError) box.appendChild(FC.ui.callout(st.quotaError + ' As alterações novas ficam só neste aparelho. Apague imagens, PDFs ou baralhos que não usa.', 'crit'));
+    else if (st.status === 'error' && st.error && /sess/i.test(st.error)) box.appendChild(FC.ui.callout(st.error, 'warn'));
   }
 
   function globalKeys(e) {
@@ -244,40 +335,175 @@
     }
   }
 
-  // ── Inicialização ──────────────────────────────────────────────────────────
-  async function start() {
-    const rootEl = document.getElementById('app');
-    try {
-      await FC.db.open();
-      await FC.settings.load();
-      applyTheme(FC.settings.get('theme'));
-      await FC.store.load();
-      await FC.decks.ensureDefault();
-    } catch (e) {
-      console.error(e);
-      clear(rootEl).appendChild(
-        h('div', { class: 'content' }, FC.ui.empty({ icon: 'alert', title: 'Não foi possível abrir o banco local', text: (e && e.message) || String(e) + ' — verifique se o navegador permite armazenamento (modo anônimo pode bloquear).' })),
-      );
-      return;
-    }
-    buildLayout();
-    FC.db.requestPersistence();
-    window.addEventListener('hashchange', route);
-    document.addEventListener('keydown', globalKeys);
-    FC.store.on('settings', (s) => applyTheme(s.theme));
-    const refreshCounts = FC.util.debounce(updateCounts, 300);
-    FC.store.on('change', refreshCounts);
-    setInterval(updateCounts, 60000);
-    updateCounts();
-    route();
-    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    }
+  /** Links dentro do app viram navegação do site (sem recarregar a página). */
+  function onClick(e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || a.target || a.hasAttribute('download')) return;
+    if (!rootEl.contains(a) && !FC.ui.portal().contains(a)) return;
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin) return;
+    const base = FC.config.base;
+    e.preventDefault();
+    if (url.pathname === base || url.pathname.startsWith(base + '/')) go((url.pathname.slice(base.length) || '/') + url.search);
+    else if (host.navigate) host.navigate(url.pathname + url.search + url.hash);
+    else location.href = url.href;
   }
 
-  Object.assign(app, { go, route, start, applyTheme, updateCounts, parseHash });
-  FC.app = app;
+  // ── Ciclo de vida ──────────────────────────────────────────────────────────
+  function loading(text, fraction) {
+    clear(rootEl).appendChild(
+      h('div', { class: 'fc-loading panel stack' }, h('div', { class: 'row' }, h('span', { class: 'spinner' }), h('span', { text })), fraction != null ? FC.ui.progressBar(fraction) : null),
+    );
+  }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
-})(typeof self !== 'undefined' ? self : this);
+  /** Abre a coleção do usuário (uma vez por login). */
+  async function boot(id, onProgress) {
+    FC.db.use('fc:' + id);
+    await FC.db.open();
+    FC.sync.configure({ apiBase: FC.config.api });
+    const cursor = await FC.db.getMeta('cursor', 0);
+    if (!cursor) {
+      // Aparelho novo para esta conta: baixa a coleção antes de mostrar
+      try {
+        await FC.sync.now({ throwErrors: true, onProgress });
+      } catch (e) {
+        if (!e.offline) console.error(e);
+      }
+    }
+    await FC.settings.load();
+    await FC.store.load();
+    FC.cards.invalidateIndex();
+    await FC.decks.ensureDefault();
+    FC.sync.start();
+    FC.summary.start();
+    if (cursor) FC.sync.now();
+    FC.db.requestPersistence();
+    userId = id;
+  }
+
+  /**
+   * Mostra os flashcards dentro de `el`.
+   * opts: { userId, navigate(url, {replace}), registerStudy(info), onSummary(summary),
+   *         base, api, assets }
+   */
+  async function mount(el, opts) {
+    if (mounted) unmount();
+    const seq = ++mountSeq;
+    host = opts || {};
+    FC.host = host;
+    ['base', 'api', 'assets'].forEach((k) => host[k] && (FC.config[k] = host[k]));
+    rootEl = el;
+    el.classList.add('fc-root', 'fc-embedded');
+    mounted = true;
+    savedTitle = document.title;
+    if (bootingFor !== host.userId) {
+      if (bootingFor) await shutdown({ keepMounted: true });
+      if (seq !== mountSeq) return;
+      bootingFor = host.userId;
+      loading('Carregando seus flashcards…');
+      const progress = (received, total) => {
+        if (mounted && rootEl && !els.content) loading('Baixando seus flashcards da conta…' + (total ? ' ' + FC.util.fmtNum(Math.min(received, total)) + ' de ' + FC.util.fmtNum(total) : ''), total ? received / total : null);
+      };
+      booting = boot(host.userId, progress);
+    } else if (!userId) loading('Carregando seus flashcards…');
+    try {
+      await booting;
+    } catch (e) {
+      console.error(e);
+      bootingFor = null;
+      if (seq === mountSeq && mounted) clear(el).appendChild(FC.ui.empty({ icon: 'alert', title: 'Não foi possível abrir os flashcards', text: ((e && e.message) || String(e)) + ' — verifique se o navegador permite armazenamento (o modo anônimo pode bloquear).' }));
+      return;
+    }
+    // Saiu da aba (ou montou de novo) enquanto carregava
+    if (seq !== mountSeq || !mounted) return;
+
+    buildLayout();
+    const on = (target, type, fn, capture) => {
+      target.addEventListener(type, fn, capture);
+      detach.push(() => target.removeEventListener(type, fn, capture));
+    };
+    on(document, 'keydown', globalKeys);
+    on(document, 'click', onClick);
+    detach.push(FC.store.on('change', FC.util.debounce(updateCounts, 300)));
+    detach.push(FC.store.on('sync', renderSync));
+    const timer = setInterval(updateCounts, 60000);
+    detach.push(() => clearInterval(timer));
+    updateCounts();
+    // Endereços antigos: /flashcards/index.html#/decks → /flashcards/decks
+    if (/^#\//.test(location.hash)) go(location.hash.slice(1), { replace: true });
+    else if (/\/index\.html$/.test(location.pathname)) go('/', { replace: true });
+    else route();
+    FC.legacy.check().then((info) => {
+      if (!mounted || !info) return;
+      legacyInfo = info;
+      renderBanners(FC.sync.status());
+    });
+  }
+
+  /** Sai da aba (a sincronização continua em segundo plano). */
+  function unmount() {
+    if (!mounted) return;
+    mountSeq++;
+    runCleanup();
+    for (const fn of detach) fn();
+    detach = [];
+    FC.ui.destroyPortal();
+    document.body.classList.remove('fc-focus-mode');
+    if (savedTitle != null) document.title = savedTitle;
+    if (rootEl) {
+      clear(rootEl);
+      rootEl.classList.remove('fc-root', 'fc-embedded');
+    }
+    mounted = false;
+    app.current = null;
+    lastRouted = null;
+    els = {};
+    rootEl = null;
+    FC.sync.resume();
+  }
+
+  /**
+   * Encerra a coleção do usuário (sair da conta). Envia o que faltar; com
+   * clearLocal apaga a cópia deste aparelho se tudo já estiver na conta.
+   * Devolve true se a cópia local foi apagada.
+   */
+  async function shutdown(opts = {}) {
+    if (!opts.keepMounted) unmount();
+    const id = userId || bootingFor;
+    if (booting) await booting.catch(() => {});
+    userId = null;
+    bootingFor = null;
+    booting = null;
+    legacyInfo = null;
+    FC.summary.stop();
+    if (!id) return false;
+    let pending = -1;
+    if (!opts.skipFlush) {
+      try {
+        pending = await FC.sync.flush();
+      } catch (e) {
+        /* offline: o que faltou fica guardado neste aparelho */
+      }
+    }
+    FC.sync.stop();
+    const reset = await FC.db.getMeta('pendingReset', false).catch(() => true);
+    FC.db.use(null);
+    FC.store.loaded = false;
+    FC.store.cards = new Map();
+    FC.store.nodes = new Map();
+    FC.store.decks = new Map();
+    FC.store.logs = [];
+    FC.store.reindexLogs();
+    FC.store.drafts = [];
+    FC.store.sessions = [];
+    FC.store.quickSessions = [];
+    FC.store.sources = new Map();
+    FC.ui.forgetMedia();
+    if (opts.clearLocal && pending === 0 && !reset) return FC.db.deleteDatabase('fc:' + id);
+    return false;
+  }
+
+  Object.assign(app, { go, route, mount, unmount, shutdown, onLocation, updateCounts, inSession, currentLocation, userId: () => userId });
+  FC.app = app;
+})(typeof self !== 'undefined' ? self : globalThis);

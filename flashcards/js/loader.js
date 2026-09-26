@@ -1,14 +1,19 @@
 /*
- * Carrega bibliotecas de terceiros (pasta assets/vendor) só quando são usadas:
- * pdf.js (PDF), JSZip + sql.js + fzstd (pacotes do Anki), SDK da Anthropic (IA).
- * Tudo local — funciona offline e abrindo o index.html direto do computador.
+ * Carrega bibliotecas de terceiros só quando são usadas: pdf.js (PDF),
+ * JSZip + sql.js + fzstd (pacotes do Anki), SDK da Anthropic (IA).
+ * Ficam em frontend/public/flashcards/vendor, servidas pelo próprio site
+ * (FC.config.assets), sem depender de CDN.
  */
 (function (root) {
   'use strict';
   const FC = (root.FC = root.FC || {});
   const loaded = new Map();
 
-  function script(src) {
+  /** Endereço de um arquivo de terceiros: "pdf.min.js" → "/flashcards/vendor/pdf.min.js". */
+  const vendor = (file) => ((FC.config && FC.config.assets) || 'vendor/') + file;
+
+  function script(file) {
+    const src = vendor(file);
     if (loaded.has(src)) return loaded.get(src);
     const p = new Promise((resolve, reject) => {
       const el = document.createElement('script');
@@ -25,10 +30,10 @@
     return p;
   }
 
-  /** URL absoluta de um arquivo do app (para workers). */
-  function url(path) {
-    return new URL(path, document.baseURI).href;
+  /** URL absoluta de um arquivo de terceiros (para workers). */
+  function url(file) {
+    return new URL(vendor(file), document.baseURI).href;
   }
 
   FC.loader = { script, url };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);

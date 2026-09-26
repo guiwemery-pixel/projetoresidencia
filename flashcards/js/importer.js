@@ -236,4 +236,4 @@
   }
 
   FC.importer = { read, defaults, resolvePath, preview, execute, extOf };
-})(typeof self !== 'undefined' ? self : this);
+})(typeof self !== 'undefined' ? self : globalThis);
