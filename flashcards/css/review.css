@@ -1,0 +1,270 @@
+/* Telas de estudo: revisão normal e Quick Review (foco: pergunta → resposta → avaliação) */
+
+.study {
+  max-width: 780px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.study-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.study-top .title {
+  font-weight: 620;
+  min-width: 0;
+  flex: 1 1 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-counts {
+  display: flex;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  font-size: 0.92rem;
+}
+
+.queue-counts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.queue-counts .current {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.flashcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 26px 28px 30px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.flashcard .fc-path {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.flashcard .fc-path .subject {
+  display: block;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+}
+
+.flashcard .fc-path .topics {
+  font-style: italic;
+}
+
+.flashcard .fc-front {
+  font-size: 1.28rem;
+  line-height: 1.55;
+  font-weight: 520;
+}
+
+.flashcard .fc-sep {
+  border: 0;
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.flashcard .fc-back {
+  font-size: 1.1rem;
+  line-height: 1.65;
+}
+
+.flashcard .fc-meta {
+  margin-top: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.show-answer {
+  display: flex;
+  justify-content: center;
+}
+
+.show-answer .btn {
+  min-width: 260px;
+}
+
+/* Botões de avaliação */
+.rating-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rating-bar.quick {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rate {
+  --c: var(--accent);
+  --w: var(--accent-wash);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, var(--border));
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 10px 6px 9px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 64px;
+  transition: background 0.1s, transform 0.05s;
+}
+
+.rate:hover,
+.rate:focus-visible {
+  background: var(--w);
+}
+
+.rate:active {
+  transform: translateY(1px);
+}
+
+.rate .name {
+  font-weight: 650;
+  font-size: 0.98rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rate .name::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.rate .ivl {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.rate .key {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.rate.r1,
+.rate.q-naosei {
+  --c: var(--crit);
+  --w: var(--crit-wash);
+}
+.rate.r2 {
+  --c: var(--serious);
+  --w: var(--serious-wash);
+}
+.rate.r3,
+.rate.q-quase {
+  --c: var(--warn);
+  --w: var(--warn-wash);
+}
+.rate.r4,
+.rate.q-sei {
+  --c: var(--good);
+  --w: var(--good-wash);
+}
+.rate.r5 {
+  --c: var(--accent);
+  --w: var(--accent-wash);
+}
+
+.study-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.study-foot .keys {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.wait-card {
+  text-align: center;
+  padding: 36px 20px;
+}
+
+/* Resumo da sessão */
+.summary {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.summary-figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.summary-figs .tile .value {
+  font-size: 1.6rem;
+}
+
+.hero {
+  font-size: 3rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.related-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.related-list button {
+  text-align: left;
+  border: 0;
+  background: var(--subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.related-list button:hover {
+  background: var(--accent-wash);
+}
+
+/* Modo foco: durante a revisão esconde a navegação no celular */
+body.focus-mode .bottom-nav {
+  display: none !important;
+}

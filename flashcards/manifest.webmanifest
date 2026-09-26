@@ -1,0 +1,13 @@
+{
+  "name": "Flashcards — Projeto Residente",
+  "short_name": "Flashcards",
+  "description": "Flashcards de medicina com revisão espaçada, Quick Review e pontos fracos por tema.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f6f3",
+  "theme_color": "#2a78d6",
+  "lang": "pt-BR",
+  "categories": ["education", "medical", "productivity"],
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

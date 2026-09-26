@@ -35,6 +35,7 @@ GUILHERME
 | **Pesquisa global** | “dengue” → Pediatria · 4 revisões · 2 simulados · 86 questões · 78% de acertos. |
 | **Privacidade** | Resumo público montado por lista de permissão, opção de não compartilhar, exportação, **apagar o progresso** (só o histórico, ou tudo voltando à estrutura inicial, sem perder a conta e os grupos) e exclusão da conta. |
 | **Interface** | Responsiva (celular, tablet, desktop), modo claro/escuro/sistema, PWA-ready (manifest). |
+| **Flashcards** | App à parte em [`flashcards/`](flashcards) (link no menu): revisão espaçada FSRS com 5 botões (Errei · Difícil · Quase · Bom · Fácil; primeira aprendizagem 1 min/5 min/10 min/1 dia/2 dias), Quick Review que não mexe no agendamento, hierarquia Área → Subárea → Assunto → Tema → Subtema, **pontos fracos no nível mais específico**, estatísticas, calendário, busca, favoritos, suspensos, geração de cards a partir de PDF com IA (Claude), importação do seu **modelo CSV** e de baralhos do **Anki (.apkg) com o histórico de revisões**, exportação (Anki CSV, CSV, TXT, JSON com revisões) e backup. Dados no navegador (IndexedDB), funciona offline. Detalhes em [`docs/FLASHCARDS.md`](docs/FLASHCARDS.md). |
 
 ## Stack
 
@@ -89,7 +90,9 @@ Abra <http://localhost:5173>. Com o seed, entre com `guilherme@demo.com`, `joao@
 | `npm run dev` | API (tsx watch) + frontend (Vite) |
 | `npm test` | Testes do backend (usa `TEST_DATABASE_URL`, um banco separado que é limpo a cada teste) |
 | `npm run typecheck` | Verificação de tipos do backend e do frontend |
-| `npm run build` | Build de produção (API em `backend/dist`, frontend em `frontend/dist`) |
+| `npm run build` | Build de produção (API em `backend/dist`, frontend em `frontend/dist`, flashcards em `frontend/dist/flashcards`) |
+| `npm run test:flashcards` | Testes unitários do app de flashcards (sem banco) |
+| `npm run test:flashcards:e2e` | Teste de ponta a ponta do app de flashcards no Chromium (Playwright) |
 | `npm start` | Sobe a API compilada, que também serve o frontend |
 | `npm run db:migrate` / `db:seed` | Migrations / dados de demonstração |
 
@@ -115,11 +118,12 @@ frontend/
     api/                cliente HTTP e tipos
     components/         ui, layout, study (registro/“Por quê?”), charts
     pages/              uma página por aba
-docs/                   arquitetura e algoritmo
+flashcards/             app de flashcards (HTML/CSS/JS sem build, IndexedDB) — ver docs/FLASHCARDS.md
+docs/                   arquitetura, algoritmo e flashcards
 ```
 
 ## Próximos passos sugeridos
 
-Google Calendar, importação de planilhas/questões, flashcards, upload de PDFs, IA para análise de
-desempenho e geração de questões, ranking opcional, tags avançadas, notificações push (PWA).
+Google Calendar, importação de questões, IA para análise de desempenho e geração de questões,
+sincronização dos flashcards com a conta, ranking opcional, tags avançadas, notificações push (PWA).
 Veja em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#preparado-para-crescer) onde cada uma se encaixa.

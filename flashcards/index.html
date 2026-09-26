@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Flashcards de medicina com revisão espaçada (FSRS), Quick Review, pontos fracos por tema e geração de cards a partir de PDFs com IA." />
+    <meta name="theme-color" content="#2a78d6" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Flashcards" />
+    <title>Flashcards</title>
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <!-- Tema salvo aplicado antes de desenhar a página (arquivo externo: CSP sem scripts inline) -->
+    <script src="js/theme-init.js"></script>
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/review.css" />
+    <link rel="stylesheet" href="css/responsive.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div class="content"><p class="muted">Carregando seus cards…</p></div>
+    </div>
+    <noscript>Este aplicativo precisa de JavaScript.</noscript>
+
+    <!-- Núcleo (sem interface) -->
+    <script src="js/util.js"></script>
+    <script src="js/database.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/loader.js"></script>
+    <script src="js/sanitize.js"></script>
+    <script src="js/scheduler.js"></script>
+    <script src="js/areas.js"></script>
+    <script src="js/decks.js"></script>
+    <script src="js/cards.js"></script>
+    <script src="js/difficulty.js"></script>
+    <script src="js/performance.js"></script>
+    <script src="js/statistics.js"></script>
+    <script src="js/review.js"></script>
+    <script src="js/quickReview.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/anki.js"></script>
+    <script src="js/importer.js"></script>
+    <script src="js/backup.js"></script>
+    <script src="js/pdf.js"></script>
+    <script src="js/ai.js"></script>
+
+    <!-- Interface -->
+    <script src="js/ui/ui.js"></script>
+    <script src="js/ui/charts.js"></script>
+    <script src="js/ui/cardEditor.js"></script>
+    <script src="js/ui/cardDetail.js"></script>
+    <script src="js/ui/cardList.js"></script>
+    <script src="js/ui/launch.js"></script>
+    <script src="js/ui/dashboardView.js"></script>
+    <script src="js/ui/reviewView.js"></script>
+    <script src="js/ui/quickView.js"></script>
+    <script src="js/ui/decksView.js"></script>
+    <script src="js/ui/generateView.js"></script>
+    <script src="js/ui/weakView.js"></script>
+    <script src="js/ui/statsView.js"></script>
+    <script src="js/ui/calendarView.js"></script>
+    <script src="js/ui/searchView.js"></script>
+    <script src="js/ui/importView.js"></script>
+    <script src="js/ui/settingsView.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

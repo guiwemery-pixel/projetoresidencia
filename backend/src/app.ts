@@ -41,7 +41,8 @@ export function createApp() {
           imgSrc: ["'self'", 'data:', 'https:'],
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
-          connectSrc: ["'self'"],
+          // api.anthropic.com: o app de flashcards pode chamar o Claude com a chave do próprio usuário
+          connectSrc: ["'self'", 'https://api.anthropic.com'],
           // Só força HTTPS quando o deploy usa HTTPS (cookie seguro)
           upgradeInsecureRequests: secureCookies ? [] : null,
         },

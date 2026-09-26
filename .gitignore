@@ -9,3 +9,4 @@ coverage/
 backend/uploads/
 frontend/dist/
 .vercel/
+flashcards/tests/.tmp-*

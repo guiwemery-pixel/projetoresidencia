@@ -1,0 +1,262 @@
+/* Tablet e celular */
+
+@media (max-width: 1100px) {
+  .grid.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid.side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  body {
+    font-size: 15.5px;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 90;
+    transform: translateX(-105%);
+    transition: transform 0.18s ease-out;
+    box-shadow: var(--shadow-pop);
+    height: 100%;
+  }
+
+  body.nav-open .sidebar {
+    transform: none;
+  }
+
+  .nav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.35);
+    display: none;
+  }
+
+  body.nav-open .nav-scrim {
+    display: block;
+  }
+
+  .menu-btn {
+    display: inline-flex;
+  }
+
+  .topbar {
+    padding: 10px 16px;
+  }
+
+  .topbar-search {
+    display: none;
+  }
+
+  .content {
+    padding: 16px 16px 96px;
+  }
+
+  .grid.two,
+  .grid.three,
+  .today {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .bottom-nav a,
+  .bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--ink-2);
+    text-decoration: none;
+    border: 0;
+    background: none;
+    padding: 6px 2px;
+    border-radius: 10px;
+    min-height: 48px;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .bottom-nav [aria-current='page'] {
+    color: var(--accent);
+    background: var(--accent-wash);
+  }
+
+  .toasts {
+    bottom: 84px;
+  }
+
+  .flashcard {
+    padding: 20px 18px 22px;
+    min-height: 240px;
+    border-radius: 16px;
+  }
+
+  .flashcard .fc-front {
+    font-size: 1.16rem;
+  }
+
+  .flashcard .fc-back {
+    font-size: 1.04rem;
+  }
+
+  /* Botões grandes para o polegar */
+  .rating-bar {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    position: sticky;
+    bottom: 8px;
+  }
+
+  .rate {
+    min-height: 68px;
+    padding: 8px 2px;
+    border-radius: 12px;
+  }
+
+  .rate .name {
+    font-size: 0.86rem;
+  }
+
+  .rate .name::before,
+  .rate .key {
+    display: none;
+  }
+
+  .show-answer {
+    position: sticky;
+    bottom: 8px;
+  }
+
+  .show-answer .btn {
+    width: 100%;
+  }
+
+  .study-foot .keys {
+    display: none;
+  }
+
+  .study-top {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .queue-counts {
+    gap: 8px;
+  }
+
+  .summary-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tree-stats .perf {
+    width: auto;
+  }
+
+  .tree-stats .bar-cell,
+  .tree-stats .hide-sm {
+    display: none;
+  }
+
+  .cal-day {
+    min-height: 56px;
+    padding: 5px;
+  }
+
+  .cal-day .s {
+    display: none;
+  }
+
+  .cal-day .n {
+    font-size: 0.95rem;
+  }
+
+  .modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal,
+  .modal.wide,
+  .modal.narrow {
+    width: 100%;
+    border-radius: 18px 18px 0 0;
+    max-height: 94vh;
+    overflow-y: auto;
+  }
+
+  .page-head h1 {
+    font-size: 1.35rem;
+  }
+
+  .hello h1 {
+    font-size: 1.4rem;
+  }
+
+  .draft {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .rate .ivl {
+    font-size: 0.72rem;
+  }
+  .today-counts {
+    gap: 18px;
+  }
+  .today-count .value {
+    font-size: 1.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media print {
+  .sidebar,
+  .topbar,
+  .bottom-nav,
+  .toasts {
+    display: none !important;
+  }
+  .content {
+    padding: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .rate,
+  .btn,
+  .panel,
+  .flashcard {
+    border: 1px solid CanvasText;
+  }
+}

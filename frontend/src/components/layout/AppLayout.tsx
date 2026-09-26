@@ -10,6 +10,7 @@ import {
   FileText,
   FolderTree,
   Home,
+  Layers,
   LogOut,
   Menu,
   Monitor,
@@ -69,6 +70,15 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </NavLink>
       ))}
+      {/* App de flashcards (estático, dados no próprio navegador): página separada */}
+      <a
+        href="/flashcards/index.html"
+        onClick={onNavigate}
+        className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-ink2 transition hover:bg-subtle hover:text-ink"
+      >
+        <Layers className="h-4 w-4" />
+        Flashcards
+      </a>
     </nav>
   );
 }
