@@ -11,6 +11,7 @@ import {
   FileText,
   FolderTree,
   Home,
+  Layers,
   LogOut,
   Menu,
   Monitor,
@@ -28,6 +29,8 @@ import {
 import { api } from '../../api/client';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications, keys } from '../../hooks/api';
+import { useFlashcardsSummary } from '../../hooks/flashcards';
+import { flashcardsToday } from '../../flashcards/today';
 import { useTheme, type ThemeChoice } from '../../hooks/useTheme';
 import { fmtRelative } from '../../lib/format';
 import { useStudyDialog } from '../study/StudyDialog';
@@ -40,6 +43,7 @@ const NAV = [
   { to: '/cronograma', label: 'Cronograma', icon: CalendarRange },
   { to: '/metricas', label: 'Métricas', icon: BarChart3 },
   { to: '/estudos', label: 'Estudos', icon: BookOpen },
+  { to: '/flashcards', label: 'Flashcards', icon: Layers },
   { to: '/assuntos', label: 'Áreas e assuntos', icon: FolderTree },
   { to: '/metas', label: 'Metas', icon: Target },
   { to: '/simulados', label: 'Simulados', icon: Trophy },
@@ -47,7 +51,14 @@ const NAV = [
   { to: '/grupo', label: 'Grupo', icon: Users },
 ];
 
+/** Cards para revisar hoje (mesmo número da aba Flashcards). */
+function useFlashcardsDue() {
+  const { data } = useFlashcardsSummary();
+  return data?.summary ? flashcardsToday(data.summary).total : 0;
+}
+
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const flashcardsDue = useFlashcardsDue();
   return (
     <nav className="flex flex-col gap-0.5" aria-label="Navegação principal">
       {NAV.map(({ to, label, icon: Icon, end }) => (
@@ -67,6 +78,11 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
             <>
               <Icon className="h-4 w-4" style={isActive ? { color: 'var(--accent)' } : undefined} />
               {label}
+              {to === '/flashcards' && flashcardsDue > 0 && (
+                <span className="num ml-auto rounded-full bg-accent-wash px-2 text-[11px] font-semibold text-accent-strong" aria-label={`${flashcardsDue} para revisar hoje`}>
+                  {flashcardsDue > 999 ? '999+' : flashcardsDue}
+                </span>
+              )}
             </>
           )}
         </NavLink>
@@ -81,7 +97,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: ReactNode }[] = [
   { value: 'system', label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
 ];
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const next = THEMES[(THEMES.findIndex((t) => t.value === theme) + 1) % THEMES.length];
   const current = THEMES.find((t) => t.value === theme)!;
@@ -257,7 +273,7 @@ export function AppLayout() {
       </div>
 
       {/* Navegação inferior (celular) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Navegação rápida">
+      <nav className="app-bottom-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Navegação rápida">
         {[
           { to: '/', label: 'Início', icon: Home, end: true },
           { to: '/revisoes', label: 'Revisões', icon: RefreshCcw },

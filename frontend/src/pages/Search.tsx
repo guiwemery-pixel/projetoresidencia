@@ -17,7 +17,7 @@ export default function SearchPage() {
     queryFn: () => api.get<SearchResult>('/search', { q }),
     enabled: q.trim().length >= 2,
   });
-  const empty = data && !data.areas.length && !data.subjects.length && !data.mockExams.length && !data.exams.length && !data.goals.length;
+  const empty = data && !data.areas.length && !data.subjects.length && !data.mockExams.length && !data.exams.length && !data.goals.length && !data.flashcards?.total;
 
   return (
     <div className="space-y-5">
@@ -59,6 +59,28 @@ export default function SearchPage() {
                         </li>
                       )}
                     </ul>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          {data.flashcards?.total > 0 && (
+            <Card
+              title="Flashcards"
+              action={
+                <Link to={`/flashcards/busca?q=${encodeURIComponent(q)}`} className="text-xs font-medium text-accent">
+                  {data.flashcards.total > data.flashcards.cards.length ? `Ver todos (${data.flashcards.total >= 300 ? '300+' : data.flashcards.total})` : 'Abrir na busca dos flashcards'}
+                </Link>
+              }
+            >
+              <ul className="divide-y divide-line">
+                {data.flashcards.cards.map((c) => (
+                  <li key={c.id} className="py-2.5">
+                    <Link to={`/flashcards/busca?q=${encodeURIComponent(q)}`} className="block text-sm font-medium text-ink hover:underline">
+                      {c.front}
+                    </Link>
+                    <p className="line-clamp-2 text-xs text-ink2">{c.back}</p>
+                    {c.deck && <p className="mt-0.5 text-[11px] text-muted">🗂️ {c.deck.split('::').join(' › ')}</p>}
                   </li>
                 ))}
               </ul>

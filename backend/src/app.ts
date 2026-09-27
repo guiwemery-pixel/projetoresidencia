@@ -23,6 +23,7 @@ import { examsRouter } from './modules/exams/exams.routes.js';
 import { notificationsRouter } from './modules/notifications/notifications.routes.js';
 import { searchRouter } from './modules/search/search.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
+import { flashcardsRouter } from './modules/flashcards/flashcards.routes.js';
 import { invalidateProgressCache } from './modules/progress/public-summary.js';
 import { runNotificationJob } from './modules/notifications/notifications.service.js';
 import { runMaintenance } from './modules/maintenance/maintenance.service.js';
@@ -42,7 +43,8 @@ export function createApp() {
           imgSrc: ["'self'", 'data:', 'https:'],
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
-          connectSrc: ["'self'"],
+          // api.anthropic.com: o app de flashcards pode chamar o Claude com a chave do próprio usuário
+          connectSrc: ["'self'", 'https://api.anthropic.com'],
           // Só força HTTPS quando o deploy usa HTTPS (cookie seguro)
           upgradeInsecureRequests: secureCookies ? [] : null,
         },
@@ -52,6 +54,8 @@ export function createApp() {
   app.use(cors({ origin: allowedOrigins, credentials: true }));
   // Importação de planilha: lotes maiores (os estudos já chegam convertidos, sem arquivo)
   app.use('/api/import', express.json({ limit: '3mb' }));
+  // Sincronização dos flashcards: o app envia em lotes de até ~1,5 MB (imagens do Anki até 3,5 MB)
+  app.use('/api/flashcards', express.json({ limit: '6mb' }));
   app.use(express.json({ limit: '300kb' }));
   app.use(cookieParser());
   app.use('/api', originCheck(allowedOrigins));
@@ -77,6 +81,8 @@ export function createApp() {
   // Tudo abaixo exige usuário autenticado; cada serviço filtra por userId.
   const api = Router();
   api.use(requireAuth);
+  // Flashcards não entram no indicador de progresso: montados antes da invalidação abaixo
+  api.use('/flashcards', flashcardsRouter);
   // Qualquer alteração invalida o cache do indicador exibido ao grupo
   api.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method !== 'GET') {

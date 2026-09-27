@@ -117,6 +117,8 @@ model User {
   groupsCreated    Group[]
   studyPlans       StudyPlan[]
   planItems        PlanItem[]
+  flashcardSync    FlashcardSync?
+  flashcardRecords FlashcardRecord[]
 
   @@map("users")
 }
@@ -544,4 +546,54 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, readAt, createdAt])
   @@map("notifications")
+}
+
+// ───────────────────────────── Flashcards ─────────────────────────────
+//
+// O app de flashcards roda no navegador (agendamento FSRS, Quick Review,
+// análises) e mantém uma cópia local para funcionar sem internet. Aqui fica a
+// cópia da conta, usada para sincronizar os aparelhos: cada registro do app
+// (card, baralho, nó da hierarquia, revisão, sessão, configurações...) é um
+// documento JSON. `version` cresce a cada gravação do usuário e serve de cursor
+// para cada aparelho baixar só o que mudou (ver modules/flashcards).
+
+model FlashcardSync {
+  userId        String    @id @map("user_id")
+  // Última versão distribuída (as gravações do usuário são numeradas em ordem)
+  version       BigInt    @default(0)
+  // Muda quando a coleção inteira é substituída (restaurar backup, apagar tudo)
+  epoch         Int       @default(1)
+  // Tamanho dos documentos guardados, para a cota por usuário
+  bytes         BigInt    @default(0)
+  // Imagens guardadas fora do banco (Cloudflare R2), para a cota de imagens
+  mediaBytes    BigInt    @default(0) @map("media_bytes")
+  // Exclusões com versão até aqui já foram descartadas pela faxina
+  purgedVersion BigInt    @default(0) @map("purged_version")
+  // Resumo do dia calculado pelo app (widget da página inicial e menu)
+  summary       Json?
+  summaryAt     DateTime? @map("summary_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("flashcard_sync")
+}
+
+model FlashcardRecord {
+  userId    String   @map("user_id")
+  store     String   @db.VarChar(32)
+  id        String   @db.VarChar(200)
+  // JSON do registro, como o app gravou; null = excluído (avisa os outros aparelhos)
+  data      String?
+  size      Int      @default(0)
+  // Bytes do arquivo guardado fora do banco (imagem no R2); 0 = tudo está em `data`
+  blobSize  Int      @default(0) @map("blob_size")
+  version   BigInt
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, store, id])
+  @@index([userId, version])
+  @@map("flashcard_records")
 }

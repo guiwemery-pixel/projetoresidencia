@@ -11,12 +11,15 @@ import { Button, Input, Modal, NumberInput, Textarea, cx, useToast } from '../ui
 import { SubjectPicker, type SubjectChoice } from './SubjectPicker';
 import { WhyPanel } from './WhyPanel';
 
-interface OpenOptions {
+export interface OpenOptions {
   subjectId?: string;
   reviewId?: string;
   /** Assunto do cronograma que este estudo cumpre */
   planItemId?: string;
   methods?: StudyMethod[];
+  /** Pré-preenchidos (ex.: ao registrar uma sessão de flashcards) */
+  minutes?: number;
+  notes?: string;
 }
 
 const Ctx = createContext<(opts?: OpenOptions) => void>(() => undefined);
@@ -45,7 +48,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
 
   const [subject, setSubject] = useState<SubjectChoice>(null);
   const [date, setDate] = useState(todayLocal());
-  const [minutes, setMinutes] = useState<number | null>(60);
+  const [minutes, setMinutes] = useState<number | null>(opts.minutes ?? 60);
   const [methods, setMethods] = useState<StudyMethod[]>(opts.methods ?? []);
   const [total, setTotal] = useState<number | null>(null);
   const [correct, setCorrect] = useState<number | null>(null);
@@ -57,7 +60,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
   const [qNotes, setQNotes] = useState('');
   const [quality, setQuality] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<number | null>(null);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(opts.notes ?? '');
   const [result, setResult] = useState<StudyResult | null>(null);
   const [showWhy, setShowWhy] = useState(false);
 

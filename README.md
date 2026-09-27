@@ -36,6 +36,7 @@ GUILHERME
 | **Pesquisa global** | “dengue” → Pediatria · 4 revisões · 2 simulados · 86 questões · 78% de acertos. |
 | **Privacidade** | Resumo público montado por lista de permissão, opção de não compartilhar, exportação, **apagar o progresso** (só o histórico, ou tudo voltando à estrutura inicial, sem perder a conta e os grupos) e exclusão da conta. |
 | **Interface** | Responsiva (celular, tablet, desktop), modo claro/escuro/sistema, PWA-ready (manifest). |
+| **Flashcards** | Aba do site (`/flashcards`): revisão espaçada FSRS com 5 botões (Errei · Difícil · Quase · Bom · Fácil; primeira aprendizagem 1 min/5 min/10 min/1 dia/2 dias; "Errei" é sempre 1 min, e o card volta na mesma sessão), Quick Review que não mexe no agendamento, hierarquia Área → Subárea → Assunto → Tema → Subtema, **pontos fracos no nível mais específico**, estatísticas, calendário, busca, favoritos, suspensos, geração de cards a partir de PDF com IA (Claude), importação do seu **modelo CSV** e de baralhos do **Anki (.apkg) com o histórico de revisões**, exportação (Anki CSV, CSV, TXT, JSON com revisões) e backup. **Dados na sua conta**, sincronizados entre aparelhos, com cópia local para funcionar offline. Aparece no Início (cards para hoje), no menu (contador), na pesquisa global e no **Registrar estudo** (ao terminar uma sessão). Também existe uma **versão só de flashcards** em `/cards` (mesma conta e mesmos dados, sem o menu do site, instalável no celular como um app "Flashcards" à parte). Detalhes em [`docs/FLASHCARDS.md`](docs/FLASHCARDS.md). |
 
 ## Stack
 
@@ -90,7 +91,9 @@ Abra <http://localhost:5173>. Com o seed, entre com `guilherme@demo.com`, `joao@
 | `npm run dev` | API (tsx watch) + frontend (Vite) |
 | `npm test` | Testes do backend (usa `TEST_DATABASE_URL`, um banco separado que é limpo a cada teste) |
 | `npm run typecheck` | Verificação de tipos do backend e do frontend |
-| `npm run build` | Build de produção (API em `backend/dist`, frontend em `frontend/dist`) |
+| `npm run build` | Build de produção (API em `backend/dist`, frontend em `frontend/dist`, com os flashcards) |
+| `npm run test:flashcards` | Testes unitários dos flashcards (agendamento, pontos fracos, formatos; sem banco) |
+| `npm run test:flashcards:e2e` | Teste de ponta a ponta da aba Flashcards no Chromium (Playwright): sobe a API com `TEST_DATABASE_URL` e o frontend compilado, e testa inclusive a sincronização entre dois aparelhos |
 | `npm start` | Sobe a API compilada, que também serve o frontend |
 | `npm run db:migrate` / `db:seed` | Migrations / dados de demonstração |
 
@@ -108,6 +111,7 @@ backend/
       studies/          registro de estudos e questões
       taxonomy/         áreas, subáreas, assuntos e templates (medicina, vazio…)
       progress/         indicador de progresso + resumo público (fronteira de privacidade)
+      flashcards/       cópia dos flashcards na conta (sincronização entre aparelhos, resumo, busca)
       metrics/ goals/ mock-exams/ exams/ notifications/ insights/ search/ dashboard/
       auth/ users/ groups/
   tests/                testes de integração
@@ -115,12 +119,15 @@ frontend/
   src/
     api/                cliente HTTP e tipos
     components/         ui, layout, study (registro/“Por quê?”), charts
-    pages/              uma página por aba
-docs/                   arquitetura e algoritmo
+    pages/              uma página por aba (Flashcards.tsx monta o motor dos flashcards)
+    flashcards/         ponte React ↔ motor dos flashcards, resumo do dia, limpeza ao sair
+  public/flashcards/    bibliotecas de terceiros dos flashcards (pdf.js, sql.js, JSZip…)
+flashcards/             motor da aba Flashcards (JS/CSS sem framework, testes) — ver docs/FLASHCARDS.md
+docs/                   arquitetura, algoritmo e flashcards
 ```
 
 ## Próximos passos sugeridos
 
-Google Calendar, importação de planilhas/questões, flashcards, upload de PDFs, IA para análise de
-desempenho e geração de questões, ranking opcional, tags avançadas, notificações push (PWA).
+Google Calendar, importação de questões, IA para análise de desempenho e geração de questões,
+ranking opcional, tags avançadas, notificações push (PWA), IA dos flashcards pelo servidor.
 Veja em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#preparado-para-crescer) onde cada uma se encaixa.

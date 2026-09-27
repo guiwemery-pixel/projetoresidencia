@@ -10,6 +10,7 @@ import { LEVELS } from '../lib/constants';
 import { Avatar, Button, Card, Input, LevelBadge, Loading, Modal, NumberInput, PageHeader, ProgressBar, cx, useToast } from '../components/ui';
 import { ProgressOverview } from '../components/dashboard/shared';
 import { questionCountFactor } from '../lib/questions';
+import { discardFlashcards } from '../flashcards/local';
 
 type ResetScope = 'progress' | 'everything';
 
@@ -25,6 +26,9 @@ const RESET_OPTIONS: { value: ResetScope; title: string; detail: string }[] = [
     detail: 'Apaga também áreas, assuntos, metas e o banco de provas, e recria a estrutura inicial, como numa conta nova.',
   },
 ];
+
+// Os flashcards têm a própria opção de apagar (aba Flashcards › Configurações)
+const RESET_FLASHCARDS_NOTE = 'Os flashcards não são afetados: para apagá-los, use Flashcards › Configurações.';
 
 /** Apagar o progresso sem excluir a conta (com senha e opção de baixar os dados antes). */
 function ResetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -66,7 +70,7 @@ function ResetDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
     >
       <div className="space-y-3">
         <p className="text-sm text-ink2">
-          Sua conta, seus grupos e suas preferências continuam. O que for apagado <strong className="text-ink">não pode ser recuperado</strong>.
+          Sua conta, seus grupos e suas preferências continuam. O que for apagado <strong className="text-ink">não pode ser recuperado</strong>. {RESET_FLASHCARDS_NOTE}
         </p>
         <div role="radiogroup" aria-label="O que apagar" className="space-y-2">
           {RESET_OPTIONS.map((o) => (
@@ -203,6 +207,8 @@ export default function ProfilePage() {
   const del = useMutation({
     mutationFn: () => api.del('/me', undefined, { password: deletePw }),
     onSuccess: async () => {
+      // A conta não existe mais: a cópia local dos flashcards vai junto, sem tentar enviar
+      await discardFlashcards(user!.id);
       await logout().catch(() => undefined);
       navigate('/entrar');
     },

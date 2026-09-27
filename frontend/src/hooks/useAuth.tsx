@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
 import { setAppTimeZone } from '../lib/format';
+import { closeFlashcards } from '../flashcards/local';
 
 interface AuthState {
   user: User | null;
@@ -37,9 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading: isLoading,
     setUser: (u) => qc.setQueryData(['me'], u),
     logout: async () => {
+      if (data) await closeFlashcards(data.id);
       await api.post('/auth/logout');
-      qc.clear();
+      // Primeiro o usuário sai (as páginas protegidas desmontam), depois o cache:
+      // na ordem inversa o AuthProvider ficava preso ao usuário antigo por um
+      // instante e as páginas refaziam chamadas já sem sessão (401).
       qc.setQueryData(['me'], null);
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
     },
   };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

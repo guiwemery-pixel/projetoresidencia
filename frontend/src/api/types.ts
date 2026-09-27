@@ -572,6 +572,34 @@ export interface SearchResult {
   mockExams: { id: string; name: string; board: string | null; takenOn: string; accuracy: number | null; status: string }[];
   exams: { id: string; name: string; board: string; year: number | null; attempts: number }[];
   goals: { id: string; title: string; status: string }[];
+  flashcards: { total: number; cards: { id: string; front: string; back: string; deck: string | null }[] };
+}
+
+/**
+ * Resumo do dia calculado pelo app de flashcards (mesmas regras da fila de
+ * revisão) e guardado na conta a cada mudança. `forecast[i]` = cards que vencem
+ * no i-ésimo dia a partir de `dayStart` (o dia 0 inclui os atrasados).
+ */
+export interface FlashcardsSummary {
+  v: number;
+  at: number;
+  dayStart: number;
+  rolloverHour: number;
+  due: number;
+  overdue: number;
+  learning: number;
+  newToday: number;
+  newAvailable: number;
+  newPerDay: number;
+  reviewsPerDay: number;
+  reviewsDone: number;
+  reviewed: number;
+  correct: number;
+  minutes: number;
+  streak: number;
+  total: number;
+  drafts: number;
+  forecast: number[];
 }
 
 export interface CalendarDay {

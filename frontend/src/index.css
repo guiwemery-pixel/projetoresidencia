@@ -141,6 +141,13 @@ body {
   }
 }
 
+/* Revisão de flashcards no celular: a tela é do card (a barra inferior volta ao terminar) */
+@media (max-width: 1023px) {
+  body.fc-focus-mode .app-bottom-nav {
+    display: none;
+  }
+}
+
 /* Recharts: foco visível e sem contorno padrão */
 .recharts-wrapper:focus,
 .recharts-surface:focus {

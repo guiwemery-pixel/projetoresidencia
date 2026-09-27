@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from '../auth/password.js';
 import { SESSION_COOKIE, destroyOtherSessions, sessionCookieOptions } from '../auth/session.js';
 import { computeProgress } from '../progress/progress.service.js';
 import { exportUserData, resetProgress, toPrivateUser } from './users.service.js';
+import { removeUserMedia } from '../flashcards/flashcards.service.js';
 
 export const usersRouter = Router();
 
@@ -102,6 +103,8 @@ usersRouter.delete('/', async (req, res) => {
   const { password } = parse(z.object({ password: z.string().min(1) }), req.body);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: currentUser(req).id } });
   if (!(await verifyPassword(password, user.passwordHash))) throw unauthorized('Senha incorreta');
+  // Os registros somem com a conta (cascade); as imagens no R2 precisam ser apagadas à parte
+  await removeUserMedia(user.id);
   await prisma.user.delete({ where: { id: user.id } });
   res.clearCookie(SESSION_COOKIE, { ...sessionCookieOptions(), maxAge: undefined });
   res.status(204).end();
