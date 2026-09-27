@@ -17,16 +17,17 @@ import type {
 } from './types.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Motor de revisão espaçada "escada adaptativa" (adaptive-ladder-v2)
+// Motor de revisão espaçada "escada adaptativa" (adaptive-ladder-v3)
 //
 // 1. Mede o contato: % de acertos + autoavaliação → pontuação 0–100.
 // 2. Classifica a pontuação numa faixa (excelente, bom, mediano, fraco, crítico).
-//    A 1ª revisão sai direto do percentual de acertos (tabela firstReview).
+//    Com questões, os dias saem do percentual (arredondado) pelas tabelas da
+//    planilha de revisões: firstReview (1ª revisão) e nextReview (as seguintes).
 // 3. A faixa move o assunto na escada D10 → D21 → D60 → D90+ (avança, mantém,
-//    volta uma etapa ou reinicia no reforço D3).
-// 4. Nas faixas de crescimento o intervalo-base da etapa é ajustado pela
-//    facilidade individual do assunto, tendência e dificuldade percebida; nas
-//    faixas de queda usa-se o intervalo-base da etapa anterior.
+//    volta uma etapa ou reinicia no reforço D3); a etapa indica a fase.
+// 4. Sem questões (flashcards, autoavaliação), nas faixas de crescimento o
+//    intervalo-base da etapa é ajustado pela facilidade individual do assunto,
+//    tendência e dificuldade percebida; nas de queda usa-se a etapa anterior.
 // 5. A quantidade de questões ajusta o resultado de forma gradual: 20 é a
 //    referência; menos questões encurtam e mais questões alongam o intervalo.
 // 6. Tudo é registrado numa explicação legível ("Por quê?").
@@ -161,7 +162,16 @@ function interpolate(x: number, raw: { x: number; factor: number }[]): number {
 
 /** "< 60% → 3 dias · 60–65% → 10 · …" (texto da tabela da 1ª revisão) */
 export function firstReviewTableText(config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
-  const tiers = [...config.firstReview.tiers].sort((a, b) => a.min - b.min);
+  return tableText(config.firstReview.tiers);
+}
+
+/** Texto da tabela das revisões seguintes ("< 60% → 7 dias · 60–66% → 13 · …"). */
+export function nextReviewTableText(config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
+  return tableText(config.nextReview.tiers);
+}
+
+function tableText(list: { min: number; days: number }[]) {
+  const tiers = [...list].sort((a, b) => a.min - b.min);
   return tiers
     .map((t, i) => {
       const next = tiers[i + 1];
@@ -199,9 +209,10 @@ export function suggestedQuestions(
   const table = config.reviewQuestionsByStage;
   const [min, max] = table[Math.min(stage, table.length - 1)];
   const k = config.sizeMultipliers[size] ?? 1;
-  // Nunca sugere menos que a referência: seguir a sugestão não encurta o intervalo
-  const lo = Math.max(config.questionCount.reference, Math.round(min * k));
-  return { min: lo, max: Math.max(lo, Math.round(max * k)) };
+  // Nunca sugere menos que a faixa mínima (a partir da referência): seguir a sugestão não encurta o intervalo
+  const [floorMin, floorMax] = config.questionCount.suggestedFloor ?? [config.questionCount.reference, config.questionCount.reference];
+  const lo = Math.max(floorMin, config.questionCount.reference, Math.round(min * k));
+  return { min: lo, max: Math.max(lo, floorMax, Math.round(max * k)) };
 }
 
 export function suggestedMethods(stage: number, theory: boolean, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {
@@ -341,6 +352,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
   let suggestTheory = false;
   let quantityApplies = false;
   let theoryApplies = false;
+  let tablePath = false;
   let measured: number | null = score; // pontuação que fica registrada como "último desempenho"
   // Só leitura (fora da própria D1) → revisão D1 amanhã
   const checkup = passiveOnly && !passiveAsReview;
@@ -395,9 +407,9 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       if (f !== 1) modifiers.push({ key: 'dificuldade', label: `Dificuldade percebida ${name}`, factor: f });
     }
   } else if (firstMeasure) {
-    // 1ª revisão: data definida pela tabela de percentual de acertos
+    // 1ª revisão: data definida pela tabela de percentual de acertos (arredondado)
     const tiers = [...config.firstReview.tiers].sort((a, b) => b.min - a.min);
-    const tier = tiers.find((t) => accuracy! >= t.min) ?? tiers[tiers.length - 1];
+    const tier = tiers.find((t) => Math.round(accuracy!) >= t.min) ?? tiers[tiers.length - 1];
     stage = tier.stage;
     growth = false;
     baseInterval = tier.days;
@@ -419,6 +431,28 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       label: 'Etapa mantida',
       detail: `Sem desempenho medido, a etapa ${stageLabel(stage, config)} é mantida.`,
     });
+  } else if (hasPercentual) {
+    // Revisões seguintes com questões: dias pela tabela (% arredondado), contados desta revisão
+    const from = state!.stage;
+    const tiers = [...config.nextReview.tiers].sort((a, b) => b.min - a.min);
+    const rounded = Math.round(accuracy!);
+    const tier = tiers.find((t) => rounded >= t.min) ?? tiers[tiers.length - 1];
+    // A etapa continua seguindo a faixa: indica a fase (consolidar, recuperação, manutenção…)
+    stage = band.resetToStage ?? Math.max(0, from + band.stageDelta);
+    growth = false;
+    tablePath = true;
+    suggestTheory = band.suggestTheory ?? false;
+    isLapse = !band.growth;
+    ease = clamp(easeFrom + band.easeDelta, config.ease.min, config.ease.max);
+    baseInterval = tier.days;
+    // A quantidade de questões ajusta a data (exceto na faixa mais baixa, que já volta logo)
+    quantityApplies = tier !== tiers[tiers.length - 1];
+    steps.push({
+      label: 'Revisão pelo percentual de acertos',
+      detail: `${pct(accuracy!)} de acertos → ${tier.days} ${tier.days === 1 ? 'dia' : 'dias'} (revisões seguintes: ${nextReviewTableText(config)}).`,
+    });
+    const moved = stage > from ? 'avança' : stage === from ? 'mantém' : band.resetToStage !== undefined ? 'reinicia' : 'volta';
+    steps.push({ label: `Etapa ${moved}`, detail: `${stageLabel(from, config)} → ${stageLabel(stage, config)} (fase: ${stagePhase(stage, config).toLowerCase()})` });
   } else {
     const from = state!.stage;
     // Revisão só teórica não avança a etapa (pode manter, voltar ou reiniciar)
@@ -452,7 +486,7 @@ export function scheduleNext(input: ScheduleInput, config: SchedulerConfig = DEF
       const name = ['', 'fácil', 'média', 'difícil'][contact.difficulty];
       if (f !== 1) modifiers.push({ key: 'dificuldade', label: `Dificuldade percebida ${name}`, factor: f });
     }
-  } else if (state && band && !band.growth && !firstMeasure) {
+  } else if (state && band && !band.growth && !firstMeasure && !tablePath) {
     steps.push({
       label: 'Sem bônus',
       detail: 'Com desempenho abaixo de 70% o intervalo-base da etapa é aplicado sem aumentos nem ajuste pela quantidade de questões.',

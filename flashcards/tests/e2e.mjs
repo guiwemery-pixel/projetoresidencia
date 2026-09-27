@@ -75,13 +75,15 @@ const freePort = () =>
 if (!process.env.E2E_NO_BUILD) execSync('npm run build -w frontend', { cwd: ROOT, stdio: 'inherit' });
 execSync('npx prisma migrate deploy', { cwd: BACKEND, stdio: 'ignore', env: { ...process.env, DATABASE_URL: TEST_DB } });
 
-// Imagens dos flashcards num "Cloudflare R2" falso (API S3 em memória)
+// Imagens dos flashcards e cards da plataforma num "Cloudflare R2" falso (API S3 em memória)
 const s3 = await startFakeS3();
+const stamp = Date.now().toString(36);
+const ADMIN_EMAIL = 'ana.' + stamp + '@teste.com'; // publica os cards da plataforma
 const PORT = await freePort();
 const BASE = 'http://127.0.0.1:' + PORT;
 const server = spawn('npx', ['tsx', 'src/index.ts'], {
   cwd: BACKEND,
-  env: { ...process.env, ...s3.env, DATABASE_URL: TEST_DB, PORT: String(PORT), NODE_ENV: 'test', NOTIFICATIONS_JOB_MINUTES: '0', FRONTEND_DIST: path.join(ROOT, 'frontend/dist'), CORS_ORIGIN: BASE, COOKIE_SECURE: 'false' },
+  env: { ...process.env, ...s3.env, PLATFORM_ADMIN_EMAILS: ADMIN_EMAIL, DATABASE_URL: TEST_DB, PORT: String(PORT), NODE_ENV: 'test', NOTIFICATIONS_JOB_MINUTES: '0', FRONTEND_DIST: path.join(ROOT, 'frontend/dist'), CORS_ORIGIN: BASE, COOKIE_SECURE: 'false' },
   stdio: ['ignore', 'pipe', 'pipe'],
   detached: true, // encerra o grupo inteiro (npx → tsx → node) no fim
 });
@@ -101,7 +103,6 @@ for (let i = 0; ; i++) {
 // ── Navegador ─────────────────────────────────────────────────────────────────
 const browser = await playwright.chromium.launch();
 const errors = [];
-const stamp = Date.now().toString(36);
 
 function watch(page, who) {
   page.on('console', (m) => {
@@ -176,7 +177,7 @@ async function answerOne(page, key = '4') {
 }
 
 // ── Aparelho principal ───────────────────────────────────────────────────────
-const A = await device('Ana Teste', 'ana.' + stamp + '@teste.com', { register: true });
+const A = await device('Ana Teste', ADMIN_EMAIL, { register: true });
 const page = A.page;
 shotPage = page;
 const go = goFor(page);
@@ -437,7 +438,7 @@ try {
     await page.waitForSelector('.rating-bar');
     ivls = await page.$$eval('.rating-bar .ivl', (els) => els.map((e) => e.textContent));
     console.log('   reaprendizagem:', ivls.join(' | '));
-    assert.deepEqual(ivls.slice(0, 3), ['1 min', '5 min', '10 min']);
+    assert.deepEqual(ivls, ['1 min', '10 min', '1 dia', '2 dias', '3 dias']);
     await page.keyboard.press('4');
     await page.waitForSelector('text=Sessão concluída!');
     const after = await evalFC((id) => {
@@ -446,7 +447,7 @@ try {
     }, id);
     assert.equal(after.state, 'review');
     assert.equal(after.lapses, lapses + 1, 'um esquecimento só');
-    assert.ok(after.days >= 1);
+    assert.equal(after.days, 2, 'Bom na reaprendizagem: 2 dias');
     assert.deepEqual(after.logs, [['review', 'learning', 1], ['learning', 'review', 4]]);
     await evalFC(async (id) => {
       const c = FC.store.cards.get(id);
@@ -1077,6 +1078,110 @@ try {
       ['Cirurgia › Trauma', 'Tutoria CG::Caso 11 - Câncer gástrico'],
     ]);
     await rm(csv, { force: true });
+  }
+
+  step('cards da plataforma: o admin publica o .apkg (vai para o R2, não para o banco)');
+  {
+    await go('/plataforma');
+    await page.waitForSelector('text=Publicar baralho', { timeout: 20000 });
+    const chooser = page.waitForEvent('filechooser');
+    await page.click('section.panel:has-text("Publicar baralho") .dropzone');
+    await (await chooser).setFiles(path.join(FLASH, 'tests/fixtures/modern.apkg'));
+    await page.waitForSelector('text=Publicar para todos', { timeout: 30000 });
+    assert.ok(await page.isVisible('text=imagem do pacote não será publicada'), 'avisa que a imagem não vai');
+    await page.click('text=Publicar para todos');
+    await page.waitForSelector('.tree-row:has-text("Digestiva")', { timeout: 30000 });
+    assert.ok([...s3.objects.keys()].some((k) => /^platform\/packages\/[a-z0-9]+\/[a-z0-9]+\/cards\//.test(k)), 'cards no R2');
+    await shot('40-plataforma-admin');
+  }
+
+  step('cards da plataforma: estudar sem entrar nas revisões, entrar nas revisões e adicionar à coleção');
+  {
+    const E = await device('Eva Teste', 'eva.' + stamp + '@teste.com', { register: true });
+    const ep = E.page;
+    await openFlashcards(ep, '/plataforma');
+    await ep.waitForSelector('.tree-row:has-text("Digestiva")', { timeout: 20000 });
+    assert.equal(await ep.locator('text=Publicar baralho').count(), 0, 'só administradores publicam');
+    await ep.click('.tree-row:has-text("Digestiva") .twisty');
+    await ep.waitForSelector('.tree-row:has-text("Estômago")');
+    const row = () => ep.locator('.tree-row', { has: ep.locator('.label-btn', { hasText: /^Estômago$/ }) });
+
+    // Só estudar: nada muda na coleção
+    await row().locator('button[title="Estudar"]').click();
+    await ep.click('.modal .panel:has-text("Só estudar") >> text=Começar');
+    await ep.waitForSelector('.flashcard', { timeout: 20000 });
+    await shot('41-plataforma-so-estudar', {}, ep);
+    for (let i = 0; i < 20 && !(await ep.$('text=Estudo concluído')); i++) {
+      await ep.keyboard.press('Space');
+      await ep.waitForSelector('.rating-bar');
+      await ep.keyboard.press('3');
+      await ep.waitForTimeout(120);
+    }
+    await ep.waitForSelector('text=Estudo concluído');
+    assert.equal(await ep.evaluate(() => FC.store.cards.size + FC.store.logs.length), 0, 'só estudar não mexe na coleção');
+
+    // Entrar nas revisões: o card respondido vai para a coleção já agendado
+    await openFlashcards(ep, '/plataforma');
+    await ep.click('.tree-row:has-text("Digestiva") .twisty');
+    await row().locator('button[title="Estudar"]').click();
+    await ep.click('.modal .panel:has-text("entrar nas revisões") >> text=Começar');
+    await ep.waitForSelector('.flashcard', { timeout: 20000 });
+    await ep.keyboard.press('Space');
+    await ep.waitForSelector('.rating-bar .rate.r4');
+    await ep.keyboard.press('4');
+    await ep.waitForTimeout(300);
+    await ep.click('.study-top >> text=Encerrar');
+    await ep.waitForSelector('text=Sessão concluída');
+    const one = await ep.evaluate(() => [...FC.store.cards.values()].map((c) => ({ state: c.state, ref: !!c.platform, deck: FC.decks.get(c.deckId).name, path: FC.areas.pathNames(c.nodeId) })));
+    assert.deepEqual(one, [{ state: 'review', ref: true, deck: 'Cirurgia::Digestiva::Estômago', path: ['Cirurgia', 'Digestiva', 'Estômago'] }]);
+
+    // Adicionar o baralho: os outros entram como novos
+    await openFlashcards(ep, '/plataforma');
+    await ep.click('.tree-row:has-text("Digestiva") .twisty');
+    const total = await ep.evaluate(() => FC.platform.cached().packages[0].cards);
+    await row().locator('button[title="Adicionar à minha coleção"]').click();
+    await ep.click('.modal button:has-text("Adicionar ' + (total - 1) + ' cards")');
+    await ep.waitForSelector('text=adicionados à sua coleção', { timeout: 20000 });
+    assert.equal(await ep.evaluate(() => FC.store.cards.size), total);
+    await shot('42-plataforma-na-colecao', {}, ep);
+
+    // Na conta vai só a referência: o texto fica no R2
+    await flush(ep);
+    const pulled = await (await E.context.request.get(BASE + '/api/flashcards/sync?since=0')).json();
+    const cardRecs = pulled.records.filter((r) => r.s === 'cards');
+    assert.equal(cardRecs.length, total);
+    assert.ok(cardRecs.every((r) => r.d.platform && r.d.front === undefined && r.d.back === undefined), 'sem frente/verso na conta');
+
+    // Outro aparelho da Eva busca o texto no R2
+    const E2 = await device('Eva (outro aparelho)', E.email);
+    await openFlashcards(E2.page, '/decks');
+    await E2.page.waitForFunction((n) => FC.store.cards.size === n, total, { timeout: 20000 });
+    const texts = (p) => p.evaluate(() => [...FC.store.cards.values()].map((c) => c.id + c.front + c.back).sort());
+    assert.deepEqual(await texts(E2.page), await texts(ep));
+
+    // Editar a cópia na coleção: o texto passa a ser da Eva e vai inteiro para a conta
+    const edited = await ep.evaluate(async () => {
+      const c = [...FC.store.cards.values()][0];
+      await FC.cards.update(c.id, { back: c.back + '<p>Minha nota</p>' });
+      return c.id;
+    });
+    await flush(ep);
+    await E2.page.evaluate(() => FC.sync.now());
+    await E2.page.waitForFunction((id) => FC.cards.get(id).back.includes('Minha nota'), edited, { timeout: 10000 });
+
+    // Excluir o baralho da lista vale só para a Eva
+    await openFlashcards(ep, '/plataforma');
+    await ep.click('.tree-row:has-text("Digestiva") .twisty');
+    await row().locator('button[title="Mais ações"]').click();
+    await ep.click('.menu [role="menuitem"]:has-text("Excluir da minha lista")');
+    await ep.waitForTimeout(300);
+    assert.equal(await row().count(), 0);
+    await flush(ep);
+    await go('/plataforma');
+    await page.click('.tree-row:has-text("Digestiva") .twisty');
+    await page.waitForSelector('.tree-row:has-text("Estômago")');
+    await E.context.close();
+    await E2.context.close();
   }
 
   step('tema do site vale para os flashcards');

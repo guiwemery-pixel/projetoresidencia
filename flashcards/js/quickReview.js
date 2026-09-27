@@ -47,6 +47,15 @@
       return this.queue.length ? this.queue[0] : null;
     }
 
+    /** Mais cards no fim da fila (sessões que carregam os cards aos poucos). */
+    append(cardIds) {
+      if (!cardIds.length) return;
+      this.queue.push(...cardIds);
+      this.initialOrder.push(...cardIds);
+      this.total += cardIds.length;
+      this.finished = false;
+    }
+
     answer(key, now = Date.now()) {
       if (!SCORE.hasOwnProperty(key)) throw new Error('Resposta inválida: ' + key);
       const id = this.queue.shift();

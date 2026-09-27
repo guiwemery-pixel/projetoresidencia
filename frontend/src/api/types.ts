@@ -185,6 +185,53 @@ export interface StudyResult {
   isFirstContact: boolean;
   completedReviewId: string | null;
   schedule: ScheduleView | null;
+  /** Assunto do cronograma concluído por este estudo */
+  planItem?: { id: string; label: string | null; weekStart: string; late: boolean } | null;
+}
+
+export type PlanItemStatus = 'PENDING' | 'DONE' | 'SKIPPED';
+
+export interface PlanItem {
+  id: string;
+  planId: string;
+  planName: string;
+  subject: { id: string; name: string; area: { id: string; path: string; color: string | null } | null };
+  weekStart: string;
+  weekEnd: string;
+  label: string | null;
+  position: number;
+  status: PlanItemStatus;
+  doneOn: string | null;
+  studySessionId: string | null;
+  /** Semana terminou sem estudo */
+  overdue: boolean;
+  /** A semana do item inclui hoje */
+  current: boolean;
+}
+
+export interface PlanSummary {
+  id: string;
+  name: string;
+  source: string | null;
+  createdAt: string;
+  total: number;
+  done: number;
+  skipped: number;
+  pending: number;
+  overdue: number;
+  firstWeek: string | null;
+  lastWeek: string | null;
+}
+
+export interface PlanDetail extends PlanSummary {
+  items: PlanItem[];
+}
+
+export interface PlanAgenda {
+  overdue: PlanItem[];
+  thisWeek: PlanItem[];
+  next: PlanItem[];
+  hasPlan: boolean;
 }
 
 export interface StudySuggestion {
@@ -291,6 +338,7 @@ export interface Dashboard {
   progress: Progress;
   insights: Insight[];
   comparisons: Insight[];
+  plan: { hasPlan: boolean; overdue: PlanItem[]; thisWeek: PlanItem[] };
 }
 
 export interface Overview {

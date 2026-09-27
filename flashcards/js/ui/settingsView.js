@@ -275,7 +275,7 @@
           ),
           section(
             'Algoritmo de revisão',
-            'Primeira aprendizagem com intervalos fixos: Errei 1 min · Difícil 5 min · Quase 10 min · Bom 1 dia · Fácil 2 dias. Depois disso, FSRS: os intervalos de cada botão são calculados pela estabilidade e dificuldade de cada card.',
+            'Primeira aprendizagem com intervalos fixos: Errei 1 min · Difícil 5 min · Quase 10 min · Bom 1 dia · Fácil 2 dias. Depois disso, FSRS: os intervalos de cada botão são calculados pela estabilidade e dificuldade de cada card. Ao repetir um card depois de errar numa revisão: Errei 1 min · Difícil 10 min · Quase 1 dia · Bom 2 dias · Fácil 3 dias.',
             h('div', { class: 'form-grid' }, FC.ui.field('Retenção desejada', numberInput('desiredRetention', 0.7, 0.99, 0.01), 'Chance de lembrar no dia da revisão. 0,90 é o padrão; mais alto = revisões mais frequentes.'), FC.ui.field('Intervalo máximo (dias)', numberInput('maximumInterval', 1, 36500))),
           ),
           section(

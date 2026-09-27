@@ -11,6 +11,8 @@ export interface BlobStore {
   put(key: string, body: Uint8Array): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
   remove(keys: string[]): Promise<void>;
+  /** Chaves que começam com `prefix`. */
+  list(prefix: string): Promise<string[]>;
   /** Apaga tudo o que começa com `prefix`; devolve quantos objetos apagou. */
   removePrefix(prefix: string): Promise<number>;
 }
@@ -71,19 +73,38 @@ class S3Store implements BlobStore {
     }
   }
 
+  /** Uma página da listagem: chaves e o token da próxima (null = acabou). */
+  private async listPage(prefix: string, token: string | null) {
+    const q = new URLSearchParams({ 'list-type': '2', prefix });
+    if (token) q.set('continuation-token', token);
+    const res = await this.client.fetch(`${this.endpoint}/${encodeURIComponent(this.bucket)}?${q}`);
+    await this.check(res, 'LIST');
+    const xml = await res.text();
+    const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => xmlUnescape(m[1]));
+    const next = /<IsTruncated>true<\/IsTruncated>/.test(xml) ? xmlUnescape(xml.match(/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/)?.[1] ?? '') : null;
+    return { keys, next: next || null };
+  }
+
+  async list(prefix: string) {
+    const all: string[] = [];
+    let token: string | null = null;
+    for (let page = 0; page < 1000; page++) {
+      const { keys, next } = await this.listPage(prefix, token);
+      all.push(...keys);
+      token = next;
+      if (!token) break;
+    }
+    return all;
+  }
+
   async removePrefix(prefix: string) {
     let removed = 0;
     let token: string | null = null;
     for (let page = 0; page < 1000; page++) {
-      const q = new URLSearchParams({ 'list-type': '2', prefix });
-      if (token) q.set('continuation-token', token);
-      const res = await this.client.fetch(`${this.endpoint}/${encodeURIComponent(this.bucket)}?${q}`);
-      await this.check(res, 'LIST');
-      const xml = await res.text();
-      const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => xmlUnescape(m[1]));
+      const { keys, next } = await this.listPage(prefix, token);
       if (keys.length) await this.remove(keys);
       removed += keys.length;
-      token = /<IsTruncated>true<\/IsTruncated>/.test(xml) ? xmlUnescape(xml.match(/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/)?.[1] ?? '') : null;
+      token = next;
       if (!token) break;
     }
     return removed;

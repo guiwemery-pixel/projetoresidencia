@@ -17,6 +17,7 @@ export {
   studyTimeFactor,
   reviewPlan,
   firstReviewTableText,
+  nextReviewTableText,
   isPassiveOnly,
   measuredScore,
   isActiveRecall,

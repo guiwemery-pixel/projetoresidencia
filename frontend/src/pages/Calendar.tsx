@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
-import { useCalendar } from '../hooks/api';
+import { useCalendar, usePlanItems } from '../hooks/api';
 import { fmtLong, fmtMonth, plural, startOfWeekStr, todayLocal } from '../lib/format';
 import { AreaDot, Card, ErrorState, IconButton, PageHeader, cx } from '../components/ui';
 import { ReviewCard } from '../components/study/ReviewCard';
+import { PlanItemCard, weekLabel } from '../components/study/PlanItemCard';
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
@@ -19,6 +20,11 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(today.slice(0, 7));
   const [selected, setSelected] = useState<string | null>(today);
   const { data, error, isFetching } = useCalendar(month);
+  const monthEnd = useMemo(() => {
+    const [y, m] = month.split('-').map(Number);
+    return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  }, [month]);
+  const planItems = usePlanItems(`${month}-01`, monthEnd).data ?? [];
 
   const cells = useMemo(() => {
     const [y, m] = month.split('-').map(Number);
@@ -33,12 +39,17 @@ export default function CalendarPage() {
 
   const byDate = new Map((data?.days ?? []).map((d) => [d.date, d]));
   const day = selected ? byDate.get(selected) : undefined;
+  // Cronograma: marcador no dia em que a semana começa; o painel mostra a semana do dia escolhido
+  const planByStart = new Map<string, typeof planItems>();
+  for (const i of planItems) planByStart.set(i.weekStart, [...(planByStart.get(i.weekStart) ?? []), i]);
+  const selectedWeek = selected ? planItems.filter((i) => i.weekStart <= selected && selected <= i.weekEnd) : [];
+  const planInMonth = planItems.filter((i) => i.weekStart >= `${month}-01` && i.weekStart <= monthEnd);
 
   return (
     <div>
       <PageHeader
         title="Calendário"
-        subtitle="Suas revisões dia a dia. Apenas você vê este calendário."
+        subtitle="Suas revisões dia a dia e os assuntos do cronograma de cada semana. Apenas você vê este calendário."
         actions={
           <Link
             to={`/calendario/imprimir?semana=${startOfWeekStr(selected ?? today)}`}
@@ -61,6 +72,7 @@ export default function CalendarPage() {
                 <p className="text-xs text-muted">
                   {plural(data.totals.pending, 'pendente', 'pendentes')} · {plural(data.totals.done, 'feita', 'feitas')}
                   {data.totals.overdue > 0 && ` · ${data.totals.overdue} atrasadas`}
+                  {planInMonth.length > 0 && ` · ${plural(planInMonth.length, 'assunto', 'assuntos')} do cronograma`}
                 </p>
               )}
             </div>
@@ -80,12 +92,14 @@ export default function CalendarPage() {
               const pending = d?.pending.length ?? 0;
               const done = d?.done.length ?? 0;
               const overdue = pending > 0 && date < today;
+              const planned = planByStart.get(date) ?? [];
+              const plannedPending = planned.filter((i) => i.status === 'PENDING');
               return (
                 <button
                   key={date}
                   role="gridcell"
                   aria-selected={selected === date}
-                  aria-label={`${fmtLong(date)}: ${pending} pendentes, ${done} feitas`}
+                  aria-label={`${fmtLong(date)}: ${pending} pendentes, ${done} feitas${planned.length ? `, começa a semana de ${planned.length} assuntos do cronograma` : ''}`}
                   onClick={() => setSelected(date)}
                   className={cx(
                     'flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl border p-1 text-sm transition sm:aspect-[4/3]',
@@ -107,6 +121,14 @@ export default function CalendarPage() {
                       ✓{done}
                     </span>
                   )}
+                  {planned.length > 0 && (
+                    <span
+                      className={cx('num text-[10px] font-medium sm:text-[11px]', plannedPending.some((i) => i.overdue) ? 'text-crit-text' : 'text-ink2')}
+                      title={`${planned.length} assuntos do cronograma nesta semana`}
+                    >
+                      📚{plannedPending.length || '✓'}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -121,10 +143,21 @@ export default function CalendarPage() {
             <span className="flex items-center gap-1" style={{ color: 'var(--good-text)' }}>
               ✓4 <span className="text-ink2">feitas</span>
             </span>
+            {planItems.length > 0 && <span>📚3 assuntos do cronograma (no início da semana)</span>}
           </div>
         </Card>
 
         <Card title={selected ? <span className="inline-block first-letter:uppercase">{fmtLong(selected)}</span> : 'Escolha um dia'}>
+          {selectedWeek.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <p className="text-sm font-medium text-ink">
+                📚 Cronograma da semana · {weekLabel(selectedWeek.find((i) => !/b[oô]nus/i.test(i.label ?? ''))?.label ?? selectedWeek[0].label)}
+              </p>
+              {selectedWeek.map((i) => (
+                <PlanItemCard key={i.id} item={i} compact showWeek={false} />
+              ))}
+            </div>
+          )}
           {!day || (day.pending.length === 0 && day.done.length === 0) ? (
             <p className="text-sm text-muted">Nenhuma revisão neste dia.</p>
           ) : (

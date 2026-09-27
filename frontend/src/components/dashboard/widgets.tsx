@@ -5,6 +5,7 @@ import type { Dashboard } from '../../api/types';
 import { duration, fmtShort, fmtWeekday, pct, plural, relativeDay } from '../../lib/format';
 import { Card, EmptyState, ProgressBar, cx } from '../ui';
 import { ReviewCard } from '../study/ReviewCard';
+import { PlanItemCard } from '../study/PlanItemCard';
 import { FavoriteGroups } from '../groups/FavoriteGroups';
 import { InsightList, ProgressOverview } from './shared';
 import { useFlashcardsSummary } from '../../hooks/flashcards';
@@ -16,6 +17,7 @@ import { flashcardsToday } from '../../flashcards/today';
 export type WidgetId =
   | 'hoje'
   | 'revisoes'
+  | 'cronograma'
   | 'flashcards'
   | 'semana'
   | 'proximas'
@@ -39,6 +41,7 @@ export const WIDGETS: Record<WidgetId, { title: string; emoji: string; column: C
   hoje: { title: 'Resumo de hoje', emoji: '📌', column: 'main' },
   revisoes: { title: 'Revisões de hoje', emoji: '🔄', column: 'main' },
   flashcards: { title: 'Flashcards', emoji: '🗂️', column: 'main', after: 'revisoes' },
+  cronograma: { title: 'Cronograma da semana', emoji: '📚', column: 'main', after: 'revisoes' },
   semana: { title: 'Esta semana', emoji: '📅', column: 'main' },
   proximas: { title: 'Próximas atividades', emoji: '⏭️', column: 'main' },
   recentes: { title: 'Estudos recentes', emoji: '📚', column: 'main' },
@@ -52,7 +55,7 @@ export const WIDGETS: Record<WidgetId, { title: string; emoji: string; column: C
 const IDS = Object.keys(WIDGETS) as WidgetId[];
 
 export const DEFAULT_LAYOUT: Layout = {
-  main: ['hoje', 'revisoes', 'flashcards', 'semana', 'proximas', 'recentes'],
+  main: ['hoje', 'revisoes', 'cronograma', 'flashcards', 'semana', 'proximas', 'recentes'],
   side: ['progresso', 'grupos', 'recomendacoes', 'comparacoes', 'metas'],
   hidden: [],
 };
@@ -243,6 +246,37 @@ export function DashboardWidget({
             <EmptyState icon="🎉" title="Nenhuma revisão pendente para hoje">
               Registre um estudo novo e o sistema agenda as revisões automaticamente.
             </EmptyState>
+          )}
+        </Card>
+      );
+    }
+
+    case 'cronograma': {
+      if (!data.plan?.hasPlan) return editing ? <Placeholder id={id} text="Importe o cronograma do seu cursinho (aba Cronograma) para ver aqui os assuntos da semana." /> : null;
+      const items = [...data.plan.overdue, ...data.plan.thisWeek];
+      return (
+        <Card
+          title="Cronograma da semana"
+          subtitle={data.plan.overdue.length && !narrow ? `${plural(data.plan.overdue.length, 'assunto atrasado', 'assuntos atrasados')} de semanas anteriores, primeiro.` : undefined}
+          action={
+            <Link to="/cronograma" className="text-xs font-medium text-accent">
+              Ver cronograma
+            </Link>
+          }
+        >
+          {items.length ? (
+            <div className="space-y-2">
+              {items.slice(0, 6).map((i) => (
+                <PlanItemCard key={i.id} item={i} compact={narrow} />
+              ))}
+              {items.length > 6 && (
+                <Link to="/cronograma" className="block pt-1 text-center text-sm text-accent">
+                  + {plural(items.length - 6, 'assunto', 'assuntos')}
+                </Link>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-ink2">✅ Tudo em dia: nenhum assunto pendente do cronograma nesta semana.</p>
           )}
         </Card>
       );

@@ -30,10 +30,11 @@ export const DIFFICULTY = [
   { value: 3, label: 'Difícil' },
 ];
 
-export const SIZES: { value: SubjectSize; label: string; hint: string }[] = [
-  { value: 'SMALL', label: 'Pequeno', hint: '10–15 questões' },
-  { value: 'MEDIUM', label: 'Médio', hint: '15–25 questões' },
-  { value: 'LARGE', label: 'Grande', hint: '20–30 questões' },
+// Questões sugeridas por revisão (nunca abaixo de 25–30; o motor de revisões usa a mesma régua)
+export const SIZES: { value: SubjectSize; label: string; hint: string; questions: string }[] = [
+  { value: 'SMALL', label: 'Pequeno', hint: '25–30 questões', questions: '25–30' },
+  { value: 'MEDIUM', label: 'Médio', hint: '25–30 questões', questions: '25–30' },
+  { value: 'LARGE', label: 'Grande', hint: '30–40 questões', questions: '30–40' },
 ];
 
 /** Estados → cor + ícone + rótulo (status nunca vai só na cor). */

@@ -109,6 +109,18 @@ export async function generateNotifications(userId: string, today?: string) {
     });
   }
 
+  // Cronograma: assuntos de semanas que já terminaram sem estudo
+  const planOverdue = await prisma.planItem.count({ where: { userId, status: 'PENDING', weekStart: { lt: toDb(addDays(day, -6)) } } });
+  if (planOverdue > 0) {
+    await notify(userId, {
+      type: 'plan-overdue',
+      title: `${planOverdue === 1 ? '1 assunto do cronograma está atrasado' : `${planOverdue} assuntos do cronograma estão atrasados`}.`,
+      body: 'Estude, adie para esta semana ou pule os que não fizerem sentido.',
+      link: '/cronograma',
+      dedupeKey: `plan-overdue:${day}`,
+    });
+  }
+
   for (const m of plannedMocks) {
     const when = fromDb(m.takenOn) === day ? 'hoje' : fromDb(m.takenOn) === addDays(day, 1) ? 'amanhã' : 'em 2 dias';
     await notify(userId, {

@@ -9,6 +9,7 @@ import { computeInsights } from '../insights/insights.service.js';
 import { overview } from '../metrics/metrics.service.js';
 import { generateNotifications } from '../notifications/notifications.service.js';
 import { tidyUpUser } from '../maintenance/maintenance.service.js';
+import { planAgenda } from '../plans/plans.service.js';
 
 export async function dashboard(userId: string, today: string) {
   // Notificações de rotina e faxina do banco rodam de forma preguiçosa ao abrir o app
@@ -21,7 +22,7 @@ export async function dashboard(userId: string, today: string) {
     where: { id: userId },
     select: { dailyQuestionsTarget: true, weeklyStudyHoursTarget: true, weeklyStudyDaysTarget: true },
   });
-  const [agenda, goals, recent, progress, insights, week, mocks, todayQuestions] = await Promise.all([
+  const [agenda, goals, recent, progress, insights, week, mocks, todayQuestions, plan] = await Promise.all([
     reviewAgenda(userId, today, 7),
     listGoals(userId, today, { status: 'active' }),
     listStudies(userId, { limit: 5 }),
@@ -33,6 +34,7 @@ export async function dashboard(userId: string, today: string) {
       orderBy: { takenOn: 'asc' },
     }),
     prisma.questionSession.aggregate({ where: { userId, doneOn: toDb(today) }, _sum: { total: true } }),
+    planAgenda(userId, today),
   ]);
 
   const goalsToday = goals.filter((g) => g.period === 'DAILY' || (g.dueDate !== null && g.dueDate === today));
@@ -87,5 +89,6 @@ export async function dashboard(userId: string, today: string) {
     progress,
     insights: insights.insights,
     comparisons,
+    plan: { hasPlan: plan.hasPlan, overdue: plan.overdue, thisWeek: plan.thisWeek },
   };
 }

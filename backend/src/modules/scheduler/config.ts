@@ -68,6 +68,13 @@ export interface SchedulerConfig {
     /** Com poucas questões e sem autoavaliação, a pontuação vai no máximo até aqui */
     fewQuestionsMaxScore: number;
   };
+  /**
+   * Revisões seguintes (da 2ª em diante) feitas com questões: os dias saem do
+   * percentual de acertos (arredondado) por esta tabela, contados da revisão feita.
+   * É a tabela da planilha "Planner de Revisões". A etapa (D10, D21, D60…) continua
+   * andando pelas faixas e indica a fase (o que fazer), não mais o intervalo.
+   */
+  nextReview: { tiers: { min: number; days: number }[] };
   ease: { initial: number; min: number; max: number };
   difficultyFactors: Record<string, number>;
   trend: { window: number; threshold: number; improvingFactor: number; decliningFactor: number };
@@ -83,7 +90,12 @@ export interface SchedulerConfig {
    * entre os pontos; fora deles vale o ponto da ponta). Aplica-se às faixas
    * ≥ 70% e à 1ª revisão (exceto a faixa mais baixa da tabela).
    */
-  questionCount: { reference: number; points: { questions: number; factor: number }[] };
+  questionCount: {
+    reference: number;
+    /** Faixa mínima sugerida [mín, máx]: seguir a sugestão nunca encurta a revisão */
+    suggestedFloor: [number, number];
+    points: { questions: number; factor: number }[];
+  };
   /**
    * Tempo de estudo do contato quando não há questões (flashcards, recall, teoria):
    * `reference` minutos valem ×1; menos encurta e mais alonga, de forma gradual.
@@ -112,7 +124,7 @@ export interface SchedulerConfig {
 }
 
 export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
-  version: 'adaptive-ladder-v2',
+  version: 'adaptive-ladder-v4',
   ladder: [3, 10, 21, 60, 90],
   ladderLabels: ['D3', 'D10', 'D21', 'D60', 'D90'],
   phases: [
@@ -197,15 +209,25 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   ],
   firstReview: {
     minQuestions: 5,
+    // Tabela da planilha "Planner de Revisões" (% arredondado)
     tiers: [
       { min: 81, days: 23, stage: 2 },
       { min: 71, days: 20, stage: 2 },
-      { min: 66, days: 13, stage: 1 },
+      { min: 67, days: 13, stage: 1 },
       { min: 60, days: 10, stage: 1 },
       { min: 0, days: 3, stage: 0 },
     ],
     assumedScore: 70,
     fewQuestionsMaxScore: 80,
+  },
+  nextReview: {
+    tiers: [
+      { min: 81, days: 30 },
+      { min: 71, days: 25 },
+      { min: 67, days: 18 },
+      { min: 60, days: 13 },
+      { min: 0, days: 7 },
+    ],
   },
   ease: { initial: 1.0, min: 0.6, max: 1.4 },
   difficultyFactors: { '1': 1.1, '2': 1.0, '3': 0.85 },
@@ -228,15 +250,17 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
     ],
   },
   questionCount: {
-    reference: 20,
+    reference: 25,
+    suggestedFloor: [25, 30],
     points: [
       { questions: 0, factor: 0.6 },
-      { questions: 5, factor: 0.7 },
-      { questions: 10, factor: 0.8 },
-      { questions: 15, factor: 0.9 },
-      { questions: 20, factor: 1.0 },
-      { questions: 30, factor: 1.1 },
-      { questions: 40, factor: 1.2 },
+      { questions: 5, factor: 0.68 },
+      { questions: 10, factor: 0.75 },
+      { questions: 15, factor: 0.82 },
+      { questions: 20, factor: 0.9 },
+      { questions: 25, factor: 1.0 },
+      { questions: 35, factor: 1.1 },
+      { questions: 45, factor: 1.2 },
     ],
   },
   lateCredit: { enabled: true, minGrowth: { excelente: 1.5, bom: 1.2, medio: 1.0 } },
@@ -252,13 +276,13 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
     ['QUESTOES', 'SIMULADO'],
   ],
   theoryMethods: ['TEORIA', 'QUESTOES'],
-  newSubjectQuestions: { SMALL: [20, 25], MEDIUM: [20, 30], LARGE: [25, 35] },
+  newSubjectQuestions: { SMALL: [25, 30], MEDIUM: [25, 30], LARGE: [30, 40] },
   reviewQuestionsByStage: [
-    [20, 25],
-    [20, 30],
-    [20, 30],
-    [20, 30],
-    [25, 40],
+    [25, 30],
+    [25, 30],
+    [25, 30],
+    [25, 30],
+    [30, 40],
   ],
   sizeMultipliers: { SMALL: 0.75, MEDIUM: 1, LARGE: 1.25 },
 };

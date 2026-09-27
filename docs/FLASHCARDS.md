@@ -13,7 +13,7 @@ guarda uma cópia para abrir na hora e funcionar sem internet.
 | Lugar | O quê |
 |---|---|
 | Menu lateral | **Flashcards**, com o número de cards para hoje (revisões que vencem hoje + novos liberados). |
-| `/flashcards/...` | A aba: Início, Revisar, Quick Review, Decks, Gerar com IA, Importar, Pontos fracos, Estatísticas, Calendário e ⚙ Configurações. Cada tela tem endereço próprio (`/flashcards/decks`, `/flashcards/revisar`…) e o voltar do navegador funciona. |
+| `/flashcards/...` | A aba: Início, Revisar, Quick Review, Decks, **Cards da plataforma**, Gerar com IA, Importar, Pontos fracos, Estatísticas, Calendário e ⚙ Configurações. Cada tela tem endereço próprio (`/flashcards/decks`, `/flashcards/revisar`…) e o voltar do navegador funciona. |
 | Início do site | Balão **Flashcards** (para revisar hoje, novos, revisados hoje com % de acerto, sequência, "Revisar agora"). Pode ser movido/ocultado em *Personalizar*. |
 | Registrar estudo | Ao terminar uma revisão ou Quick Review, **Registrar estudo** abre o diálogo do site com o método *Flashcards*, o tempo da sessão, um resumo nas observações e o **assunto** já escolhido quando existe na plataforma um assunto com o mesmo nome do assunto mais frequente da sessão. Assim a sessão entra no histórico, nas métricas, nas metas e no agendamento de revisões do assunto. |
 | Pesquisa global | Seção **Flashcards** com os cards que contêm o termo (frente, verso ou tags). |
@@ -55,6 +55,7 @@ flashcards/                 motor da aba (JavaScript sem framework; testado à p
 │   ├── util.js          datas, texto, CSV (puro)
 │   ├── database.js      banco local por usuário (IndexedDB) + fila de envio (outbox)
 │   ├── sync.js          ⭐ sincronização com a conta (envio, recebimento, recomeço, offline)
+│   ├── platform.js      cards da plataforma: catálogo, o que é só do usuário, coleção, sessões, publicar
 │   ├── summary.js       resumo do dia para o Início e o menu do site
 │   ├── legacy.js        leva para a conta os dados da versão anterior (só no navegador)
 │   ├── store.js         estado em memória + eventos
@@ -85,7 +86,8 @@ frontend/src/flashcards/              engine.ts (importa o motor na ordem), toda
                                       do dia a partir do resumo), local.ts (limpeza ao sair),
                                       standalone.ts (endereço /cards, domínio próprio, nome/ícone)
 frontend/public/flashcards/vendor/    pdf.js, sql.js, JSZip, fzstd, SDK da Anthropic (LICENSES.md)
-backend/src/modules/flashcards/       cópia na conta: sincronização, resumo, busca
+backend/src/modules/flashcards/       cópia na conta: sincronização, resumo, busca; platform.ts
+                                      (cards da plataforma no Cloudflare R2)
 ```
 
 O motor é carregado só quando a aba abre (um pedaço separado do build, ~100 KB comprimido). O
@@ -187,10 +189,67 @@ feito offline chegar antes. Uma alteração local ainda não enviada vence a que
 - **Sair da conta** envia o que falta e apaga a cópia local do navegador (se algo não foi enviado,
   por falta de internet, a cópia fica para não perder nada). Excluir a conta apaga tudo.
 
+- **Cards da plataforma na coleção:** vão para a conta **sem frente e verso** enquanto o texto for
+  o da plataforma (ver a seção seguinte); outro aparelho completa o texto pelo R2.
+
 **Versão anterior (dados só no navegador):** ao abrir a aba num navegador que usou a versão antiga
 (banco `flashcards-medicina`), aparece "Encontramos flashcards salvos só neste navegador" com
 **Levar para a minha conta**. Os dados são copiados (juntando com o que já existir na conta); o
 banco antigo não é apagado, só marcado para não perguntar de novo.
+
+## Cards da plataforma
+
+Aba **Cards da plataforma** (`/flashcards/plataforma`): baralhos prontos, iguais para todos os
+usuários (ex.: *Flashcards Revisados 2026*, 45.743 cards em 890 baralhos). O conteúdo fica **só no
+Cloudflare R2**, nunca no banco (Neon) — nem no repositório.
+
+**O que cada usuário faz** (vale só para ele; ninguém muda o baralho dos outros):
+
+| Ação | Onde fica |
+|---|---|
+| **Estudar → Só estudar** | Não sei · Quase · Sei, sem interrupção (o card que você erra volta na mesma sessão, como no Quick Review). Não entra nas revisões nem muda o agendamento. Nada é gravado. Ao terminar: estudar de novo os que errou ou colocá-los na coleção. |
+| **Estudar → Estudar e entrar nas revisões** | Errei · Difícil · Quase · Bom · Fácil (os intervalos de um card novo). Cada card respondido entra na coleção **já agendado**, com o histórico da resposta (`source: 'platform'`, não gasta o limite de novos do dia). Os que já estão na coleção ficam de fora. Desfazer tira o card da coleção. |
+| **Adicionar à minha coleção** | Copia os cards do baralho (e dos de dentro) que ainda não estão lá, como **novos**, na ordem do baralho, no baralho de mesmo nome e na hierarquia pelo nome dos baralhos (sem o baralho-raiz do pacote; "Clínica Cirúrgica" → Cirurgia, "Preventiva & Social" → Medicina Preventiva). Daí em diante são cards seus: editar, mover ou excluir mexe só na sua coleção. |
+| **Editar (só para você)** | `kv/platformEdits` na conta do usuário. A plataforma continua igual para os outros; "Voltar ao original" desfaz. |
+| **Excluir da minha lista** (card ou baralho) | `kv/platformHidden`. Some dos estudos, da lista e do "Adicionar"; "Mostrar de novo" desfaz. |
+
+Ordem (a do baralho ou embaralhada) e quantidade (20, 50, 100, 200 ou todos) são escolhidas ao
+começar. Os cards chegam baralho a baralho: a sessão começa logo, mesmo em "Clínica Médica" (19 mil
+cards), e carrega o resto enquanto você estuda.
+
+**Sem o texto no banco.** O card copiado para a coleção guarda `platform: {p: pacote, d: baralho,
+c: card, h: marca}` — `h` é um hash do texto original. Enquanto frente e verso forem os originais,
+a sincronização envia o card **sem frente e verso** (`FC.platform.slim`), ~0,7 KB por card; ao
+receber, o aparelho usa a própria cópia ou busca o baralho no R2 (`FC.platform.hydrate`, antes de
+gravar no banco local). Editou a cópia? O texto passa a ser seu e vai inteiro para a conta. Se o
+card sair da plataforma, os aparelhos novos mostram um aviso no lugar do texto (sem subir o aviso
+para a conta). Limitação: a busca global do site não encontra esses cards pelo texto (só os
+editados); a busca dentro dos flashcards encontra.
+
+**No R2** (bucket das imagens, prefixo `platform/`):
+
+```
+platform/catalog.json                                   pacotes publicados {id, name, version, cards, decks}
+platform/packages/<pacote>/<versão>/decks.json          árvore: {id, name "A::B", parent, own, total}
+platform/packages/<pacote>/<versão>/cards/<baralho>.json cards do baralho: {id, front, back, tags}
+platform/packages/<pacote>/upload.json                  publicação em andamento
+```
+
+| Rota (`/api/flashcards/platform…`) | Quem | O que faz |
+|---|---|---|
+| `GET /platform` | todos | `{enabled, admin, packages}` com a árvore de cada pacote. |
+| `GET /platform/cards?package=&version=&deck=` | todos | Os cards de um baralho, como estão no R2. A versão está no endereço: o navegador guarda (`immutable`). |
+| `POST /platform/publish` `{packageId?}` | admin | Começa uma versão (nova ou de um pacote existente); descarta publicação anterior pela metade. |
+| `POST /platform/publish/:pacote/:versão/decks` `{decks: [{id, cards}]}` | admin | Uma parte (até ~2,5 MB). |
+| `POST /platform/publish/:pacote/:versão/finish` `{name, decks}` | admin | Confere que chegaram todos os baralhos, grava a árvore, troca o catálogo e apaga a versão anterior. |
+| `DELETE /platform/packages/:pacote` | admin | Tira o pacote da plataforma (as cópias nas coleções continuam). |
+
+**Publicar** (administradores — e-mails em `PLATFORM_ADMIN_EMAILS`, ver
+[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md#cards-da-plataforma)): na própria aba, **Publicar baralho** →
+escolher o `.apkg`. O navegador lê o pacote (o mesmo leitor da importação), monta a árvore de
+baralhos e envia em partes. Publicar de novo com **Atualizar “…”** troca a versão para todos. Os ids
+são estáveis — card = id do card no Anki, baralho = hash do nome completo —, então edições,
+ocultos e cópias dos usuários continuam valendo. Imagens do pacote não são publicadas (a tela avisa).
 
 ## Algoritmo de revisão
 
@@ -212,10 +271,16 @@ retenção desejada 90%, configurável). O FSRS tem 4 notas; as 5 respostas entr
 | Fácil | Easy (4) | bônus de "Easy" |
 
 **Reaprendizagem** (depois de "Errei" numa revisão): o card entra em "Aprendendo" e volta na
-mesma sessão, com os mesmos passos fixos (Errei 1 min · Difícil 5 min · Quase 10 min). "Bom" e
-"Fácil" o devolvem à revisão com o intervalo do FSRS para a estabilidade que restou (no mínimo
-1 e 2 dias), então um card maduro esquecido não recomeça do zero. Errar de novo na
-reaprendizagem não conta outro esquecimento. Ou seja, "Errei" é sempre 1 min.
+mesma sessão. Ao repeti-lo, os intervalos são fixos:
+
+| Errei | Difícil | Quase | Bom | Fácil |
+|---|---|---|---|---|
+| 1 min | 10 min | 1 dia | 2 dias | 3 dias |
+
+"Errei" e "Difícil" o mantêm reaprendendo (volta na mesma sessão); "Quase", "Bom" e "Fácil" o
+devolvem à revisão. A estabilidade e a dificuldade FSRS continuam sendo atualizadas, então as
+revisões seguintes voltam a crescer pelo FSRS. Errar de novo na reaprendizagem não conta outro
+esquecimento. Ou seja, "Errei" é sempre 1 min.
 
 Os intervalos mostrados embaixo de cada botão são os que serão aplicados, sempre em ordem
 (Difícil < Quase < Bom < Fácil). Mesmo durante a primeira aprendizagem a estabilidade e a
@@ -225,6 +290,12 @@ normal com um estado de memória coerente. O dia de estudo vira às 4h (ajustáv
 **Revisão normal** mostra só o que o scheduler liberou: aprendizagem vencida → revisões
 vencidas (limite diário) → cards novos (limite diário), respeitando suspensões e baralhos
 arquivados/suspensos. "Z" desfaz a última resposta (restaura o card e apaga o registro).
+
+**Cards novos liberados:** no Início, embaixo de "Hoje você tem", a linha "Liberando N cards
+novos por dia · **Alterar**" abre a escolha: **Todo dia** muda o limite diário (o mesmo de
+Configurações; 0 = só revisões) e **Só hoje** libera cards a mais só neste dia de estudo (volta
+ao normal no dia seguinte). O contador do menu, a revisão e o balão do Início do site seguem o
+novo número.
 
 **Só revisões** (no Início, ao lado de "Começar revisão", e no ▶ "Como quer estudar?"): a
 revisão normal sem os cards novos — só os já estudados que venceram (e os que estão
@@ -287,7 +358,7 @@ dificuldade alta) só ordena listas; não mexe no agendamento.
 | **CSV/TXT no modelo Anki** (`#separator`, `#html`, `#deck`, `#columns`, `#tags column`) | Frente/verso. O bloco `assunto-tag` (Assunto + "Tema › Subtema") vira a classificação e é tirado da frente; "Pergunta:"/"Resposta:" também. |
 | Planilha CSV com títulos | Colunas reconhecidas: Frente/Pergunta, Verso/Resposta, Tags, Baralho, Grande área, Subárea, Assunto, Tema, Subtema, Fonte, Página, Dificuldade, Referência. |
 | **JSON de baralho** (exportado por este app) | Cards, classificação, baralho, tags, fonte e — se exportado "com agendamento" — estado FSRS e histórico completo. |
-| **Anki `.apkg` / `.colpkg`** | Coleções antigas (`collection.anki2/anki21`, JSON) e novas (`collection.anki21b`, zstd + protobuf). Modelos renderizados (campos, seções, `{{FrontSide}}`, cloze), imagens, tags, sub-baralhos, suspensão, vencimento, intervalo, repetições, esquecimentos e o **revlog** inteiro. Estabilidade/dificuldade: as do FSRS do próprio Anki quando existem; senão, recalculadas repassando o histórico (como o Anki faz ao ativar o FSRS). Respostas: De novo→Errei, Difícil→Difícil, Bom→Bom, Fácil→Fácil. |
+| **Anki `.apkg` / `.colpkg`** | Coleções antigas (`collection.anki2/anki21`, JSON) e novas (`collection.anki21b`, zstd + protobuf). Modelos renderizados (campos, seções, `{{FrontSide}}`, cloze — o `<hr id=answer>` só corta o verso quando antes dele vem a frente repetida; num verso próprio, como resposta + referência, fica tudo), imagens, tags, sub-baralhos, suspensão, vencimento, intervalo, repetições, esquecimentos e o **revlog** inteiro. Estabilidade/dificuldade: as do FSRS do próprio Anki quando existem; senão, recalculadas repassando o histórico (como o Anki faz ao ativar o FSRS). Respostas: De novo→Errei, Difícil→Difícil, Bom→Bom, Fácil→Fácil. |
 | Backup completo | Restaura tudo (substitui os flashcards da conta, em todos os aparelhos). |
 
 Classificação "Automático": cabeçalho do card → caminho/colunas do arquivo → tag hierárquica
@@ -358,10 +429,13 @@ em Flashcards › Configurações.
 
 ```bash
 npm run test:flashcards          # unitários (node --test): scheduler, Quick Review,
-                                 # pontos fracos, formatos, conversão do Anki, estatísticas
+                                 # pontos fracos, formatos, conversão do Anki, estatísticas,
+                                 # cards da plataforma (árvore, caminho, card sem texto na conta)
 npm run test -w backend          # inclui tests/flashcards.test.ts: envio/recebimento, versões sem
                                  # buracos com gravações simultâneas, isolamento entre usuários,
-                                 # epoch/recomeço, faxina, cota, validação, resumo e busca
+                                 # epoch/recomeço, faxina, cota, validação, resumo e busca;
+                                 # tests/flashcards-platform.test.ts: publicar no R2 (S3 falso),
+                                 # só admin, versão nova, publicação pela metade, sem R2
 npm run test:flashcards:e2e      # ponta a ponta no Chromium (Playwright) contra o site inteiro:
                                  # sobe a API com TEST_DATABASE_URL e o frontend compilado; importa o
                                  # CSV modelo e os .apkg, revisa, desfaz, Quick Review, pontos fracos,
@@ -369,7 +443,9 @@ npm run test:flashcards:e2e      # ponta a ponta no Chromium (Playwright) contra
                                  # voltar; "Registrar estudo"; segundo aparelho baixando tudo;
                                  # offline; backup substituindo a conta; outro usuário; versão antiga;
                                  # Início e contador; versão só de flashcards (/cards, alternar,
-                                 # login voltando ao app); pesquisa global; tema; celular; sair
+                                 # login voltando ao app); pesquisa global; cards da plataforma
+                                 # (publicar, só estudar, entrar nas revisões, adicionar, conta sem
+                                 # o texto, outro aparelho, excluir da lista); tema; celular; sair
 node flashcards/tests/e2e.mjs <pasta>   # idem, salvando screenshots (E2E_NO_BUILD=1 pula o build)
 node flashcards/tests/fixtures/make-apkg.js   # regenera os pacotes do Anki de teste
 ```

@@ -107,6 +107,7 @@
         count(dueToday, 'para revisar', 'review'),
         count(c.overdue, 'atrasados', 'overdue'),
       ),
+      newLimitLine(c),
     );
     const actions = h('div', { class: 'row' });
     if (total) {
@@ -120,6 +121,81 @@
     actions.appendChild(button('Quick Review', { icon: 'zap', onClick: () => FC.app.go('/quick') }));
     panel.appendChild(actions);
     return panel;
+  }
+
+  /** "Novos: 20 por dia (+10 só hoje) · Alterar" — quantos cards novos entram na revisão. */
+  function newLimitLine(c) {
+    const s = FC.settings.get();
+    const { start } = FC.review.todayCounts(Date.now());
+    const extra = FC.review.newLimit(s, start) - s.newPerDay;
+    const text = U.plural(s.newPerDay, 'card novo', 'cards novos') + ' por dia' + (extra ? ' (+' + U.fmtNum(extra) + ' só hoje)' : '');
+    return h(
+      'div',
+      { class: 'row new-limit' },
+      h('span', { class: 'small ink2' }, 'Liberando ', h('strong', { text }), c.newDone ? ' · ' + U.plural(c.newDone, 'novo estudado', 'novos estudados') + ' hoje' : ''),
+      button('Alterar', { variant: 'ghost', size: 'sm', icon: 'settings', title: 'Escolher quantos cards novos são liberados', onClick: () => newLimitDialog(c) }),
+    );
+  }
+
+  /** Escolher quantos cards novos são liberados: todo dia (limite diário) ou só hoje (a mais). */
+  function newLimitDialog(c) {
+    const s = FC.settings.get();
+    const { start } = FC.review.todayCounts(Date.now());
+    const currentExtra = FC.review.newLimit(s, start) - s.newPerDay;
+    let mode = 'daily';
+    const input = h('input', { class: 'input', type: 'number', min: '0', max: '9999', step: '1', inputmode: 'numeric', value: String(s.newPerDay), style: { maxWidth: '140px' } });
+    const label = h('label', { class: 'label', text: 'Cards novos por dia' });
+    const hint = h('p', { class: 'hint' });
+    const chips = h('div', { class: 'row' });
+    const presets = { daily: [0, 5, 10, 20, 30, 50, 100], today: [5, 10, 20, 30, 50] };
+    const paint = () => {
+      label.textContent = mode === 'daily' ? 'Cards novos por dia' : 'Cards novos a mais, só hoje';
+      hint.textContent =
+        mode === 'daily'
+          ? 'Vale para todos os dias. Com 0, só entram revisões. ' + U.plural(c.newAvailable, 'card novo ainda não estudado', 'cards novos ainda não estudados') + ' na coleção.'
+          : 'Soma ao limite de ' + U.fmtNum(s.newPerDay) + ' por dia só hoje; amanhã volta ao normal.';
+      FC.ui.clear(chips);
+      for (const n of presets[mode]) {
+        chips.appendChild(
+          button(mode === 'today' ? '+' + n : String(n), {
+            size: 'sm',
+            variant: Number(input.value) === n ? 'primary' : '',
+            onClick: () => {
+              input.value = String(n);
+              paint();
+            },
+          }),
+        );
+      }
+    };
+    input.addEventListener('input', paint);
+    const seg = FC.ui.seg(
+      [
+        { value: 'daily', label: 'Todo dia' },
+        { value: 'today', label: 'Só hoje' },
+      ],
+      mode,
+      (v) => {
+        mode = v;
+        input.value = String(mode === 'daily' ? s.newPerDay : currentExtra || 10);
+        paint();
+      },
+    );
+    const save = async () => {
+      const n = U.clamp(Math.round(Number(input.value) || 0), 0, 9999);
+      if (mode === 'daily') await FC.settings.set({ newPerDay: n });
+      else await FC.settings.set({ newExtra: n ? { dayStart: start, count: n } : null });
+      m.close();
+      FC.ui.toast(mode === 'daily' ? 'Agora são ' + U.plural(n, 'card novo', 'cards novos') + ' por dia.' : n ? 'Mais ' + U.plural(n, 'card novo liberado', 'cards novos liberados') + ' só hoje.' : 'Sem cards novos a mais hoje.');
+    };
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && save());
+    const m = FC.ui.modal({
+      title: 'Cards novos liberados',
+      size: 'narrow',
+      content: h('div', { class: 'stack' }, seg, h('div', { class: 'field' }, label, input, hint), chips),
+      actions: [button('Cancelar', { onClick: () => m.close() }), button('Salvar', { variant: 'primary', onClick: save })],
+    });
+    paint();
   }
 
   function nextDue() {
@@ -206,6 +282,7 @@
       draw();
       ctx.on('cards', FC.util.debounce(draw, 400));
       ctx.on('decks', FC.util.debounce(draw, 400));
+      ctx.on('settings', FC.util.debounce(draw, 100));
     },
   };
 

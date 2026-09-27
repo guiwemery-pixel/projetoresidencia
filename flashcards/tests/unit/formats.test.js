@@ -86,6 +86,11 @@ test('Anki: modelos com seções, {{FrontSide}} e cloze', () => {
   assert.equal(r.back, 'R');
   r = A.renderCard(basic, { flds: 'P?\x1fR\x1fmais' }, 0, 'D');
   assert.equal(r.back, 'R<br>mais');
+  // Verso sem {{FrontSide}}: a linha separa resposta e referência, e a resposta fica
+  const own = { type: 0, name: 'Próprio', flds: [{ name: 'question', ord: 0 }, { name: 'answer', ord: 1 }, { name: 'reference', ord: 2 }], tmpls: [{ ord: 0, qfmt: '<div class="main">{{question}}</div>', afmt: '<div class="main">{{answer}}</div>\n\n<hr id=answer>\n\n<div class="reference">{{reference}}</div>' }] };
+  r = A.renderCard(own, { flds: 'P?\x1fFração de ejeção\x1fUpToDate' }, 0, 'D');
+  assert.equal(r.front, '<div class="main">P?</div>');
+  assert.equal(r.back, '<div class="main">Fração de ejeção</div>\n\n<hr id=answer>\n\n<div class="reference">UpToDate</div>');
   const cloze = { type: 1, name: 'Cloze', flds: [{ name: 'Texto', ord: 0 }], tmpls: [{ ord: 0, qfmt: '{{cloze:Texto}}', afmt: '{{cloze:Texto}}' }] };
   r = A.renderCard(cloze, { flds: 'A {{c1::acalasia}} causa {{c2::disfagia::sintoma}}' }, 1, 'D');
   assert.equal(r.front, 'A acalasia causa <span class="cloze">[sintoma]</span>');

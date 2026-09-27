@@ -36,7 +36,7 @@ export async function getSettings(userId: string) {
 
 /** Exporta todos os dados do usuário (portabilidade — LGPD art. 18). */
 export async function exportUserData(userId: string) {
-  const [user, areas, subjects, studySessions, questionSessions, learningStates, reviews, goals, mockExams, boards, exams, examAttempts] =
+  const [user, areas, subjects, studySessions, questionSessions, learningStates, reviews, goals, mockExams, boards, exams, examAttempts, studyPlans] =
     await Promise.all([
       prisma.user.findUniqueOrThrow({ where: { id: userId } }),
       prisma.area.findMany({ where: { userId } }),
@@ -50,6 +50,7 @@ export async function exportUserData(userId: string) {
       prisma.board.findMany({ where: { userId } }),
       prisma.exam.findMany({ where: { userId } }),
       prisma.examAttempt.findMany({ where: { userId } }),
+      prisma.studyPlan.findMany({ where: { userId }, include: { items: true } }),
     ]);
   return {
     exportedAt: new Date().toISOString(),
@@ -65,6 +66,7 @@ export async function exportUserData(userId: string) {
     boards,
     exams,
     examAttempts,
+    studyPlans,
   };
 }
 
@@ -95,6 +97,7 @@ export async function resetProgress(userId: string, scope: 'progress' | 'everyth
       await tx.examAttempt.deleteMany({ where });
       await tx.notification.deleteMany({ where });
       if (scope === 'everything') {
+        await tx.studyPlan.deleteMany({ where });
         await tx.goal.deleteMany({ where });
         await tx.exam.deleteMany({ where });
         await tx.board.deleteMany({ where });
@@ -104,6 +107,8 @@ export async function resetProgress(userId: string, scope: 'progress' | 'everyth
         const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { domain: true } });
         if (user.domain in TEMPLATES) await applyTemplate(tx, userId, user.domain as TemplateKey);
       } else {
+        // Cronograma continua, com tudo pendente de novo
+        await tx.planItem.updateMany({ where, data: { status: 'PENDING', doneOn: null, studySessionId: null } });
         await tx.goal.updateMany({ where: { userId, status: { in: ['COMPLETED', 'EXPIRED'] } }, data: { status: 'ACTIVE', completedAt: null } });
         await tx.goal.updateMany({ where, data: { manualProgress: 0 } });
       }

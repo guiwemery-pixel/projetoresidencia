@@ -4,7 +4,7 @@ import { CalendarCheck2, ChevronDown, Info, Lightbulb, Sparkles } from 'lucide-r
 import { api } from '../../api/client';
 import type { StudyMethod, StudyResult, StudySuggestion } from '../../api/types';
 import { useCreateStudy, useSubjects } from '../../hooks/api';
-import { DIFFICULTY, METHODS, METHOD_LABEL, QUALITY } from '../../lib/constants';
+import { DIFFICULTY, METHODS, METHOD_LABEL, QUALITY, SIZES } from '../../lib/constants';
 import { duration, fmtLong, pct, relativeDay, todayLocal } from '../../lib/format';
 import { questionCountFactor, type QuestionCountConfig } from '../../lib/questions';
 import { Button, Input, Modal, NumberInput, Textarea, cx, useToast } from '../ui';
@@ -14,6 +14,8 @@ import { WhyPanel } from './WhyPanel';
 export interface OpenOptions {
   subjectId?: string;
   reviewId?: string;
+  /** Assunto do cronograma que este estudo cumpre */
+  planItemId?: string;
   methods?: StudyMethod[];
   /** Pré-preenchidos (ex.: ao registrar uma sessão de flashcards) */
   minutes?: number;
@@ -88,7 +90,8 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
   const accuracy = total && correct !== null && correct <= total ? (correct / total) * 100 : null;
   const questionsError = total !== null && correct !== null && correct > total ? 'Acertos maiores que o total' : undefined;
 
-  const newSuggestion = subject?.kind === 'new' ? { SMALL: '10–15', MEDIUM: '15–25', LARGE: '20–30' }[subject.data.size] : null;
+  const newSuggestion = subject?.kind === 'new' ? SIZES.find((x) => x.value === subject.data.size)?.questions ?? null : null;
+  const reference = suggestion?.questionCount?.reference ?? 25;
 
   // Sem questões: explica de onde sai a próxima data
   const activeRecall = methods.some((m) => m === 'FLASHCARDS' || m === 'RECALL');
@@ -114,6 +117,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
     try {
       const res = await create.mutateAsync({
         ...(subject.kind === 'existing' ? { subjectId: subject.subject.id } : { newSubject: subject.data }),
+        planItemId: opts.planItemId ?? null,
         date,
         durationMinutes: minutes ?? 0,
         methods,
@@ -140,7 +144,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
     }
   }
 
-  const title = result ? 'Estudo registrado' : opts.reviewId ? 'Registrar revisão' : 'Registrar estudo';
+  const title = result ? 'Estudo registrado' : opts.reviewId ? 'Registrar revisão' : opts.planItemId ? 'Registrar estudo do cronograma' : 'Registrar estudo';
 
   if (result) {
     const s = result.schedule;
@@ -177,6 +181,12 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                 </p>
               )}
               {result.completedReviewId && <p className="mt-1 text-sm text-ink2">✔ A revisão pendente deste assunto foi concluída.</p>}
+              {result.planItem && (
+                <p className="mt-1 text-sm text-ink2">
+                  ✔ {result.planItem.label ? `${result.planItem.label} do cronograma` : 'Assunto do cronograma'} concluído
+                  {result.planItem.late ? ' (estava atrasado)' : ''}.
+                </p>
+              )}
             </div>
           </div>
           {s && (
@@ -189,7 +199,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                   {s.checkup && 'Como foi só estudo/leitura, amanhã faça a revisão D1: questões, flashcards, recall ou teoria. '}
                   {s.suggestTheory && 'Volte ao conteúdo teórico e depois faça questões. '}
                   Sugerido: {s.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')} · {s.suggestedQuestions.min}–{s.suggestedQuestions.max} questões.
-                  {' '}Com bom desempenho, menos de 20 questões aproximam a próxima revisão e mais de 20 a afastam, aos poucos.
+                  {' '}Com bom desempenho, menos de {reference} questões aproximam a próxima revisão e mais de {reference} a afastam, aos poucos.
                 </p>
               </div>
               <button type="button" onClick={() => setShowWhy((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-accent" aria-expanded={showWhy}>
@@ -401,7 +411,7 @@ function SuggestionBox({ suggestion: s }: { suggestion: StudySuggestion }) {
     if (s.checkup) {
       return `Revisão D1${when}: o último contato foi só estudo/leitura. Revise como preferir — ${s.questions.min}–${s.questions.max} questões, flashcards, recall ou teoria — e marque "Como foi?". Sem questões, a próxima data sai da sua autoavaliação, do tempo de estudo e da dificuldade.`;
     }
-    const ref = s.questionCount?.reference ?? 20;
+    const ref = s.questionCount?.reference ?? 25;
     return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões. ${ref} questões é a referência: indo bem, menos que isso aproxima a próxima revisão e mais que isso a afasta.`;
   }, [s]);
   return (

@@ -79,11 +79,13 @@
   function start() {
     if (unsubscribe) return;
     const offChange = FC.store.on('change', () => schedule());
+    const offSettings = FC.store.on('settings', () => schedule(500));
     const offSync = FC.store.on('sync', (st) => st.status === 'ok' && !lastSent && schedule(500));
     // Virada do dia sem nenhuma revisão também muda o resumo
     const tick = setInterval(() => schedule(0), 10 * 60000);
     unsubscribe = () => {
       offChange();
+      offSettings();
       offSync();
       clearInterval(tick);
       clearTimeout(timer);

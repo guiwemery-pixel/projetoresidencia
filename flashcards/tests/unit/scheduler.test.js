@@ -63,16 +63,20 @@ test('"Errei" numa revisão é esquecimento: conta lapso, reduz a estabilidade e
   assert.ok(res.card.difficulty > c.difficulty, 'errar aumenta a dificuldade FSRS');
 });
 
-test('reaprendizagem: passos fixos e volta à revisão com o intervalo do FSRS', () => {
+test('reaprendizagem: Errei 1 min · Difícil 10 min · Quase 1 dia · Bom 2 dias · Fácil 3 dias', () => {
   // Card maduro (estabilidade de 100 dias) esquecido
   const t = NOW;
   const mature = Object.assign(fresh(), { state: 'review', stability: 100, difficulty: 5, lastReview: t - 100 * DAY, dueDate: t - DAY, scheduledDays: 100, repetitions: 6 });
   let c = apply(mature, 1, t);
   assert.ok(S.isRelearning(c));
-  let p = S.preview(c, t + MIN);
-  assert.deepEqual(p.slice(0, 3).map((x) => x.text), ['1 min', '5 min', '10 min']);
-  assert.ok(p[3].intervalDays > 1, 'Bom não joga fora o que restou da memória: ' + p[3].text);
-  assert.ok(p[4].intervalDays > p[3].intervalDays, 'Fácil > Bom');
+  const p = S.preview(c, t + MIN);
+  assert.deepEqual(p.map((x) => x.text), ['1 min', '10 min', '1 dia', '2 dias', '3 dias']);
+  // "Difícil" continua reaprendendo (volta em 10 min); "Quase" já devolve à revisão
+  assert.equal(S.next(c, 2, t + MIN).card.state, 'learning');
+  assert.equal(S.next(c, 2, t + MIN).card.dueDate - (t + MIN), 10 * MIN);
+  const quase = S.next(c, 3, t + MIN).card;
+  assert.equal(quase.state, 'review');
+  assert.equal(quase.dueDate, addDays(dayStart(t + MIN, 4), 1));
 
   // Errar de novo na reaprendizagem não conta outro esquecimento
   c = apply(c, 1, t + MIN);
@@ -86,9 +90,13 @@ test('reaprendizagem: passos fixos e volta à revisão com o intervalo do FSRS',
   assert.equal(res.card.scheduledDays, S.preview(c, t + 2 * MIN)[3].intervalDays);
   assert.equal(res.card.dueDate, addDays(dayStart(t + 2 * MIN, 4), res.card.scheduledDays));
 
-  // Card recém-esquecido com pouca memória: mínimo de 1 e 2 dias
+  assert.equal(res.card.scheduledDays, 2);
+
+  // Mesmos intervalos para um card com pouca memória (fixos, não dependem do FSRS)
   const weak = apply(Object.assign(fresh(), { state: 'review', stability: 0.5, difficulty: 8, lastReview: t - 3 * DAY, dueDate: t, scheduledDays: 1 }), 1, t);
-  assert.deepEqual(S.preview(weak, t + MIN).map((x) => x.text), ['1 min', '5 min', '10 min', '1 dia', '2 dias']);
+  assert.deepEqual(S.preview(weak, t + MIN).map((x) => x.text), ['1 min', '10 min', '1 dia', '2 dias', '3 dias']);
+  // A primeira aprendizagem (card novo) continua com os passos dela
+  assert.deepEqual(S.preview(fresh(), t).map((x) => x.text), ['1 min', '5 min', '10 min', '1 dia', '2 dias']);
 });
 
 test('primeira aprendizagem não vira reaprendizagem', () => {

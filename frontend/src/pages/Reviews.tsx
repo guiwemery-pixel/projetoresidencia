@@ -3,17 +3,21 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Review } from '../api/types';
-import { useAgenda } from '../hooks/api';
+import { useAgenda, usePlanAgenda } from '../hooks/api';
 import { fmtShort, fmtWeekday, pct, plural } from '../lib/format';
 import { QUALITY } from '../lib/constants';
 import { AreaDot, Card, EmptyState, ErrorState, Loading, PageHeader, Segmented } from '../components/ui';
 import { ReviewCard, WhyDialog } from '../components/study/ReviewCard';
+import { PlanItemCard } from '../components/study/PlanItemCard';
 
 type Tab = 'hoje' | 'proximas' | 'historico';
 
 export default function ReviewsPage() {
   const [tab, setTab] = useState<Tab>('hoje');
   const agenda = useAgenda(30);
+  const plan = usePlanAgenda();
+  const planOverdue = plan.data?.overdue ?? [];
+  const planWeek = plan.data?.thisWeek ?? [];
   const history = useQuery({
     queryKey: ['reviews', 'history'],
     queryFn: () => api.get<Review[]>('/reviews', { status: 'DONE', order: 'desc', limit: 100 }),
@@ -58,6 +62,23 @@ export default function ReviewsPage() {
               </div>
             </Card>
           )}
+          {planOverdue.length > 0 && (
+            <Card
+              title={`⚠️ Cronograma atrasado (${planOverdue.length})`}
+              subtitle="Assuntos de semanas que já passaram sem estudo. Estude, adie para esta semana ou pule."
+              action={
+                <Link to="/cronograma" className="text-xs font-medium text-accent">
+                  Ver cronograma
+                </Link>
+              }
+            >
+              <div className="space-y-2">
+                {planOverdue.map((i) => (
+                  <PlanItemCard key={i.id} item={i} />
+                ))}
+              </div>
+            </Card>
+          )}
           <Card title={`🔄 Para hoje (${today.length})`}>
             {today.length ? (
               <div className="space-y-2">
@@ -71,6 +92,23 @@ export default function ReviewsPage() {
               </EmptyState>
             )}
           </Card>
+          {planWeek.length > 0 && (
+            <Card
+              title={`📚 Cronograma desta semana (${planWeek.length})`}
+              subtitle="Assuntos novos previstos para esta semana. Ao estudar, as revisões são agendadas."
+              action={
+                <Link to="/cronograma" className="text-xs font-medium text-accent">
+                  Ver cronograma
+                </Link>
+              }
+            >
+              <div className="space-y-2">
+                {planWeek.map((i) => (
+                  <PlanItemCard key={i.id} item={i} />
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       )}
 

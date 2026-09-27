@@ -88,8 +88,8 @@ export const normName = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const cleanName = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 120);
-const areaKey = (s: string) => AREA_ALIASES[normName(s)] ?? normName(s);
+export const cleanName = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 120);
+export const areaKey = (s: string) => AREA_ALIASES[normName(s)] ?? normName(s);
 
 interface Resolved {
   /** chave do assunto → id existente (ou null se será criado) */

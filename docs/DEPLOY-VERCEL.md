@@ -31,6 +31,8 @@ O projeto já vem configurado para o Vercel (`vercel.json`):
    projeto um domínio que comece com `flashcards` (ex.: `flashcards-seunome.vercel.app`). Nele, a
    página inicial abre direto a versão só de flashcards. Sem isso ela continua em `/cards`.
    *(Opcional, recomendado)* **Imagens dos flashcards no Cloudflare R2** — veja a seção abaixo.
+   *(Opcional)* **Cards da plataforma** (baralhos para todos os usuários, guardados no R2) — veja
+   [a seção](#cards-da-plataforma).
 5. **Publicar de novo:** aba *Deployments* → no último deploy, menu *⋯* → *Redeploy*.
 6. **Usar:** abra o endereço `https://<seu-projeto>.vercel.app`, crie sua conta, crie o grupo
    (aba *Grupo*) e envie o link de convite aos amigos.
@@ -89,4 +91,23 @@ elas vão para lá, e o banco guarda só o nome, o tipo e o tamanho de cada uma.
 Imagens enviadas antes continuam funcionando e são levadas para o R2 aos poucos pelo job diário
 (até 200 por dia). Apagar todos os flashcards, restaurar um backup ou excluir a conta apaga também as
 imagens da pessoa no R2.
+
+## Cards da plataforma
+
+Baralhos prontos que aparecem para todos na aba *Flashcards › Cards da plataforma*. O conteúdo fica
+no **Cloudflare R2** (o mesmo bucket das imagens, prefixo `platform/`), não no banco: o baralho
+*Flashcards Revisados 2026* (45 mil cards) ocupa ~48 MB no R2 e nada no Neon. Quando alguém coloca
+cards na coleção, a conta dela guarda só a referência (~0,7 KB por card), sem o texto.
+
+1. Configure o R2 (seção acima). Sem ele, a aba mostra "Ainda não disponível".
+2. No Vercel, *Settings → Environment Variables*: `PLATFORM_ADMIN_EMAILS` = o seu e-mail de login
+   (vários separados por vírgula). Só esses usuários veem **Publicar baralho**. **Redeploy.**
+3. Entre no site com esse e-mail → *Flashcards › Cards da plataforma* → **Publicar baralho** →
+   escolha o `.apkg` → **Publicar para todos**. O navegador lê o pacote e envia em partes (cerca de
+   1 minuto para 45 mil cards).
+4. Para corrigir ou atualizar o baralho: publique o `.apkg` novo escolhendo **Atualizar “…”** no
+   destino. A versão anterior é apagada do R2; o que cada usuário editou, ocultou ou colocou na
+   coleção continua valendo.
+
+O `.apkg` não precisa (e não deve) ir para o repositório: ele é público.
 

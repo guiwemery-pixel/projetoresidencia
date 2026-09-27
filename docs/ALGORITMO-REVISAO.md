@@ -1,4 +1,4 @@
-# Algoritmo de revisão espaçada — `adaptive-ladder-v2`
+# Algoritmo de revisão espaçada — `adaptive-ladder-v4`
 
 Código: `backend/src/modules/scheduler/` (puro e testado em `engine.test.ts`).
 Parâmetros: `config.ts` + sobrescritas na tabela `algorithm_configs`.
@@ -10,25 +10,32 @@ Cada **assunto** tem seu próprio histórico de aprendizagem. Cada dia em que vo
 
 1. **mede** como foi (acertos + autoavaliação);
 2. **classifica** o resultado numa faixa;
-3. **move** o assunto na escada de intervalos (avança, mantém, volta ou reinicia);
-4. **ajusta** o intervalo pelo que já sabe desse assunto e pela **quantidade de questões** feitas;
+3. **move** o assunto na escada (avança, mantém, volta ou reinicia) — a etapa indica a fase;
+4. **calcula a data**: com questões, pelo **percentual de acertos** nas tabelas da planilha de
+   revisões (seção 3), ajustado pela **quantidade de questões**; sem questões, pelo intervalo-base
+   da etapa e pelo que já sabe desse assunto;
 5. **explica** tudo no botão **“Por quê?”**.
 
 Sessões do mesmo dia são somadas num único contato (ex.: teoria de manhã e questões à noite).
 
-## 1. Escada de intervalos-base
+## 1. Escada (fases)
 
-| Etapa | Intervalo-base | Fase | Métodos sugeridos | Questões sugeridas* |
+A etapa diz **o que fazer** na revisão (fase, métodos, quantidade de questões sugerida). Nas
+revisões **com questões**, os dias saem das tabelas da seção 3 (no máximo 30 dias entre uma revisão
+e outra); o intervalo-base abaixo vale para as revisões **sem questões** (flashcards, recall,
+autoavaliação).
+
+| Etapa | Intervalo-base (sem questões) | Fase | Métodos sugeridos | Questões sugeridas* |
 |---|---|---|---|---|
-| D0 | — | Aprender | Teoria + questões | pequeno 20–25 · médio 20–30 · grande 25–35 |
-| D10 | 10 dias (pode ser mais, conforme o desempenho) | Consolidar | Questões + flashcards | 20–30 |
-| D21 | 21–30 dias (pode ser mais, conforme o desempenho) | Recuperação após intervalo maior | Questões | 20–30 |
-| D60 | 60 dias | Manutenção | Questões + flashcards | 20–30 |
-| D90+ | 90 dias, depois ×1,5 (máx. 180) | Manutenção de longo prazo | Questões / simulados | 25–40 |
-| D3 | 3 dias | Reforço — rever os erros (só quando o desempenho fica baixo) | Questões + revisão | 20–25 |
+| D0 | — | Aprender | Teoria + questões | pequeno e médio 25–30 · grande 30–40 |
+| D10 | 10 dias (pode ser mais, conforme o desempenho) | Consolidar | Questões + flashcards | 25–30 |
+| D21 | 21–30 dias (pode ser mais, conforme o desempenho) | Recuperação após intervalo maior | Questões | 25–30 |
+| D60 | 60 dias | Manutenção | Questões + flashcards | 25–30 |
+| D90+ | 90 dias, depois ×1,5 (máx. 180) | Manutenção de longo prazo | Questões / simulados | 30–40 |
+| D3 | 3 dias | Reforço — rever os erros (só quando o desempenho fica baixo) | Questões + revisão | 25–30 |
 
-\* para assunto médio; pequeno ×0,75 e grande ×1,25, **nunca abaixo de 20** — a referência de
-quantidade (seção 4): quem segue a sugestão nunca tem o intervalo encurtado. Os D são **intervalos
+\* para assunto médio; pequeno ×0,75 e grande ×1,25, **nunca abaixo de 25–30** — 25 é a
+referência de quantidade (seção 4): quem segue a sugestão nunca tem o intervalo encurtado. Os D são **intervalos
 desde o último contato**, porque as datas reais se deslocam com a adaptação.
 
 Não há mais D1 nem D7 na escada. O **D3** não é uma etapa do caminho normal: é o reforço de quem
@@ -74,15 +81,15 @@ Exemplos da especificação: 90% + Dominei = 93 · 70% + Razoável = 70 · 50% +
 | < 50 | Crítico | **reinicia (D3)** | 3 dias + sugestão de voltar à teoria | −0,20 |
 
 Nas faixas de crescimento (≥ 70%) o intervalo **parte de no mínimo o intervalo-base da etapa**:
-D10 ≥ 10 dias, D21 ≥ 21, D60 ≥ 60, D90 ≥ 90. Com 20 questões ou mais ele nunca fica abaixo disso;
-com menos de 20, a quantidade de questões (seção 4) o traz um pouco para menos.
+D10 ≥ 10 dias, D21 ≥ 21, D60 ≥ 60, D90 ≥ 90. Com 25 questões ou mais ele nunca fica abaixo disso;
+com menos de 25, a quantidade de questões (seção 4) o traz um pouco para menos.
 
 Trava de segurança: com menos de 5 questões e sem autoavaliação, a faixa máxima é “Bom”.
 
 **Revisão só de estudo/leitura → revisão D1 no dia seguinte.** Ler de novo não mede quanto você
 lembra. Quando o contato do dia é só estudo/leitura (inclusive no D0), a próxima revisão fica para
 o **dia seguinte** (rótulo D1). A D1 pode ser feita **como a pessoa preferir**: questões (sugestão
-de 1,5× o normal da etapa, ex.: 30–45; depois de um D0 só de leitura, 20–30), flashcards, recall ou
+de 1,5× o normal da etapa, ex.: 38–45; depois de um D0 só de leitura, 25–30), flashcards, recall ou
 teoria. A etapa e a facilidade do assunto **não mudam** até a D1. **A D1 nunca gera outra D1**:
 feita com questões, vale o percentual; feita com flashcards/recall, valem a autoavaliação, o
 tempo de estudo e a dificuldade (abaixo); **feita só com teoria** (aula, vídeo, leitura), vale o
@@ -90,15 +97,15 @@ mesmo cálculo **× 0,4** e a etapa fica no máximo em D10 — ir bem numa aula 
 lembra como as questões medem. Numa etapa avançada, a revisão só teórica também usa × 0,4 e não
 avança a etapa.
 
-**1ª revisão — definida pelo percentual de acertos.** A data da primeira revisão sai do
-percentual de acertos do primeiro contato medido (o D0 com questões, ou a revisão D1 feita depois
-de um D0 só de leitura):
+**1ª revisão — definida pelo percentual de acertos** (arredondado para inteiro, como na planilha
+“Planner de Revisões”). A data da primeira revisão sai do percentual de acertos do primeiro contato
+medido (o D0 com questões, ou a revisão D1 feita depois de um D0 só de leitura):
 
 | Acertos | 1ª revisão em | Posição na escada |
 |---|---|---|
 | abaixo de 60% | 3 dias | D3 (reforço) |
-| 60–65% | 10 dias | D10 |
-| 66–70% | 13 dias | D10 |
+| 60–66% | 10 dias | D10 |
+| 67–70% | 13 dias | D10 |
 | 71–80% | 20 dias | D21 |
 | 81% ou mais | 23 dias | D21 |
 
@@ -109,11 +116,29 @@ de um D0 só de leitura):
 autoavaliação, considera desempenho médio (70 → 13 dias); com 1 a 4 questões e sem autoavaliação, a
 pontuação vai no máximo até 80. Abaixo de 60 são sempre 3 dias. Abaixo de 50% também sugere voltar à
 teoria. A
-**quantidade de questões** ajusta essa data (seção 4): com 20 questões vale a tabela exata; 85% em
-7 questões → 17 dias em vez de 23; 85% em 40 questões → 28 dias. Abaixo de 60% são sempre 3 dias.
-Da 1ª revisão em diante, valem as faixas acima. A tabela é configurável (`firstReview.tiers`).
+**quantidade de questões** ajusta essa data (seção 4): com 25 questões vale a tabela exata; 86% em
+7 questões → 16 dias em vez de 23; 85% em 20 questões → 21 dias; 84% em 45 questões → 28 dias. Abaixo de 60% são sempre 3 dias.
+A tabela é configurável (`firstReview.tiers`).
 
-## 4. Modificadores (só nas faixas de crescimento)
+**Revisões seguintes com questões — tabela da planilha.** Da 2ª revisão em diante, feita com 5
+questões ou mais, os dias contam a partir da revisão feita e saem do percentual de acertos
+(arredondado):
+
+| Acertos | Próxima revisão em |
+|---|---|
+| abaixo de 60% | 7 dias |
+| 60–66% | 13 dias |
+| 67–70% | 18 dias |
+| 71–80% | 25 dias |
+| 81% ou mais | 30 dias |
+
+A quantidade de questões ajusta esses dias (exceto abaixo de 60%). A faixa (acertos +
+autoavaliação) continua movendo a etapa — avança, mantém, volta ou reinicia no reforço D3 — e
+sugerindo voltar à teoria abaixo de 50%, mas não muda os dias. A tabela é configurável
+(`nextReview.tiers`). Quando a versão do algoritmo muda, o histórico de cada assunto é recalculado
+aos poucos (ao abrir o app e no job diário), para as revisões pendentes seguirem a regra nova.
+
+## 4. Modificadores (revisões sem questões, nas faixas de crescimento)
 
 | Modificador | Efeito |
 |---|---|
@@ -130,76 +155,70 @@ O produto dos modificadores (sem a quantidade) é limitado a 0,5–1,6 e o inter
 
 ### Quantidade de questões
 
-**20 questões é a referência** (×1). Com menos, o resultado é menos seguro e a próxima revisão fica
-um pouco mais próxima; com mais, um pouco mais longe. É gradual — cada questão conta; entre os
-pontos da tabela o fator é proporcional:
+**25 questões é a referência** (×1) — 20 ainda é pouco para medir o assunto. Com menos, o
+resultado é menos seguro e a próxima revisão fica um pouco mais próxima; com mais, um pouco mais
+longe. É gradual — cada questão conta; entre os pontos da tabela o fator é proporcional:
 
-| Questões | 5 | 7 | 10 | 15 | **20** | 25 | 30 | 35 | 40 ou mais |
+| Questões | 5 | 7 | 10 | 15 | 20 | **25** | 30 | 35 | 45 ou mais |
 |---|---|---|---|---|---|---|---|---|---|
-| Fator | ×0,70 | ×0,74 | ×0,80 | ×0,90 | **×1** | ×1,05 | ×1,10 | ×1,15 | ×1,20 |
+| Fator | ×0,68 | ×0,71 | ×0,75 | ×0,82 | ×0,90 | **×1** | ×1,05 | ×1,10 | ×1,20 |
 
-(1 a 4 questões: ×0,62 a ×0,68.) Vale com desempenho ≥ 70% e na 1ª revisão (exceto abaixo de 60%).
-Com desempenho baixo não há ajuste — o intervalo já é o curto. Sem questões (só flashcards/recall)
-também não. Exemplo no D21 com 80% de acertos, subindo para o D60:
+(1 a 4 questões: ×0,62 a ×0,66.) Vale nas revisões com questões a partir de 60% de acertos (na 1ª
+e nas seguintes). Abaixo de 60% não há ajuste — o intervalo já é o curto. Sem questões (só
+flashcards/recall) também não; aí vale o tempo de estudo. Exemplo numa revisão seguinte com 80% de
+acertos (tabela: 25 dias):
 
-| Questões | 5 | 10 | 15 | 20 | 25 | 30 | 40 |
-|---|---|---|---|---|---|---|---|
-| Próxima revisão | 43 dias | 49 | 55 | **61** | 64 | 67 | 73 |
+| Questões | 5 | 10 | 15 | 20 | 25 | 30 | 35 | 45 |
+|---|---|---|---|---|---|---|---|---|
+| Próxima revisão | 17 dias | 19 | 21 | 23 | **25** | 26 | 28 | 30 |
 
 ## 5. Simulações (saída real do motor)
 
-**1ª revisão pelo percentual e adaptação depois dela**
+**1ª revisão e revisões seguintes pelas tabelas**
 
 | Contato | Resultado | Faixa | Próxima revisão |
 |---|---|---|---|
-| D0 | 16/20 = 80% | Bom | **1ª revisão em 20 dias** (tabela: 71–80%) |
-| 1ª revisão | 18/20 = 90% | Excelente | **D60 em 85 dias** — aumenta bastante |
-| 2ª revisão | 10/20 = 50% | Fraco | **D21 em 21 dias** — perda de retenção, volta uma etapa |
+| D0 | 20/25 = 80% | Bom | **1ª revisão em 20 dias** (tabela: 71–80%) — fase D21 |
+| 1ª revisão | 23/25 = 92% | Excelente | **30 dias** (tabela: ≥ 81%) — fase D60 |
+| 2ª revisão | 13/25 = 52% | Fraco | **7 dias** (tabela: < 60%) — perda de retenção, volta uma fase |
 
-**Retenção cai após intervalo maior**
+**Retenção cai depois de várias revisões boas**
 
-| Contato | Resultado | Faixa | Próxima revisão | Facilidade |
-|---|---|---|---|---|
-| D0 | 80% | Bom | 1ª revisão em 20 dias | 1,02 |
-| 1ª revisão | 90% | Excelente | D60 em 85 dias | 1,07 |
-| 2ª revisão | 85% | Bom | D90 em 102 dias | 1,09 |
-| 3ª revisão | 60% | Fraco | **D60 em 60 dias** | **0,94** |
+| Contato | Resultado | Faixa | Próxima revisão |
+|---|---|---|---|
+| D0 | 80% | Bom | 1ª revisão em 20 dias |
+| 1ª revisão | 92% | Excelente | 30 dias (D60) |
+| 2ª revisão | 84% | Bom | 30 dias (D90) |
+| 3ª revisão | 60% | Fraco | **13 dias** (volta para a fase D60) |
 
-O sistema percebe a queda depois do intervalo longo, volta uma etapa e reduz a facilidade do
-assunto — as próximas subidas serão mais cautelosas. Também gera a notificação
-“Seu desempenho em Coledocolitíase caiu de 85% para 60%”.
+(25 questões em cada contato.) Também gera a notificação “Seu desempenho em Coledocolitíase caiu
+de 84% para 60%”.
 
 **Abaixo de 60%: reforço em 3 dias**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | 11/20 = 55% | **D3 em 3 dias** — reforço: questões + revisão dos erros (20–25 questões) |
-| reforço | 16/20 = 80% | **D10 em 10 dias** |
-| D10 | 17/20 = 85% | **D21 em 21 dias** |
-| D21 | 18/20 = 90% | **D60 em 74 dias** |
-
-**Mínimo da etapa**
-
-| Contato | Resultado | Próxima revisão |
-|---|---|---|
-| D0 | 13/20 = 65% | 1ª revisão em 10 dias (D10) |
-| D10 | 17/20 = 85% | **D21 em 21 dias** — o cálculo daria 20 (facilidade reduzida pelo início fraco), mas o D21 não fica abaixo de 21 |
+| D0 | 13/25 = 52% | **3 dias** (D3) — reforço: questões + revisão dos erros (25–30 questões) |
+| reforço | 20/25 = 80% | **25 dias** (D10) |
+| D10 | 21/25 = 84% | **30 dias** (D21) |
+| D21 | 23/25 = 92% | **30 dias** (D60) |
 
 **Poucas questões**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | 14/20 = 70% | 1ª revisão em 13 dias (D10) |
-| D10 | 7/7 = 100% + 😐 Razoável → pontuação 88,6 (Bom) | **D21 em 16 dias** — o cálculo dá 22, × 0,74 por serem só 7 questões |
+| D0 | 17/25 = 68% | 1ª revisão em 13 dias (D10) |
+| D10 | 7/7 = 100% + 😐 Razoável | **21 dias** — a tabela dá 30, × 0,71 por serem só 7 questões |
+| D10 (outro caso) | 20/20 = 100% | **27 dias** — × 0,90: 20 questões ainda encurtam um pouco |
 
 **Assunto que começa só com teoria**
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | só teoria, 🙂 | amanhã — revisão D1 (20–30 questões, flashcards, recall ou teoria) |
-| D1 | 14/20 = 70% | **D10 em 13 dias** (tabela: 66–70%) |
-| 1ª revisão | 17/20, 🙂 | D21 em 22 dias |
-| 2ª revisão | 19/20, 😄 | D60 em 81 dias |
+| D0 | só teoria, 🙂 | amanhã — revisão D1 (25–30 questões, flashcards, recall ou teoria) |
+| D1 | 17/25 = 68% | **13 dias** (1ª revisão; tabela: 67–70%) |
+| 1ª revisão | 21/25, 🙂 | 30 dias (D21) |
+| 2ª revisão | 24/25, 😄 | 30 dias (D60) |
 
 **D1 feita sem questões**
 
@@ -214,10 +233,10 @@ assunto — as próximas subidas serão mais cautelosas. Também gera a notifica
 
 | Contato | Resultado | Próxima revisão |
 |---|---|---|
-| D0 | 16/20 = 80% | 1ª revisão em 20 dias |
-| 1ª revisão | 18/20 = 90% | D60 em 85 dias |
-| 2ª revisão | só leitura, 🙂 | **amanhã** — revisão D1 (30–45 questões sugeridas), etapa mantida |
-| dia seguinte | 34/40 = 85% | **D90 em 118 dias** (98 × 1,2 pelas 40 questões; seriam 98 com 20) |
+| D0 | 20/25 = 80% | 1ª revisão em 20 dias |
+| 1ª revisão | 23/25 = 92% | 30 dias (D60) |
+| 2ª revisão | só leitura, 🙂 | **amanhã** — revisão D1 (38–45 questões sugeridas), fase mantida |
+| dia seguinte | 38/45 = 84% | **36 dias** (D90) — 30 × 1,2 pelas 45 questões |
 
 ## 6. Transparência (“Por quê?”)
 

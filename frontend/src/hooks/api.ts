@@ -11,6 +11,10 @@ import type {
   GroupListItem,
   MockExamList,
   Notification,
+  PlanAgenda,
+  PlanDetail,
+  PlanItem,
+  PlanSummary,
   Progress,
   Review,
   Study,
@@ -36,6 +40,7 @@ export const keys = {
   group: (id: string) => ['group', id] as const,
   notifications: ['notifications'] as const,
   progress: ['progress'] as const,
+  plans: ['plans'] as const,
 };
 
 /** Invalida tudo que depende de registros de estudo. */
@@ -43,7 +48,7 @@ export function useInvalidateStudyData() {
   const qc = useQueryClient();
   return () =>
     Promise.all(
-      ['dashboard', 'subjects', 'subject', 'studies', 'reviews', 'metrics', 'goals', 'notifications', 'progress', 'group', 'search'].map((k) =>
+      ['dashboard', 'subjects', 'subject', 'studies', 'reviews', 'metrics', 'goals', 'notifications', 'progress', 'group', 'search', 'plans'].map((k) =>
         qc.invalidateQueries({ queryKey: [k] }),
       ),
     );
@@ -57,6 +62,22 @@ export const useAgenda = (days = 14) =>
   useQuery({ queryKey: [...keys.agenda, days], queryFn: () => api.get<{ today: Review[]; overdue: Review[]; upcoming: Review[] }>('/reviews/agenda', { days }) });
 export const useCalendar = (month: string) =>
   useQuery({ queryKey: keys.calendar(month), queryFn: () => api.get<CalendarData>('/reviews/calendar', { month }), placeholderData: (p) => p });
+export const usePlans = () => useQuery({ queryKey: [...keys.plans, 'list'], queryFn: () => api.get<PlanSummary[]>('/plans') });
+export const usePlan = (id?: string) =>
+  useQuery({ queryKey: [...keys.plans, 'detail', id], queryFn: () => api.get<PlanDetail>(`/plans/${id}`), enabled: !!id, placeholderData: (p) => p });
+export const usePlanAgenda = () => useQuery({ queryKey: [...keys.plans, 'agenda'], queryFn: () => api.get<PlanAgenda>('/plans/agenda') });
+export const usePlanItems = (from: string, to: string) =>
+  useQuery({ queryKey: [...keys.plans, 'items', from, to], queryFn: () => api.get<PlanItem[]>('/plans/items', { from, to }), placeholderData: (p) => p });
+
+/** Adiar, pular, voltar a pendente ou marcar como feito um assunto do cronograma. */
+export function useUpdatePlanItem() {
+  const invalidate = useInvalidateStudyData();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; weekStart?: string; status?: PlanItem['status'] }) => api.patch<PlanItem>(`/plans/items/${id}`, body),
+    onSuccess: invalidate,
+  });
+}
+
 export const useGoals = () => useQuery({ queryKey: keys.goals, queryFn: () => api.get<Goal[]>('/goals') });
 export const useMockExams = () => useQuery({ queryKey: keys.mocks, queryFn: () => api.get<MockExamList>('/mock-exams') });
 export const useBoards = () => useQuery({ queryKey: keys.boards, queryFn: () => api.get<Board[]>('/exams/boards') });

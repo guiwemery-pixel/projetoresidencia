@@ -9,6 +9,8 @@
   const DEFAULTS = {
     // Estudo diário
     newPerDay: 20,
+    // Cards novos a mais só hoje: { dayStart, count } (dayStart = início do dia de estudo)
+    newExtra: null,
     reviewsPerDay: 300,
     newOrder: 'added', // 'added' | 'random'
     rolloverHour: 4,
