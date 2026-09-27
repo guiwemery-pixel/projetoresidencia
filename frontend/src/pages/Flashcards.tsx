@@ -10,6 +10,7 @@ import { useStudyDialog } from '../components/study/StudyDialog';
 import { normalize } from '../components/study/SubjectPicker';
 import { ErrorState, Loading } from '../components/ui';
 import type { FlashcardsEngine, FlashcardsStudyInfo } from '../flashcards/types';
+import { CARDS_BASE } from '../flashcards/standalone';
 
 /** Assunto da plataforma com o mesmo nome do assunto dos cards (de preferência na mesma área). */
 export function matchSubject(subjects: Subject[], info: FlashcardsStudyInfo['subject']) {
@@ -27,10 +28,11 @@ export function matchSubject(subjects: Subject[], info: FlashcardsStudyInfo['sub
 }
 
 /**
- * Aba Flashcards: o motor (flashcards/js) desenha a aba dentro desta div,
- * com os dados da conta. O React continua dono da URL, do menu e do tema.
+ * O motor (flashcards/js) desenha os flashcards dentro desta div, com os dados da
+ * conta. O React continua dono da URL, do menu e do tema. Usado pela aba do site
+ * (/flashcards) e pela versão só de flashcards (/cards).
  */
-export default function FlashcardsPage() {
+export function FlashcardsView({ base, standalone = false }: { base: string; standalone?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const engine = useRef<FlashcardsEngine | null>(null);
   const { user } = useAuth();
@@ -62,6 +64,9 @@ export default function FlashcardsPage() {
         setState('ready');
         return FC.app.mount(el, {
           userId,
+          base,
+          standalone,
+          alternate: standalone ? { base: '/flashcards', label: 'Abrir dentro do Projeto Residente' } : { base: CARDS_BASE, label: 'Abrir só os flashcards (app separado)' },
           navigate: (url, opts) => latest.current.navigate(url, { replace: opts?.replace }),
           onSummary: (summary) => qc.setQueryData(flashcardsSummaryKey, { summary, updatedAt: new Date().toISOString() }),
           registerStudy: async (info) => {
@@ -78,7 +83,7 @@ export default function FlashcardsPage() {
       cancelled = true;
       engine.current?.app.unmount();
     };
-  }, [userId, qc]);
+  }, [userId, qc, base, standalone]);
 
   useEffect(() => {
     engine.current?.app.onLocation();
@@ -91,4 +96,9 @@ export default function FlashcardsPage() {
       <div ref={ref} />
     </>
   );
+}
+
+/** Aba Flashcards do Projeto Residente. */
+export default function FlashcardsPage() {
+  return <FlashcardsView base="/flashcards" />;
 }

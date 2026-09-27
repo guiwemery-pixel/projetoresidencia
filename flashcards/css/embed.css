@@ -65,6 +65,10 @@
   white-space: nowrap;
 }
 
+.fc-root .fc-spacer {
+  margin-right: auto;
+}
+
 .fc-root .fc-brand-mark {
   width: 30px;
   height: 30px;

@@ -1,0 +1,19 @@
+{
+  "id": "/cards",
+  "name": "Flashcards — Projeto Residente",
+  "short_name": "Flashcards",
+  "description": "Flashcards de medicina com revisão espaçada (FSRS), Quick Review, pontos fracos e IA. Mesma conta do Projeto Residente.",
+  "start_url": "/cards",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#012563",
+  "theme_color": "#012563",
+  "lang": "pt-BR",
+  "categories": ["education", "medical", "productivity"],
+  "icons": [
+    { "src": "/icons/flashcards-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/flashcards-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/flashcards-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/flashcards-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -766,6 +766,73 @@ try {
     await page.click('button:has-text("Encerrar")');
   }
 
+  step('versão só de flashcards (/cards): mesma conta e dados, sem o menu do site');
+  {
+    const onSite = await counts(page);
+    await page.goto(BASE + '/cards');
+    await page.waitForSelector('.fc-root.fc-standalone .hello', { timeout: 30000 });
+    assert.equal(await page.$('aside'), null, 'sem o menu lateral do site');
+    assert.equal(await page.$('.fc-root .fc-brand'), null, 'o título fica na barra do app');
+    assert.deepEqual(await counts(page), onSite, 'mesma coleção');
+    const head = () =>
+      page.evaluate(() => ({
+        manifest: document.querySelector('link[rel="manifest"]').getAttribute('href'),
+        appTitle: document.querySelector('meta[name="apple-mobile-web-app-title"]').getAttribute('content'),
+        icon: document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href'),
+      }));
+    assert.deepEqual(await head(), { manifest: '/cards.webmanifest', appTitle: 'Flashcards', icon: '/icons/flashcards-apple-touch.png' }, 'instalável como app próprio');
+    const manifest = await (await A.context.request.get(BASE + '/cards.webmanifest')).json();
+    assert.equal(manifest.start_url, '/cards');
+    for (const icon of manifest.icons) assert.equal((await A.context.request.get(BASE + icon.src)).status(), 200, icon.src);
+    await shot('34-app-flashcards');
+    await page.click('.fc-tab[data-nav="decks"]');
+    await page.waitForTimeout(300);
+    assert.equal(new URL(page.url()).pathname, '/cards/decks');
+    // Alterna para a aba do site na mesma tela, e volta
+    await page.click('.fc-head button[title="Mais opções dos flashcards"]');
+    await page.click('.menu button:has-text("Abrir dentro do Projeto Residente")');
+    await page.waitForSelector('aside a[href="/flashcards"][aria-current="page"]');
+    assert.equal(new URL(page.url()).pathname, '/flashcards/decks');
+    assert.deepEqual(await head(), { manifest: '/manifest.webmanifest', appTitle: 'Projeto Residente', icon: '/icons/apple-touch-icon.png' }, 'o site volta a ser o Projeto Residente');
+    await page.click('.fc-head button[title="Mais opções dos flashcards"]');
+    await page.click('.menu button:has-text("Abrir só os flashcards")');
+    await page.waitForSelector('.fc-root.fc-standalone');
+    assert.equal(new URL(page.url()).pathname, '/cards/decks');
+    // Revisão e "Registrar estudo" também funcionam aqui
+    const n = (await counts(page)).logs;
+    await answerOne(page, '4');
+    assert.equal((await counts(page)).logs, n + 1);
+    await page.click('button:has-text("Encerrar")');
+    await page.waitForSelector('.fc-register');
+    await page.click('.fc-register button:has-text("Registrar estudo")');
+    await page.locator('[role="dialog"]:has-text("Registrar estudo")').waitFor({ timeout: 10000 });
+    await page.locator('[role="dialog"] button:has-text("Cancelar")').click();
+    assert.equal(await flush(page), 0);
+    // O link "Projeto Residente" leva ao Início do site
+    await page.click('header a[title^="Abrir o Projeto Residente"]');
+    await page.waitForSelector('aside a[href="/"][aria-current="page"]');
+    assert.equal(new URL(page.url()).pathname, '/');
+  }
+
+  step('entrar pelo app de flashcards volta para ele depois do login');
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const p = await ctx.newPage();
+    watch(p, 'Ana (app no celular)');
+    await p.goto(BASE + '/cards/revisar');
+    await p.waitForSelector('text=Entrar nos Flashcards');
+    await p.fill('input[type="email"]', A.email);
+    await p.fill('input[type="password"]', PASSWORD);
+    await p.click('button[type="submit"]');
+    await p.waitForSelector('.fc-root.fc-standalone', { timeout: 30000 });
+    assert.equal(new URL(p.url()).pathname, '/cards/revisar');
+    await p.evaluate(() => FC.app.go('/'));
+    await p.waitForSelector('.fc-root .hello');
+    await shot('35-app-flashcards-celular', { fullPage: false }, p);
+    assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false, 'sem rolagem horizontal');
+    await ctx.close();
+  }
+
   step('busca global do site encontra os cards');
   await page.goto(BASE + '/busca?q=Borrmann');
   await page.waitForSelector('main a[href^="/flashcards/busca"]');

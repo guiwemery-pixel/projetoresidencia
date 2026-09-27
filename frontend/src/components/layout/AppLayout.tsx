@@ -95,7 +95,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: ReactNode }[] = [
   { value: 'system', label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
 ];
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const next = THEMES[(THEMES.findIndex((t) => t.value === theme) + 1) % THEMES.length];
   const current = THEMES.find((t) => t.value === theme)!;

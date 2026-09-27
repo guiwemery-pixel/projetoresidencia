@@ -4,13 +4,25 @@ import { api } from '../api/client';
 import type { User } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
 import { Button, Input, Select } from '../components/ui';
+import { isCardsPath, isFlashcardsHost } from '../flashcards/standalone';
 
-function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+/** Para onde voltar depois de entrar, e se a pessoa veio pelo app só de flashcards. */
+function useReturnTo() {
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
+  return { from, cards: isFlashcardsHost() || isCardsPath(from ?? '') };
+}
+
+function AuthShell({ title, subtitle, children, cards }: { title: string; subtitle: string; children: ReactNode; cards?: boolean }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <img src="/icons/icon-192.png" alt="Projeto Residente" width={112} height={112} className="mb-4 h-28 w-28 rounded-3xl shadow-card" />
+          {cards ? (
+            <img src="/icons/flashcards-192.png" alt="Flashcards" width={112} height={112} className="mb-4 h-28 w-28 rounded-3xl shadow-card" />
+          ) : (
+            <img src="/icons/icon-192.png" alt="Projeto Residente" width={112} height={112} className="mb-4 h-28 w-28 rounded-3xl shadow-card" />
+          )}
           <h1 className="text-xl font-semibold text-ink">{title}</h1>
           <p className="mt-1 text-sm text-ink2">{subtitle}</p>
         </div>
@@ -24,6 +36,7 @@ export function LoginPage() {
   const { setUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { from, cards } = useReturnTo();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +49,7 @@ export function LoginPage() {
     try {
       const { user } = await api.post<{ user: User }>('/auth/login', { email, password });
       setUser(user);
-      navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true });
+      navigate(from ?? '/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao entrar');
     } finally {
@@ -45,7 +58,11 @@ export function LoginPage() {
   }
 
   return (
-    <AuthShell title="Entrar" subtitle="Organize seus estudos, revise no momento certo e acompanhe o grupo.">
+    <AuthShell
+      cards={cards}
+      title={cards ? 'Entrar nos Flashcards' : 'Entrar'}
+      subtitle={cards ? 'Seus flashcards com revisão espaçada. Use a mesma conta do Projeto Residente.' : 'Organize seus estudos, revise no momento certo e acompanhe o grupo.'}
+    >
       <form onSubmit={submit} className="space-y-4">
         <Input label="E-mail" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input label="Senha" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -56,7 +73,7 @@ export function LoginPage() {
       </form>
       <p className="mt-4 text-center text-sm text-ink2">
         Ainda não tem conta?{' '}
-        <Link to="/cadastro" className="font-medium text-accent">
+        <Link to="/cadastro" state={location.state} className="font-medium text-accent">
           Criar conta
         </Link>
       </p>
@@ -67,6 +84,8 @@ export function LoginPage() {
 export function RegisterPage() {
   const { setUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { from, cards } = useReturnTo();
   const [params] = useSearchParams();
   const [form, setForm] = useState({ name: '', email: '', password: '', inviteCode: params.get('convite') ?? '', template: 'medicina' });
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +103,7 @@ export function RegisterPage() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       setUser(user);
-      navigate('/', { replace: true });
+      navigate(from ?? '/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar conta');
     } finally {
@@ -93,7 +112,11 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Criar conta" subtitle="Seus dados detalhados ficam privados. O grupo vê apenas um resumo visual.">
+    <AuthShell
+      cards={cards}
+      title="Criar conta"
+      subtitle={cards ? 'Uma conta do Projeto Residente vale para os flashcards e para o site completo.' : 'Seus dados detalhados ficam privados. O grupo vê apenas um resumo visual.'}
+    >
       <form onSubmit={submit} className="space-y-4">
         <Input label="Nome" autoComplete="name" required minLength={2} value={form.name} onChange={set('name')} />
         <Input label="E-mail" type="email" autoComplete="email" required value={form.email} onChange={set('email')} />
@@ -110,7 +133,7 @@ export function RegisterPage() {
       </form>
       <p className="mt-4 text-center text-sm text-ink2">
         Já tem conta?{' '}
-        <Link to="/entrar" className="font-medium text-accent">
+        <Link to="/entrar" state={location.state} className="font-medium text-accent">
           Entrar
         </Link>
       </p>

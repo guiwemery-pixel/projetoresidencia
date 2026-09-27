@@ -97,12 +97,13 @@
 
   /** O React avisa que a URL mudou (link, voltar/avançar, navegação do app). */
   function onLocation() {
-    if (!mounted) return;
+    // Ainda carregando a coleção: a tela certa é desenhada no fim do mount
+    if (!mounted || !els.content) return;
     if (currentLocation().key !== lastRouted) route();
   }
 
   function route() {
-    if (!mounted) return;
+    if (!mounted || !els.content) return;
     const { path, query, key } = currentLocation();
     lastRouted = key;
     let match = null;
@@ -196,17 +197,30 @@
       }
     });
     const syncBtn = h('button', { type: 'button', class: 'fc-sync', onclick: () => FC.sync.now() });
-    const more = FC.ui.moreButton(
-      () => MORE.map((m) => ({ label: m.label, icon: m.icon, run: () => go(m.path) })).concat(['-', { label: 'Sincronizar agora', icon: 'refresh', run: () => FC.sync.now() }]),
-      'Mais opções dos flashcards',
-    );
+    const more = FC.ui.moreButton(() => {
+      const items = MORE.map((m) => ({ label: m.label, icon: m.icon, run: () => go(m.path) })).concat(['-', { label: 'Sincronizar agora', icon: 'refresh', run: () => FC.sync.now() }]);
+      // Alternar entre a aba do site e a versão só de flashcards, na mesma tela
+      const alt = host.alternate;
+      if (alt && host.navigate) {
+        items.push({
+          label: alt.label,
+          icon: 'arrow',
+          run: () => {
+            const { path } = currentLocation();
+            host.navigate(alt.base + (path === '/' ? '' : path) + location.search);
+          },
+        });
+      }
+      return items;
+    }, 'Mais opções dos flashcards');
     const head = h(
       'div',
       { class: 'fc-head' },
       h(
         'div',
         { class: 'fc-head-row' },
-        h('div', { class: 'fc-brand' }, h('span', { class: 'fc-brand-mark' }, icon('layers', 16)), h('span', { text: 'Flashcards' })),
+        // Na versão só de flashcards o título já está na barra do app
+        host.standalone ? h('div', { class: 'fc-spacer' }) : h('div', { class: 'fc-brand' }, h('span', { class: 'fc-brand-mark' }, icon('layers', 16)), h('span', { text: 'Flashcards' })),
         syncBtn,
         h('div', { class: 'fc-search' }, icon('search', 15), search),
         FC.ui.button('Novo card', { icon: 'plus', variant: 'primary', size: 'sm', onClick: () => FC.cardEditor.open({}) }),
@@ -385,7 +399,7 @@
   /**
    * Mostra os flashcards dentro de `el`.
    * opts: { userId, navigate(url, {replace}), registerStudy(info), onSummary(summary),
-   *         base, api, assets }
+   *         base, api, assets, standalone, alternate: {base, label} }
    */
   async function mount(el, opts) {
     if (mounted) unmount();
@@ -395,6 +409,7 @@
     ['base', 'api', 'assets'].forEach((k) => host[k] && (FC.config[k] = host[k]));
     rootEl = el;
     el.classList.add('fc-root', 'fc-embedded');
+    el.classList.toggle('fc-standalone', !!host.standalone);
     mounted = true;
     savedTitle = document.title;
     if (bootingFor !== host.userId) {
@@ -453,7 +468,7 @@
     if (savedTitle != null) document.title = savedTitle;
     if (rootEl) {
       clear(rootEl);
-      rootEl.classList.remove('fc-root', 'fc-embedded');
+      rootEl.classList.remove('fc-root', 'fc-embedded', 'fc-standalone');
     }
     mounted = false;
     app.current = null;

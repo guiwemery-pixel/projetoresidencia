@@ -21,6 +21,30 @@ guarda uma cópia para abrir na hora e funcionar sem internet.
 
 Endereços da versão anterior (`/flashcards/index.html#/decks`) levam à tela equivalente.
 
+## Versão só de flashcards (`/cards`)
+
+Os mesmos flashcards, na mesma conta, numa tela própria sem o menu do Projeto Residente — para
+quem quer abrir direto nos cards. O que você faz numa versão aparece na outra (é a mesma coleção).
+
+| | Aba do site | Só flashcards |
+|---|---|---|
+| Endereço | `/flashcards`, `/flashcards/revisar`… | `/cards`, `/cards/revisar`… |
+| Menu do site, Início, busca global | sim | não (barra própria com "Projeto Residente ↗", tema, perfil e sair) |
+| Nome e ícone ao instalar | Projeto Residente | **Flashcards** (manifesto `cards.webmanifest`, ícones `icons/flashcards-*`) |
+| Registrar estudo, sincronização, offline | sim | sim |
+
+- **Alternar:** menu ⋯ dos flashcards → "Abrir só os flashcards (app separado)" ou "Abrir dentro do
+  Projeto Residente", na mesma tela.
+- **Instalar no celular:** abra `https://<seu-site>/cards` → *Adicionar à tela inicial* (Safari:
+  compartilhar; Chrome: menu ⋮ → *Instalar app*). Fica um ícone "Flashcards" separado do
+  "Projeto Residente". O `theme-init.js` troca nome, ícone e manifesto antes de a página abrir.
+- **Login:** entrando por `/cards`, a tela de login aparece como "Entrar nos Flashcards" e volta
+  para o app depois de entrar (a mesma conta vale para os dois).
+- **Domínio próprio (opcional):** no Vercel, *Settings → Domains* → adicione outro domínio ao mesmo
+  projeto, começando por `flashcards` (ex.: `flashcards-seunome.vercel.app`). Nesse domínio, a página
+  inicial abre direto a versão só de flashcards. É outro endereço, então o login é separado (mesma
+  conta e senha).
+
 ## Estrutura
 
 ```
@@ -56,8 +80,10 @@ flashcards/                 motor da aba (JavaScript sem framework; testado à p
 └── tests/               unit/*.test.js (node --test) · e2e.mjs (Playwright) · fixtures/
 
 frontend/src/pages/Flashcards.tsx     página /flashcards/*: carrega e monta o motor
+frontend/src/pages/FlashcardsApp.tsx  versão só de flashcards (/cards): barra própria + o mesmo motor
 frontend/src/flashcards/              engine.ts (importa o motor na ordem), today.ts (números
-                                      do dia a partir do resumo), local.ts (limpeza ao sair)
+                                      do dia a partir do resumo), local.ts (limpeza ao sair),
+                                      standalone.ts (endereço /cards, domínio próprio, nome/ícone)
 frontend/public/flashcards/vendor/    pdf.js, sql.js, JSZip, fzstd, SDK da Anthropic (LICENSES.md)
 backend/src/modules/flashcards/       cópia na conta: sincronização, resumo, busca
 ```
@@ -145,6 +171,9 @@ feito offline chegar antes. Uma alteração local ainda não enviada vence a que
   imagens maiores que ~2,5 MB.
 - **Cota:** `FLASHCARDS_QUOTA_MB` por usuário (padrão 100). Passando dela, as alterações novas ficam
   no aparelho e a aba avisa.
+- **Quanto ocupa no banco** (medido, com índices): ~0,6 KB por revisão e ~1 KB por card (cards com
+  textos longos, mais). Ex.: 5 mil cards com 50 mil revisões ≈ 40 MB. O que mais pesa são imagens de
+  baralhos do Anki.
 - **Faxina:** marcas de exclusão com mais de 90 dias são descartadas pelo job diário; um aparelho
   parado há mais tempo que isso recomeça do zero na próxima abertura (nada excluído volta).
 - **Sair da conta** envia o que falta e apaga a cópia local do navegador (se algo não foi enviado,
@@ -301,7 +330,8 @@ npm run test:flashcards:e2e      # ponta a ponta no Chromium (Playwright) contra
                                  # PDF → IA (API simulada), JSON com revisões; menu do site, abas e
                                  # voltar; "Registrar estudo"; segundo aparelho baixando tudo;
                                  # offline; backup substituindo a conta; outro usuário; versão antiga;
-                                 # Início e contador; pesquisa global; tema; celular; sair
+                                 # Início e contador; versão só de flashcards (/cards, alternar,
+                                 # login voltando ao app); pesquisa global; tema; celular; sair
 node flashcards/tests/e2e.mjs <pasta>   # idem, salvando screenshots (E2E_NO_BUILD=1 pula o build)
 node flashcards/tests/fixtures/make-apkg.js   # regenera os pacotes do Anki de teste
 ```
