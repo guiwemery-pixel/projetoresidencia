@@ -80,7 +80,7 @@
           'div',
           { class: 'panel flat stack' },
           h('h3', { text: 'Revisão normal' }),
-          h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' }),
+          h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' + (counts.newHeld ? ' ' + U.plural(counts.newHeld, 'novo fica', 'novos ficam') + ' fora do dia (marcado "Nunca entrar como card novo").' : '') }),
           button(due ? 'Revisar ' + due : 'Nada devido agora', { variant: 'primary', icon: 'play', disabled: !due, onClick: () => (m.close(), review(filter, label)) }),
           counts.dueNow && counts.newToday ? button('Só revisões (' + counts.dueNow + ', sem novos)', { icon: 'undo', onClick: () => (m.close(), onlyReviews(filter, label)) }) : null,
         ),
@@ -88,7 +88,7 @@
           'div',
           { class: 'panel flat stack' },
           h('h3', { text: 'Estudar tudo' }),
-          h('p', { class: 'small ink2', text: 'Todos os ' + U.plural(studyable, 'card', 'cards') + ': novos sem o limite do dia (' + U.plural(counts.newAvailable, 'novo', 'novos') + ') e também os que ainda não venceram. As respostas entram no cronograma.' }),
+          h('p', { class: 'small ink2', text: 'Todos os ' + U.plural(studyable, 'card', 'cards') + ': novos sem o limite do dia (' + U.plural(counts.newAvailable + counts.newHeld, 'novo', 'novos') + ') e também os que ainda não venceram. As respostas entram no cronograma.' }),
           button('Estudar ' + U.plural(studyable, 'card', 'cards'), { icon: 'layers', disabled: !studyable, onClick: () => (m.close(), studyAll(filter, label)) }),
         ),
         h(

@@ -142,6 +142,22 @@
     store().emit('nodes');
   }
 
+  async function update(id, patch) {
+    const node = get(id);
+    if (!node) return;
+    Object.assign(node, patch);
+    await FC.db.put('nodes', node);
+    store().emit('nodes');
+    return node;
+  }
+
+  /** Nós cujos cards novos nunca entram nos novos do dia (marcados ou dentro de um marcado). */
+  function noNewIds() {
+    const out = new Set();
+    for (const n of store().nodes.values()) if (n.noNew) for (const id of descendantIds(n.id)) out.add(id);
+    return out;
+  }
+
   /** Move o nó (com tudo o que tem dentro) para outro pai do nível imediatamente acima. */
   async function move(id, newParentId) {
     const node = get(id);
@@ -268,6 +284,8 @@
     pathFields,
     create,
     rename,
+    update,
+    noNewIds,
     move,
     merge,
     remove,
