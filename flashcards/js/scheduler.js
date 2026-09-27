@@ -14,9 +14,10 @@
  *    "Quase" usa metade da penalidade de "Difícil" (média geométrica), então os
  *    intervalos ficam sempre em ordem: Errei < Difícil < Quase < Bom < Fácil.
  * 3. "Errei" numa revisão é um esquecimento (lapso): estabilidade pós-lapso do FSRS e o
- *    card volta em 1 min, na mesma sessão (reaprendizagem, com os mesmos passos fixos).
- *    Na reaprendizagem, "Bom" e "Fácil" devolvem o card à revisão com o intervalo do FSRS
- *    (no mínimo 1 e 2 dias), sem jogar fora o que ainda restou da memória.
+ *    card volta em 1 min, na mesma sessão. Na reaprendizagem (repetir o card depois de
+ *    errar) os intervalos são fixos:
+ *      Errei 1 min · Difícil 10 min · Quase 1 dia · Bom 2 dias · Fácil 3 dias
+ *    "Quase", "Bom" e "Fácil" devolvem o card à revisão.
  */
 (function (root, factory) {
   const util = typeof module === 'object' && module.exports ? require('./util.js') : root.FC.util;
@@ -44,6 +45,15 @@
     3: { minutes: 10 },
     4: { days: 1 },
     5: { days: 2 },
+  };
+
+  /** Intervalos exatos da reaprendizagem (repetir o card depois de errar numa revisão). */
+  const RELEARNING = {
+    1: { minutes: 1 },
+    2: { minutes: 10 },
+    3: { days: 1 },
+    4: { days: 2 },
+    5: { days: 3 },
   };
 
   // Parâmetros padrão do FSRS-5
@@ -172,16 +182,13 @@
       const prevS = card.stability;
       const last = lastReviewOf(card);
       const r = first || !prevS || last == null ? null : retrievabilityAt((now - last) / DAY, prevS);
-      let prevDays = 0;
       for (const rating of RATINGS) {
         const g = rating.grade;
         const s = first || !prevS ? initStability(g, w) : shortTermStability(prevS, g, w);
         const d = first || card.difficulty == null ? initDifficulty(g, w) : nextDifficulty(card.difficulty, g, w);
-        const step = FIRST_LEARNING[rating.value];
+        const step = (relearning ? RELEARNING : FIRST_LEARNING)[rating.value];
         const graduates = !!step.days;
-        let days = step.days;
-        if (graduates && relearning) days = Math.min(Math.max(step.days, intervalFor(s, o), prevDays + 1), o.maximumInterval);
-        if (graduates) prevDays = days;
+        const days = graduates ? Math.min(step.days, o.maximumInterval) : undefined;
         results[rating.value] = {
           rating: rating.value,
           state: graduates ? 'review' : 'learning',
@@ -333,6 +340,7 @@
     RATINGS,
     RATING_BY_VALUE,
     FIRST_LEARNING,
+    RELEARNING,
     DEFAULT_W,
     DEFAULTS,
     newState,

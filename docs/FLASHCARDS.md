@@ -212,10 +212,16 @@ retenção desejada 90%, configurável). O FSRS tem 4 notas; as 5 respostas entr
 | Fácil | Easy (4) | bônus de "Easy" |
 
 **Reaprendizagem** (depois de "Errei" numa revisão): o card entra em "Aprendendo" e volta na
-mesma sessão, com os mesmos passos fixos (Errei 1 min · Difícil 5 min · Quase 10 min). "Bom" e
-"Fácil" o devolvem à revisão com o intervalo do FSRS para a estabilidade que restou (no mínimo
-1 e 2 dias), então um card maduro esquecido não recomeça do zero. Errar de novo na
-reaprendizagem não conta outro esquecimento. Ou seja, "Errei" é sempre 1 min.
+mesma sessão. Ao repeti-lo, os intervalos são fixos:
+
+| Errei | Difícil | Quase | Bom | Fácil |
+|---|---|---|---|---|
+| 1 min | 10 min | 1 dia | 2 dias | 3 dias |
+
+"Errei" e "Difícil" o mantêm reaprendendo (volta na mesma sessão); "Quase", "Bom" e "Fácil" o
+devolvem à revisão. A estabilidade e a dificuldade FSRS continuam sendo atualizadas, então as
+revisões seguintes voltam a crescer pelo FSRS. Errar de novo na reaprendizagem não conta outro
+esquecimento. Ou seja, "Errei" é sempre 1 min.
 
 Os intervalos mostrados embaixo de cada botão são os que serão aplicados, sempre em ordem
 (Difícil < Quase < Bom < Fácil). Mesmo durante a primeira aprendizagem a estabilidade e a
@@ -225,6 +231,12 @@ normal com um estado de memória coerente. O dia de estudo vira às 4h (ajustáv
 **Revisão normal** mostra só o que o scheduler liberou: aprendizagem vencida → revisões
 vencidas (limite diário) → cards novos (limite diário), respeitando suspensões e baralhos
 arquivados/suspensos. "Z" desfaz a última resposta (restaura o card e apaga o registro).
+
+**Cards novos liberados:** no Início, embaixo de "Hoje você tem", a linha "Liberando N cards
+novos por dia · **Alterar**" abre a escolha: **Todo dia** muda o limite diário (o mesmo de
+Configurações; 0 = só revisões) e **Só hoje** libera cards a mais só neste dia de estudo (volta
+ao normal no dia seguinte). O contador do menu, a revisão e o balão do Início do site seguem o
+novo número.
 
 **Só revisões** (no Início, ao lado de "Começar revisão", e no ▶ "Como quer estudar?"): a
 revisão normal sem os cards novos — só os já estudados que venceram (e os que estão

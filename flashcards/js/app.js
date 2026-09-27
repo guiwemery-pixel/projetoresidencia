@@ -441,6 +441,7 @@
     on(document, 'keydown', globalKeys);
     on(document, 'click', onClick);
     detach.push(FC.store.on('change', FC.util.debounce(updateCounts, 300)));
+    detach.push(FC.store.on('settings', FC.util.debounce(updateCounts, 300)));
     detach.push(FC.store.on('sync', renderSync));
     const timer = setInterval(updateCounts, 60000);
     detach.push(() => clearInterval(timer));

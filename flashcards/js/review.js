@@ -35,6 +35,12 @@
     return cards.slice().sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   }
 
+  /** Cards novos liberados no dia de estudo que começa em `start`: o limite diário + os "só hoje". */
+  function newLimit(s, start) {
+    const extra = s.newExtra && s.newExtra.dayStart === start ? Math.max(0, Number(s.newExtra.count) || 0) : 0;
+    return s.newPerDay + extra;
+  }
+
   /** Resumo do dia para o dashboard / tela de início. filter igual ao de FC.cards.select. */
   function counts(filter, now = Date.now()) {
     const s = FC.settings.get();
@@ -58,7 +64,7 @@
       if (state === 'review' && c.dueDate < start) overdue++;
       else if (c.dueDate < tomorrow) dueToday++;
     }
-    const newToday = Math.max(0, Math.min(newAvailable, s.newPerDay - newDone));
+    const newToday = Math.max(0, Math.min(newAvailable, newLimit(s, start) - newDone));
     const reviewBudget = Math.max(0, s.reviewsPerDay - reviewsDone);
     return { newAvailable, newToday, newDone, reviewsDone, learning, dueToday, overdue, dueNow, reviewBudget, total: cards.length };
   }
@@ -83,7 +89,7 @@
       const today = todayCounts(this.startedAt);
       this.all = !!(opts && opts.all);
       this.noNew = !this.all && !!(opts && opts.noNew);
-      this.newLimit = this.all ? Infinity : this.noNew ? 0 : Math.max(0, s.newPerDay - today.newDone);
+      this.newLimit = this.all ? Infinity : this.noNew ? 0 : Math.max(0, newLimit(s, today.start) - today.newDone);
       this.reviewLimit = this.all ? Infinity : Math.max(0, s.reviewsPerDay - today.reviewsDone);
       this.answered = new Set(); // no modo "tudo", cada card em revisão aparece uma vez
     }
@@ -235,5 +241,5 @@
     }
   }
 
-  FC.review = { counts, todayCounts, Session, createSession: (filter, label, opts) => new Session(filter, label, opts) };
+  FC.review = { counts, todayCounts, newLimit, Session, createSession: (filter, label, opts) => new Session(filter, label, opts) };
 })(typeof self !== 'undefined' ? self : globalThis);

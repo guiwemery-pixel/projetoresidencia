@@ -437,7 +437,7 @@ try {
     await page.waitForSelector('.rating-bar');
     ivls = await page.$$eval('.rating-bar .ivl', (els) => els.map((e) => e.textContent));
     console.log('   reaprendizagem:', ivls.join(' | '));
-    assert.deepEqual(ivls.slice(0, 3), ['1 min', '5 min', '10 min']);
+    assert.deepEqual(ivls, ['1 min', '10 min', '1 dia', '2 dias', '3 dias']);
     await page.keyboard.press('4');
     await page.waitForSelector('text=Sessão concluída!');
     const after = await evalFC((id) => {
@@ -446,7 +446,7 @@ try {
     }, id);
     assert.equal(after.state, 'review');
     assert.equal(after.lapses, lapses + 1, 'um esquecimento só');
-    assert.ok(after.days >= 1);
+    assert.equal(after.days, 2, 'Bom na reaprendizagem: 2 dias');
     assert.deepEqual(after.logs, [['review', 'learning', 1], ['learning', 'review', 4]]);
     await evalFC(async (id) => {
       const c = FC.store.cards.get(id);
