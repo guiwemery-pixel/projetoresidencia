@@ -74,6 +74,13 @@
     return blocked;
   }
 
+  /** Baralhos cujos cards novos nunca entram nos novos do dia (inclusive por herança). */
+  function noNewIds() {
+    const out = new Set();
+    for (const d of all()) if (d.noNew) for (const id of descendantIds(d.id)) out.add(id);
+    return out;
+  }
+
   async function update(id, patch) {
     const deck = get(id);
     if (!deck) return;
@@ -161,5 +168,5 @@
 
   const shortName = (deck) => (deck ? deck.name.split('::').pop() : '—');
 
-  FC.decks = { DEFAULT_NAME, all, get, findByName, create, getOrCreate, ensureDefault, descendantIds, cardsIn, blockedIds, update, rename, duplicate, remove, tree, shortName, cleanName };
+  FC.decks = { DEFAULT_NAME, all, get, findByName, create, getOrCreate, ensureDefault, descendantIds, cardsIn, blockedIds, noNewIds, update, rename, duplicate, remove, tree, shortName, cleanName };
 })(typeof self !== 'undefined' ? self : globalThis);

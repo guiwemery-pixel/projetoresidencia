@@ -26,6 +26,17 @@
     return { newDone, reviewsDone, start };
   }
 
+  /**
+   * Cards novos que ficam fora dos novos do dia: baralho ou nó da hierarquia marcado
+   * "Nunca entrar como card novo" (assuntos paralelos). Entram pelo "Estudar tudo".
+   */
+  function heldBack() {
+    const decks = FC.decks.noNewIds();
+    const nodes = FC.areas.noNewIds();
+    if (!decks.size && !nodes.size) return () => false;
+    return (c) => decks.has(c.deckId) || nodes.has(c.nodeId);
+  }
+
   function newOrder(cards, now) {
     const s = FC.settings.get();
     if (s.newOrder === 'random') {
@@ -41,7 +52,9 @@
     const cards = FC.cards.select(filter || {});
     const { newDone, reviewsDone, start } = todayCounts(now);
     const tomorrow = FC.util.addDays(start, 1);
+    const held = heldBack();
     let newAvailable = 0;
+    let newHeld = 0;
     let learning = 0;
     let dueToday = 0;
     let overdue = 0;
@@ -49,7 +62,8 @@
     for (const c of cards) {
       const state = c.state || 'new';
       if (state === 'new') {
-        newAvailable++;
+        if (held(c)) newHeld++;
+        else newAvailable++;
         continue;
       }
       if (c.dueDate == null) continue;
@@ -60,7 +74,7 @@
     }
     const newToday = Math.max(0, Math.min(newAvailable, s.newPerDay - newDone));
     const reviewBudget = Math.max(0, s.reviewsPerDay - reviewsDone);
-    return { newAvailable, newToday, newDone, reviewsDone, learning, dueToday, overdue, dueNow, reviewBudget, total: cards.length };
+    return { newAvailable, newHeld, newToday, newDone, reviewsDone, learning, dueToday, overdue, dueNow, reviewBudget, total: cards.length };
   }
 
   class Session {
@@ -99,10 +113,12 @@
       const reviews = [];
       const fresh = [];
       const ahead = []; // modo "tudo": em revisão, mas ainda não venceram
+      const held = this.all ? () => false : heldBack();
       for (const c of cards) {
         const state = c.state || 'new';
-        if (state === 'new') fresh.push(c);
-        else if (state === 'learning') learning.push(c);
+        if (state === 'new') {
+          if (!held(c)) fresh.push(c);
+        } else if (state === 'learning') learning.push(c);
         else if (c.dueDate != null && c.dueDate <= now) reviews.push(c);
         else if (this.all && !this.answered.has(c.id)) ahead.push(c);
       }
@@ -235,5 +251,5 @@
     }
   }
 
-  FC.review = { counts, todayCounts, Session, createSession: (filter, label, opts) => new Session(filter, label, opts) };
+  FC.review = { counts, todayCounts, heldBack, Session, createSession: (filter, label, opts) => new Session(filter, label, opts) };
 })(typeof self !== 'undefined' ? self : globalThis);

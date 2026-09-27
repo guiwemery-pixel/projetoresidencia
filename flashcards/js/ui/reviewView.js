@@ -265,9 +265,17 @@
               icon: 'check',
               title: all ? 'Nada para revisar agora' : 'Nenhum card aqui',
               text: all
-                ? (c.newAvailable && !c.newToday ? 'O limite de cards novos de hoje já foi atingido. ' : '') + 'A revisão normal segue o agendamento. Para revisar mesmo assim, use o Quick Review (não altera o agendamento).'
+                ? (c.newHeld ? U.plural(c.newHeld, 'card novo daqui não entra', 'cards novos daqui não entram') + ' nos novos do dia (marcado "Nunca entrar como card novo"): estude-os pelo "Estudar tudo". ' : '') +
+                  (c.newAvailable && !c.newToday ? 'O limite de cards novos de hoje já foi atingido. ' : '') +
+                  'A revisão normal segue o agendamento. Para revisar mesmo assim, use o Quick Review (não altera o agendamento).'
                 : 'Crie, importe ou gere cards para começar.',
-              actions: all ? [button('Quick Review', { variant: 'primary', icon: 'zap', onClick: () => FC.launch.quick(filter, 'Quick Review · ' + label) }), link('Início', '#/', { variant: 'ghost' })] : [link('Importar', '#/importar', { variant: 'primary' }), link('Gerar com IA', '#/gerar')],
+              actions: all
+                ? [
+                    c.newHeld ? button('Estudar tudo', { variant: 'primary', icon: 'layers', onClick: () => FC.launch.studyAll(filter, label) }) : null,
+                    button('Quick Review', { variant: c.newHeld ? null : 'primary', icon: 'zap', onClick: () => FC.launch.quick(filter, 'Quick Review · ' + label) }),
+                    link('Início', '#/', { variant: 'ghost' }),
+                  ].filter(Boolean)
+                : [link('Importar', '#/importar', { variant: 'primary' }), link('Gerar com IA', '#/gerar')],
             }),
           ),
         );
