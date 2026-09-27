@@ -13,7 +13,10 @@
  *      Bom → Good (3) · Fácil → Easy (4)
  *    "Quase" usa metade da penalidade de "Difícil" (média geométrica), então os
  *    intervalos ficam sempre em ordem: Errei < Difícil < Quase < Bom < Fácil.
- * 3. "Errei" numa revisão é um esquecimento (lapso): estabilidade pós-lapso do FSRS.
+ * 3. "Errei" numa revisão é um esquecimento (lapso): estabilidade pós-lapso do FSRS e o
+ *    card volta em 1 min, na mesma sessão (reaprendizagem, com os mesmos passos fixos).
+ *    Na reaprendizagem, "Bom" e "Fácil" devolvem o card à revisão com o intervalo do FSRS
+ *    (no mínimo 1 e 2 dias), sem jogar fora o que ainda restou da memória.
  */
 (function (root, factory) {
   const util = typeof module === 'object' && module.exports ? require('./util.js') : root.FC.util;
@@ -131,6 +134,8 @@
 
   const isNew = (card) => !card.state || card.state === 'new';
   const isLearning = (card) => card.state === 'learning';
+  // Em aprendizagem depois de um esquecimento (só "Errei" numa revisão conta lapso)
+  const isRelearning = (card) => isLearning(card) && (card.lapses || 0) > 0 && card.stability > 0;
 
   function isDue(card, now) {
     if (isNew(card)) return false;
@@ -163,23 +168,27 @@
 
     if (isNew(card) || isLearning(card)) {
       const first = isNew(card);
+      const relearning = isRelearning(card);
       const prevS = card.stability;
       const last = lastReviewOf(card);
       const r = first || !prevS || last == null ? null : retrievabilityAt((now - last) / DAY, prevS);
+      let prevDays = 0;
       for (const rating of RATINGS) {
         const g = rating.grade;
         const s = first || !prevS ? initStability(g, w) : shortTermStability(prevS, g, w);
         const d = first || card.difficulty == null ? initDifficulty(g, w) : nextDifficulty(card.difficulty, g, w);
         const step = FIRST_LEARNING[rating.value];
         const graduates = !!step.days;
-        const due = graduates ? addDays(today, step.days) : now + step.minutes * MIN;
+        let days = step.days;
+        if (graduates && relearning) days = Math.min(Math.max(step.days, intervalFor(s, o), prevDays + 1), o.maximumInterval);
+        if (graduates) prevDays = days;
         results[rating.value] = {
           rating: rating.value,
           state: graduates ? 'review' : 'learning',
           stability: s,
           difficulty: d,
-          due,
-          intervalDays: graduates ? step.days : step.minutes / 1440,
+          due: graduates ? addDays(today, days) : now + step.minutes * MIN,
+          intervalDays: graduates ? days : step.minutes / 1440,
           retrievability: r,
           lapse: false,
         };
@@ -226,6 +235,9 @@
         lapse: v === 1,
       };
     }
+    // "Errei": volta em 1 min, na mesma sessão (reaprendizagem)
+    const relearn = FIRST_LEARNING[1].minutes;
+    Object.assign(results[1], { state: 'learning', due: now + relearn * MIN, intervalDays: relearn / 1440 });
     return results;
   }
 
@@ -326,6 +338,7 @@
     newState,
     isNew,
     isLearning,
+    isRelearning,
     isDue,
     retrievability,
     retrievabilityAt,

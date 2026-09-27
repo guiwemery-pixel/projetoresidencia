@@ -130,7 +130,8 @@
         kind,
         early,
         remaining: {
-          learning: learnDue.length,
+          // Inclui o que volta daqui a pouco (ex.: "Errei" → 1 min), que ainda sai nesta sessão
+          learning: learning.filter((c) => c.dueDate <= now + LEARN_AHEAD_MIN * MIN).length,
           review: Math.min(reviews.length, Math.max(0, this.reviewLimit - this.seenReviews)),
           new: Math.min(fresh.length, Math.max(0, this.newLimit - this.seenNew)),
         },

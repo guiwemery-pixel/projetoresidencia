@@ -37,27 +37,64 @@ test('depois da primeira aprendizagem: 5 intervalos calculados e em ordem', () =
   let t = c.dueDate + 5 * 3600e3;
   for (let i = 0; i < 4; i++) {
     const days = S.preview(c, t).map((x) => x.intervalDays);
-    assert.ok(days.every((d) => d >= 1), 'no mínimo 1 dia');
+    assert.equal(days[0], 1 / 1440, 'Errei: 1 min');
+    assert.ok(days.slice(1).every((d) => d >= 1), 'no mínimo 1 dia');
     for (let k = 2; k < 5; k++) assert.ok(days[k] > days[k - 1], 'Difícil < Quase < Bom < Fácil: ' + days);
-    assert.ok(days[0] <= days[1], 'Errei ≤ Difícil');
     c = apply(c, 4, t);
     t = c.dueDate + 3600e3;
   }
   assert.ok(c.scheduledDays > 10, 'intervalos crescem com acertos');
 });
 
-test('"Errei" numa revisão é esquecimento: conta lapso e reduz a estabilidade', () => {
+test('"Errei" numa revisão é esquecimento: conta lapso, reduz a estabilidade e volta em 1 min', () => {
   let c = apply(fresh(), 4, NOW);
   c = apply(c, 4, c.dueDate + 3600e3);
   const t = c.dueDate + 3600e3;
   const before = c.stability;
+  assert.equal(S.preview(c, t)[0].text, '1 min');
   const res = S.next(c, 1, t);
   assert.equal(res.card.lapses, 1);
   assert.ok(res.card.stability < before);
-  assert.ok(res.card.scheduledDays >= 1);
+  assert.equal(res.card.state, 'learning');
+  assert.equal(res.card.dueDate - t, 1 * MIN);
   assert.equal(res.log.rating, 1);
   assert.equal(res.log.stateBefore, 'review');
+  assert.equal(res.log.stateAfter, 'learning');
   assert.ok(res.card.difficulty > c.difficulty, 'errar aumenta a dificuldade FSRS');
+});
+
+test('reaprendizagem: passos fixos e volta à revisão com o intervalo do FSRS', () => {
+  // Card maduro (estabilidade de 100 dias) esquecido
+  const t = NOW;
+  const mature = Object.assign(fresh(), { state: 'review', stability: 100, difficulty: 5, lastReview: t - 100 * DAY, dueDate: t - DAY, scheduledDays: 100, repetitions: 6 });
+  let c = apply(mature, 1, t);
+  assert.ok(S.isRelearning(c));
+  let p = S.preview(c, t + MIN);
+  assert.deepEqual(p.slice(0, 3).map((x) => x.text), ['1 min', '5 min', '10 min']);
+  assert.ok(p[3].intervalDays > 1, 'Bom não joga fora o que restou da memória: ' + p[3].text);
+  assert.ok(p[4].intervalDays > p[3].intervalDays, 'Fácil > Bom');
+
+  // Errar de novo na reaprendizagem não conta outro esquecimento
+  c = apply(c, 1, t + MIN);
+  assert.equal(c.state, 'learning');
+  assert.equal(c.lapses, 1);
+  assert.equal(c.dueDate - (t + MIN), 1 * MIN);
+
+  const res = S.next(c, 4, t + 2 * MIN);
+  assert.equal(res.card.state, 'review');
+  assert.equal(res.card.lapses, 1);
+  assert.equal(res.card.scheduledDays, S.preview(c, t + 2 * MIN)[3].intervalDays);
+  assert.equal(res.card.dueDate, addDays(dayStart(t + 2 * MIN, 4), res.card.scheduledDays));
+
+  // Card recém-esquecido com pouca memória: mínimo de 1 e 2 dias
+  const weak = apply(Object.assign(fresh(), { state: 'review', stability: 0.5, difficulty: 8, lastReview: t - 3 * DAY, dueDate: t, scheduledDays: 1 }), 1, t);
+  assert.deepEqual(S.preview(weak, t + MIN).map((x) => x.text), ['1 min', '5 min', '10 min', '1 dia', '2 dias']);
+});
+
+test('primeira aprendizagem não vira reaprendizagem', () => {
+  const c = apply(fresh(), 1, NOW);
+  assert.equal(S.isRelearning(c), false);
+  assert.equal(c.lapses, 0);
 });
 
 test('determinístico: mesma entrada, mesma saída', () => {

@@ -353,7 +353,8 @@ try {
     await page.keyboard.press('Space');
     await page.waitForSelector('.rating-bar');
     const newLabels = await page.$$eval('.rating-bar .ivl', (els) => els.map((e) => e.textContent));
-    if (newLabels[0] === '1 min') assert.deepEqual(newLabels, ['1 min', '5 min', '10 min', '1 dia', '2 dias']);
+    assert.equal(newLabels[0], '1 min', '"Errei" sempre em 1 min');
+    if (newLabels[1] === '5 min') assert.deepEqual(newLabels.slice(0, 3), ['1 min', '5 min', '10 min']);
     await page.keyboard.press(key);
     await page.waitForTimeout(250);
     answered++;
@@ -397,6 +398,54 @@ try {
     assert.ok(study, 'estudo registrado com o método Flashcards: ' + JSON.stringify(studies).slice(0, 300));
     assert.equal(study.subject.name, sent.subject.name);
     assert.equal(study.durationMinutes, sent.minutes);
+  }
+
+  step('"Errei" numa revisão: o card volta em 1 min, na mesma sessão');
+  {
+    // Card em revisão, vencido, com 20 dias de estabilidade; a etiqueta isola a sessão
+    const { id, lapses } = await evalFC(async () => {
+      const c = [...FC.store.cards.values()].find((x) => /padrão-ouro/.test(x.front));
+      const now = Date.now();
+      Object.assign(c, { state: 'review', stability: 20, difficulty: 5, lastReview: now - 20 * 86400000, dueDate: now - 3600e3, scheduledDays: 20, tags: (c.tags || []).concat('teste-errei'), updatedAt: now });
+      await FC.db.put('cards', c);
+      FC.store.emit('cards', {});
+      return { id: c.id, lapses: c.lapses || 0 };
+    });
+    await go('/revisar?tag=teste-errei');
+    await page.waitForSelector('.show-answer .btn');
+    await page.keyboard.press('Space');
+    await page.waitForSelector('.rating-bar');
+    let ivls = await page.$$eval('.rating-bar .ivl', (els) => els.map((e) => e.textContent));
+    console.log('   revisão:', ivls.join(' | '));
+    assert.equal(ivls[0], '1 min');
+    assert.ok(ivls.slice(1).every((t) => /dia|mês|meses|ano/.test(t)), 'as outras respostas seguem em dias: ' + ivls);
+    await page.keyboard.press('1');
+    await page.waitForSelector('.flashcard .badge:has-text("Adiantado")');
+    assert.match(await page.textContent('.flashcard'), /padrão-ouro/, 'o mesmo card volta na mesma sessão');
+    assert.deepEqual(await page.$$eval('.queue-counts > span', (els) => els.map((e) => e.textContent)), ['0', '1', '0'], 'conta como aprendendo');
+    await shot('08b-errei-volta-em-1-min');
+    await page.keyboard.press('Space');
+    await page.waitForSelector('.rating-bar');
+    ivls = await page.$$eval('.rating-bar .ivl', (els) => els.map((e) => e.textContent));
+    console.log('   reaprendizagem:', ivls.join(' | '));
+    assert.deepEqual(ivls.slice(0, 3), ['1 min', '5 min', '10 min']);
+    await page.keyboard.press('4');
+    await page.waitForSelector('text=Sessão concluída!');
+    const after = await evalFC((id) => {
+      const c = FC.store.cards.get(id);
+      return { state: c.state, lapses: c.lapses, days: c.scheduledDays, logs: FC.store.cardLogs(id).slice(-2).map((l) => [l.stateBefore, l.stateAfter, l.rating]) };
+    }, id);
+    assert.equal(after.state, 'review');
+    assert.equal(after.lapses, lapses + 1, 'um esquecimento só');
+    assert.ok(after.days >= 1);
+    assert.deepEqual(after.logs, [['review', 'learning', 1], ['learning', 'review', 4]]);
+    await evalFC(async (id) => {
+      const c = FC.store.cards.get(id);
+      c.tags = c.tags.filter((t) => t !== 'teste-errei');
+      c.updatedAt = Date.now();
+      await FC.db.put('cards', c);
+      FC.store.emit('cards', {});
+    }, id);
   }
 
   step('Quick Review não altera o agendamento');
