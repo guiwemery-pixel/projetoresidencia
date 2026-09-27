@@ -90,7 +90,12 @@ export interface SchedulerConfig {
    * entre os pontos; fora deles vale o ponto da ponta). Aplica-se às faixas
    * ≥ 70% e à 1ª revisão (exceto a faixa mais baixa da tabela).
    */
-  questionCount: { reference: number; points: { questions: number; factor: number }[] };
+  questionCount: {
+    reference: number;
+    /** Faixa mínima sugerida [mín, máx]: seguir a sugestão nunca encurta a revisão */
+    suggestedFloor: [number, number];
+    points: { questions: number; factor: number }[];
+  };
   /**
    * Tempo de estudo do contato quando não há questões (flashcards, recall, teoria):
    * `reference` minutos valem ×1; menos encurta e mais alonga, de forma gradual.
@@ -119,7 +124,7 @@ export interface SchedulerConfig {
 }
 
 export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
-  version: 'adaptive-ladder-v3',
+  version: 'adaptive-ladder-v4',
   ladder: [3, 10, 21, 60, 90],
   ladderLabels: ['D3', 'D10', 'D21', 'D60', 'D90'],
   phases: [
@@ -245,15 +250,17 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
     ],
   },
   questionCount: {
-    reference: 20,
+    reference: 25,
+    suggestedFloor: [25, 30],
     points: [
       { questions: 0, factor: 0.6 },
-      { questions: 5, factor: 0.7 },
-      { questions: 10, factor: 0.8 },
-      { questions: 15, factor: 0.9 },
-      { questions: 20, factor: 1.0 },
-      { questions: 30, factor: 1.1 },
-      { questions: 40, factor: 1.2 },
+      { questions: 5, factor: 0.68 },
+      { questions: 10, factor: 0.75 },
+      { questions: 15, factor: 0.82 },
+      { questions: 20, factor: 0.9 },
+      { questions: 25, factor: 1.0 },
+      { questions: 35, factor: 1.1 },
+      { questions: 45, factor: 1.2 },
     ],
   },
   lateCredit: { enabled: true, minGrowth: { excelente: 1.5, bom: 1.2, medio: 1.0 } },
@@ -269,13 +276,13 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
     ['QUESTOES', 'SIMULADO'],
   ],
   theoryMethods: ['TEORIA', 'QUESTOES'],
-  newSubjectQuestions: { SMALL: [20, 25], MEDIUM: [20, 30], LARGE: [25, 35] },
+  newSubjectQuestions: { SMALL: [25, 30], MEDIUM: [25, 30], LARGE: [30, 40] },
   reviewQuestionsByStage: [
-    [20, 25],
-    [20, 30],
-    [20, 30],
-    [20, 30],
-    [25, 40],
+    [25, 30],
+    [25, 30],
+    [25, 30],
+    [25, 30],
+    [30, 40],
   ],
   sizeMultipliers: { SMALL: 0.75, MEDIUM: 1, LARGE: 1.25 },
 };

@@ -209,9 +209,10 @@ export function suggestedQuestions(
   const table = config.reviewQuestionsByStage;
   const [min, max] = table[Math.min(stage, table.length - 1)];
   const k = config.sizeMultipliers[size] ?? 1;
-  // Nunca sugere menos que a referência: seguir a sugestão não encurta o intervalo
-  const lo = Math.max(config.questionCount.reference, Math.round(min * k));
-  return { min: lo, max: Math.max(lo, Math.round(max * k)) };
+  // Nunca sugere menos que a faixa mínima (a partir da referência): seguir a sugestão não encurta o intervalo
+  const [floorMin, floorMax] = config.questionCount.suggestedFloor ?? [config.questionCount.reference, config.questionCount.reference];
+  const lo = Math.max(floorMin, config.questionCount.reference, Math.round(min * k));
+  return { min: lo, max: Math.max(lo, floorMax, Math.round(max * k)) };
 }
 
 export function suggestedMethods(stage: number, theory: boolean, config: SchedulerConfig = DEFAULT_SCHEDULER_CONFIG) {

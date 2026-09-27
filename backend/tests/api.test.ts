@@ -71,7 +71,7 @@ describe('autenticação', () => {
 });
 
 describe('fluxo principal: estudo → revisão → reagendamento', () => {
-  it('registra estudo com questões e agenda a 1ª revisão (16/20 → 20 dias)', async () => {
+  it('registra estudo com questões e agenda a 1ª revisão (20/25 → 20 dias)', async () => {
     const { agent } = await signup('Guilherme');
     const cirurgia = await firstArea(agent);
     const vias = cirurgia.children.find((c) => c.name === 'Vias Biliares')!;
@@ -82,11 +82,11 @@ describe('fluxo principal: estudo → revisão → reagendamento', () => {
       durationMinutes: 90,
       methods: ['TEORIA', 'QUESTOES'],
       quality: 4,
-      questions: { total: 20, correct: 16, board: 'ENARE' },
+      questions: { total: 25, correct: 20, board: 'ENARE' },
     });
     expect(res.status).toBe(201);
     expect(res.body.isFirstContact).toBe(true);
-    expect(res.body.session.questions).toMatchObject({ total: 20, correct: 16, wrong: 4, accuracy: 80 });
+    expect(res.body.session.questions).toMatchObject({ total: 25, correct: 20, wrong: 5, accuracy: 80 });
     expect(res.body.schedule.intervalDays).toBe(20);
     expect(res.body.schedule.dueOn).toBe(addDays(today, 20));
     expect(res.body.schedule.explanation.steps.length).toBeGreaterThan(0);
@@ -361,17 +361,17 @@ describe('mudança de versão do algoritmo', () => {
       date: addDays(today, -40),
       durationMinutes: 60,
       methods: ['QUESTOES'],
-      questions: { total: 20, correct: 16 },
+      questions: { total: 25, correct: 20 },
     });
     const subjectId = first.body.session.subject.id;
-    await agent.post('/api/studies').send({ subjectId, date: addDays(today, -20), durationMinutes: 40, methods: ['QUESTOES'], questions: { total: 20, correct: 19 } });
+    await agent.post('/api/studies').send({ subjectId, date: addDays(today, -20), durationMinutes: 40, methods: ['QUESTOES'], questions: { total: 25, correct: 24 } });
     // Como se tivesse sido calculado pela regra antiga (revisão lá na frente)
     await prisma.learningState.updateMany({ where: { userId: user.id }, data: { algorithmVersion: 'adaptive-ladder-v2' } });
     await prisma.review.updateMany({ where: { userId: user.id, status: 'PENDING' }, data: { scheduledFor: toDb(addDays(today, 150)) } });
 
     expect(await upgradeAlgorithm({ userId: user.id })).toMatchObject({ upgraded: 1, done: true });
     const pending = await prisma.review.findFirstOrThrow({ where: { userId: user.id, status: 'PENDING' } });
-    expect(fromDb(pending.scheduledFor)).toBe(addDays(today, 10)); // 95% → 30 dias depois da revisão
+    expect(fromDb(pending.scheduledFor)).toBe(addDays(today, 10)); // 96% → 30 dias depois da revisão
     expect(await upgradeAlgorithm({ userId: user.id })).toMatchObject({ upgraded: 0, done: true });
   });
 });
