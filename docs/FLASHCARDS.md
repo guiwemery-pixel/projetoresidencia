@@ -205,11 +205,17 @@ retenção desejada 90%, configurável). O FSRS tem 4 notas; as 5 respostas entr
 
 | Resposta | Nota FSRS | Efeito |
 |---|---|---|
-| Errei | Again (1) | esquecimento: conta lapso, estabilidade pós-lapso, mínimo 1 dia |
+| Errei | Again (1) | esquecimento: conta lapso, estabilidade pós-lapso e **volta em 1 min, na mesma sessão** |
 | Difícil | Hard (2) | penalidade de "Hard" |
 | Quase | 2,5 | metade da penalidade de "Hard" (média geométrica) |
 | Bom | Good (3) | — |
 | Fácil | Easy (4) | bônus de "Easy" |
+
+**Reaprendizagem** (depois de "Errei" numa revisão): o card entra em "Aprendendo" e volta na
+mesma sessão, com os mesmos passos fixos (Errei 1 min · Difícil 5 min · Quase 10 min). "Bom" e
+"Fácil" o devolvem à revisão com o intervalo do FSRS para a estabilidade que restou (no mínimo
+1 e 2 dias), então um card maduro esquecido não recomeça do zero. Errar de novo na
+reaprendizagem não conta outro esquecimento. Ou seja, "Errei" é sempre 1 min.
 
 Os intervalos mostrados embaixo de cada botão são os que serão aplicados, sempre em ordem
 (Difícil < Quase < Bom < Fácil). Mesmo durante a primeira aprendizagem a estabilidade e a
