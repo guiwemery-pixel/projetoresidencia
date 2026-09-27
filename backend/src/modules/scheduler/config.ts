@@ -68,6 +68,13 @@ export interface SchedulerConfig {
     /** Com poucas questões e sem autoavaliação, a pontuação vai no máximo até aqui */
     fewQuestionsMaxScore: number;
   };
+  /**
+   * Revisões seguintes (da 2ª em diante) feitas com questões: os dias saem do
+   * percentual de acertos (arredondado) por esta tabela, contados da revisão feita.
+   * É a tabela da planilha "Planner de Revisões". A etapa (D10, D21, D60…) continua
+   * andando pelas faixas e indica a fase (o que fazer), não mais o intervalo.
+   */
+  nextReview: { tiers: { min: number; days: number }[] };
   ease: { initial: number; min: number; max: number };
   difficultyFactors: Record<string, number>;
   trend: { window: number; threshold: number; improvingFactor: number; decliningFactor: number };
@@ -112,7 +119,7 @@ export interface SchedulerConfig {
 }
 
 export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
-  version: 'adaptive-ladder-v2',
+  version: 'adaptive-ladder-v3',
   ladder: [3, 10, 21, 60, 90],
   ladderLabels: ['D3', 'D10', 'D21', 'D60', 'D90'],
   phases: [
@@ -197,15 +204,25 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   ],
   firstReview: {
     minQuestions: 5,
+    // Tabela da planilha "Planner de Revisões" (% arredondado)
     tiers: [
       { min: 81, days: 23, stage: 2 },
       { min: 71, days: 20, stage: 2 },
-      { min: 66, days: 13, stage: 1 },
+      { min: 67, days: 13, stage: 1 },
       { min: 60, days: 10, stage: 1 },
       { min: 0, days: 3, stage: 0 },
     ],
     assumedScore: 70,
     fewQuestionsMaxScore: 80,
+  },
+  nextReview: {
+    tiers: [
+      { min: 81, days: 30 },
+      { min: 71, days: 25 },
+      { min: 67, days: 18 },
+      { min: 60, days: 13 },
+      { min: 0, days: 7 },
+    ],
   },
   ease: { initial: 1.0, min: 0.6, max: 1.4 },
   difficultyFactors: { '1': 1.1, '2': 1.0, '3': 0.85 },

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app, firstArea, resetDb, signup } from './helpers.js';
-import { todayIn, addDays } from '../src/lib/dates.js';
+import { todayIn, addDays, fromDb, toDb } from '../src/lib/dates.js';
 import { prisma } from '../src/lib/prisma.js';
-import { runMaintenance } from '../src/modules/maintenance/maintenance.service.js';
+import { runMaintenance, upgradeAlgorithm } from '../src/modules/maintenance/maintenance.service.js';
 
 const today = todayIn('America/Sao_Paulo');
 
@@ -349,6 +349,30 @@ describe('importar planilha', () => {
     const wrong = await agent.post('/api/import/preview').send({ events: [{ subject: 'X', date: today, total: 5, correct: 6 }] });
     expect(wrong.status).toBe(400);
     expect((await request(app).post('/api/import/run').send({ events })).status).toBe(401);
+  });
+});
+
+describe('mudança de versão do algoritmo', () => {
+  it('recalcula as revisões dos assuntos calculados pela versão anterior', async () => {
+    const { agent, user } = await signup('Versao');
+    const area = await firstArea(agent, 'Clínica Médica');
+    const first = await agent.post('/api/studies').send({
+      newSubject: { areaId: area.id, name: 'Asma' },
+      date: addDays(today, -40),
+      durationMinutes: 60,
+      methods: ['QUESTOES'],
+      questions: { total: 20, correct: 16 },
+    });
+    const subjectId = first.body.session.subject.id;
+    await agent.post('/api/studies').send({ subjectId, date: addDays(today, -20), durationMinutes: 40, methods: ['QUESTOES'], questions: { total: 20, correct: 19 } });
+    // Como se tivesse sido calculado pela regra antiga (revisão lá na frente)
+    await prisma.learningState.updateMany({ where: { userId: user.id }, data: { algorithmVersion: 'adaptive-ladder-v2' } });
+    await prisma.review.updateMany({ where: { userId: user.id, status: 'PENDING' }, data: { scheduledFor: toDb(addDays(today, 150)) } });
+
+    expect(await upgradeAlgorithm({ userId: user.id })).toMatchObject({ upgraded: 1, done: true });
+    const pending = await prisma.review.findFirstOrThrow({ where: { userId: user.id, status: 'PENDING' } });
+    expect(fromDb(pending.scheduledFor)).toBe(addDays(today, 10)); // 95% → 30 dias depois da revisão
+    expect(await upgradeAlgorithm({ userId: user.id })).toMatchObject({ upgraded: 0, done: true });
   });
 });
 

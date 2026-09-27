@@ -138,6 +138,15 @@ const DETAIL_LABEL: Record<string, string> = {
   evolucao: 'Evolução',
 };
 
+/** Faixas de % de uma tabela: "< 60%", "60–66%", "≥ 81%" */
+function tierRanges(tiers: { min: number }[]) {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  return sorted.map((t, i) => {
+    const next = sorted[i + 1];
+    return i === 0 ? `< ${next?.min ?? 100}%` : next ? `${t.min}–${next.min - 1}%` : `≥ ${t.min}%`;
+  });
+}
+
 /** "< 60% → 3 dias · 60–65% → 10 dias · …" */
 function firstReviewText(tiers: { min: number; days: number }[]) {
   const sorted = [...tiers].sort((a, b) => a.min - b.min);
@@ -159,6 +168,7 @@ interface AlgorithmConfig {
   bands: { key: string; min: number; label: string; rule: string; factor: number }[];
   score: { accuracyWeight: number; qualityWeight: number; qualityScores: Record<string, number>; qualityLabels: Record<string, string> };
   firstReview: { minQuestions: number; tiers: { min: number; days: number; stage: number }[] };
+  nextReview?: { tiers: { min: number; days: number }[] };
   questionCount?: { reference: number; points: { questions: number; factor: number }[] };
 }
 
@@ -325,8 +335,45 @@ export default function ProfilePage() {
       {algorithm.data && (
         <Card title="Algoritmo de revisão" subtitle={`Versão ${algorithm.data.version}. Parâmetros ajustáveis no banco sem reconstruir a aplicação.`}>
           <div className="space-y-4 text-sm">
+            {algorithm.data.nextReview && (
+              <div>
+                <p className="mb-1 font-medium text-ink">Revisões com questões</p>
+                <p className="mb-2 text-ink2">
+                  Os dias até a próxima revisão saem do percentual de acertos (arredondado), pela tabela da planilha de revisões. A 1ª conta do primeiro contato; as
+                  seguintes, da revisão feita.
+                </p>
+                <div className="-mx-4 overflow-x-auto sm:mx-0">
+                  <table className="num w-full min-w-[360px] text-left">
+                    <thead className="text-xs text-muted">
+                      <tr>
+                        <th className="px-4 py-1.5 font-medium sm:px-0">Acertos</th>
+                        <th className="py-1.5 font-medium">1ª revisão</th>
+                        <th className="py-1.5 font-medium">Revisões seguintes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const first = [...algorithm.data.firstReview.tiers].sort((a, b) => a.min - b.min);
+                        const next = [...algorithm.data.nextReview.tiers].sort((a, b) => a.min - b.min);
+                        return tierRanges(first).map((range, i) => (
+                          <tr key={range} className="border-t border-line">
+                            <td className="px-4 py-1.5 text-ink sm:px-0">{range}</td>
+                            <td className="py-1.5 text-ink2">{first[i].days} dias</td>
+                            <td className="py-1.5 text-ink2">{next[i]?.days ?? '—'} dias</td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <div>
-              <p className="mb-2 font-medium text-ink">Escada de intervalos-base</p>
+              <p className="mb-2 font-medium text-ink">Fases da escada</p>
+              <p className="mb-2 text-ink2">
+                A etapa indica o que fazer em cada revisão e anda conforme a faixa de desempenho abaixo. Nas revisões sem questões (flashcards, autoavaliação), ela também
+                dá o intervalo-base.
+              </p>
               <div className="flex flex-wrap gap-2">
                 {/* A etapa 0 (D3) é o reforço de quem vai mal, fora do caminho normal */}
                 {[{ l: 'D0', p: 'Aprender' }, ...algorithm.data.ladderLabels.slice(1).map((l, i) => ({ l, p: algorithm.data!.phases[i + 1] }))].map(
@@ -369,19 +416,19 @@ export default function ProfilePage() {
                 .reverse()
                 .map(([k, label]) => `${label} = ${algorithm.data!.score.qualityScores[k]}`)
                 .join(', ')}
-              ). A 1ª revisão sai do percentual de acertos do primeiro contato (mínimo de {algorithm.data.firstReview.minQuestions} questões):{' '}
-              {firstReviewText(algorithm.data.firstReview.tiers)}. Contato só de estudo/leitura
+              ). Com {algorithm.data.firstReview.minQuestions} questões ou mais, os dias vêm da tabela acima (1ª revisão: {firstReviewText(algorithm.data.firstReview.tiers)}).
+              Contato só de estudo/leitura
               agenda a revisão D1 no dia seguinte — com questões, flashcards, recall ou teoria — e mantém a etapa; a D1 nunca gera outra D1. Sem questões suficientes, a
               data sai da autoavaliação (mesma tabela), ajustada pelo tempo de estudo e pela dificuldade; se a revisão for só teórica (aula, vídeo,
-              leitura), o prazo é multiplicado por 0,4 e a etapa não avança. Nas faixas de crescimento, o intervalo
+              leitura), o prazo é multiplicado por 0,4 e a etapa não avança. Nas revisões sem questões e com desempenho a partir de 70%, o intervalo
               ainda é ajustado pela facilidade individual do assunto, tendência e dificuldade percebida.
             </p>
             {algorithm.data.questionCount && (
               <div>
                 <p className="mb-1 font-medium text-ink">Quantidade de questões</p>
                 <p className="mb-2 text-ink2">
-                  {algorithm.data.questionCount.reference} questões é a referência. Com desempenho a partir de 70% (e na 1ª revisão), menos questões aproximam a próxima
-                  revisão e mais questões a afastam, de forma gradual. Entre um ponto e outro o ajuste é proporcional (ex.: 7 questões → ×
+                  {algorithm.data.questionCount.reference} questões é a referência. A partir de 60% de acertos, menos questões aproximam a próxima revisão da tabela e mais
+                  questões a afastam, de forma gradual. Entre um ponto e outro o ajuste é proporcional (ex.: 7 questões → ×
                   {questionCountFactor(7, algorithm.data.questionCount).toLocaleString('pt-BR')}).
                 </p>
                 <div className="flex flex-wrap gap-2">

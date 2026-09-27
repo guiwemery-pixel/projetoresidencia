@@ -192,18 +192,18 @@ describe('escada de revisões', () => {
     return results;
   }
 
-  it('D0 → D10 → D21 → D60 → D90+, sem D1 nem D7', () => {
+  it('D0 → D10 → D21 → D60 → D90+, sem D1 nem D7 (com questões, os dias vêm das tabelas)', () => {
     const results = onSchedule(contact('2026-01-05', { methods: ['TEORIA', 'QUESTOES'], questions: q(13, 20) }), [
       { correct: 17, total: 20 },
       { correct: 17, total: 20 },
       { correct: 17, total: 20 },
       { correct: 17, total: 20 },
     ]);
+    // A etapa segue indicando a fase (consolidar, recuperação, manutenção…)
     expect(results.map((r) => r.stageLabel)).toEqual(['D10', 'D21', 'D60', 'D90', 'D90+']);
-    expect(results[0].intervalDays).toBe(10); // 65% → 10 dias
-    // Começou fraco (65%) e foi bem no D10: a facilidade menor não derruba o D21 abaixo de 21 dias
-    expect(results[1].intervalDays).toBeGreaterThanOrEqual(21);
-    expect(results[1].explanation.steps.some((s) => s.label === 'Mínimo da etapa')).toBe(true);
+    // 65% → 10 dias (1ª revisão); 85% → 30 dias em cada revisão seguinte
+    expect(results.map((r) => r.intervalDays)).toEqual([10, 30, 30, 30, 30]);
+    expect(results[1].explanation.steps.some((s) => s.label === 'Revisão pelo percentual de acertos')).toBe(true);
     expect(results.map((r) => r.suggestedMethods)).toEqual([
       ['QUESTOES', 'FLASHCARDS'],
       ['QUESTOES'],
@@ -225,14 +225,19 @@ describe('escada de revisões', () => {
     expect(reforco.intervalDays).toBeGreaterThanOrEqual(10);
   });
 
-  it('D10 e D21 podem ficar maiores com bom desempenho', () => {
-    const [d0] = onSchedule(contact('2026-01-05', { questions: q(14, 20) }), []);
-    expect(d0.stageLabel).toBe('D10');
-    expect(d0.intervalDays).toBe(13); // 70% → 13 dias
-    const [first, excelente] = onSchedule(contact('2026-01-05', { questions: q(17, 20) }), [{ correct: 20, total: 20 }]);
-    expect(first.stageLabel).toBe('D21');
-    expect(first.intervalDays).toBe(23); // 85% → 23 dias
-    expect(excelente.intervalDays).toBeGreaterThan(60);
+  it('tabelas da planilha pelo % arredondado: 1ª revisão 3/10/13/20/23 e seguintes 7/13/18/25/30 dias', () => {
+    // Sem o ajuste pela quantidade, para olhar só a tabela
+    const flat = { ...DEFAULT_SCHEDULER_CONFIG, questionCount: { reference: 20, points: [{ questions: 0, factor: 1 }] } };
+    const first = (correct: number, total: number) =>
+      scheduleNext({ state: null, contact: contact('2026-01-05', { questions: q(correct, total) }), history: [] }, flat).intervalDays;
+    // 59,5% → 60; 66,4% → 66; 66,5% → 67; 70,5% → 71; 80,5% → 81
+    expect([first(118, 200), first(119, 200), first(166, 250), first(133, 200), first(141, 200), first(161, 200)]).toEqual([3, 10, 10, 13, 20, 23]);
+    const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 10, lastContactOn: '2026-01-01', lastScore: 70, contacts: 2, lapses: 0 };
+    const next = (correct: number, total: number) =>
+      scheduleNext({ state, contact: contact('2026-01-11', { questions: q(correct, total) }), history: [], scheduledFor: '2026-01-11' }, flat).intervalDays;
+    expect([next(11, 20), next(119, 200), next(166, 250), next(133, 200), next(14, 20), next(141, 200), next(16, 20), next(161, 200), next(20, 20)]).toEqual([
+      7, 13, 13, 18, 18, 25, 25, 30, 30,
+    ]);
   });
 });
 
@@ -245,9 +250,9 @@ describe('revisão adaptativa', () => {
     ]);
     expect(d0.intervalDays).toBe(20); // 80% → 20 dias
     expect(r1.band).toBe('excelente');
-    expect(r1.intervalDays).toBeGreaterThan(60); // aumenta bastante
+    expect(r1.intervalDays).toBe(30); // 90% → 30 dias
     expect(r2.band).toBe('fraco');
-    expect(r2.intervalDays).toBeLessThan(r1.intervalDays); // perda de retenção → encurta
+    expect(r2.intervalDays).toBe(7); // 50% → 7 dias (perda de retenção)
     expect(r2.isLapse).toBe(true);
   });
 
@@ -283,12 +288,14 @@ describe('revisão adaptativa', () => {
     const dificuldade = run(10, 2); // 50% + Tive dificuldade
     const esqueci = run(4, 1); // 20% + Esqueci
 
-    expect(dominei.intervalDays).toBeGreaterThan(21); // aumenta bastante (D10 → D21)
-    expect(razoavel.intervalDays).toBeGreaterThan(10); // aumento pequeno, mantém D10
-    expect(razoavel.intervalDays).toBeLessThanOrEqual(13);
-    expect(dificuldade.intervalDays).toBe(3); // volta para o reforço D3
-    expect(dificuldade.stageLabel).toBe('D3');
-    expect(esqueci.intervalDays).toBe(3); // reforço em 3 dias + teoria
+    // Os dias saem do % de acertos pela tabela; a faixa (com a autoavaliação) move a etapa
+    expect(dominei.intervalDays).toBe(30); // 90%
+    expect(dominei.stageLabel).toBe('D21');
+    expect(razoavel.intervalDays).toBe(18); // 70%
+    expect(razoavel.stageLabel).toBe('D10'); // mantém a etapa
+    expect(dificuldade.intervalDays).toBe(7); // 50%
+    expect(dificuldade.stageLabel).toBe('D3'); // volta para a fase de reforço
+    expect(esqueci.intervalDays).toBe(7); // 20% + voltar à teoria
     expect(esqueci.suggestTheory).toBe(true);
   });
 
@@ -298,16 +305,14 @@ describe('revisão adaptativa', () => {
     expect(r.intervalDays).toBeGreaterThanOrEqual(21);
   });
 
-  it('dá crédito ao intervalo real quando a revisão foi feita atrasada e bem', () => {
+  it('dá crédito ao intervalo real quando a revisão sem questões foi feita atrasada e bem', () => {
     const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 7, lastContactOn: '2026-01-01', lastScore: 80, contacts: 1, lapses: 0 };
-    const r = scheduleNext({
-      state,
-      contact: contact('2026-02-10', { questions: q(19, 20) }),
-      history: [],
-      scheduledFor: '2026-01-08',
-    });
+    const late = (partial: Partial<ContactEvidence>) => scheduleNext({ state, contact: contact('2026-02-10', partial), history: [], scheduledFor: '2026-01-08' });
+    const r = late({ methods: ['FLASHCARDS'], quality: 5 });
     expect(r.explanation.inputs.timing).toBe('atrasada');
     expect(r.intervalDays).toBeGreaterThanOrEqual(40 * 1.5);
+    // Com questões vale a tabela (95% → 30 dias), mesmo atrasada
+    expect(late({ questions: q(19, 20) }).intervalDays).toBe(30);
   });
 
   it('revisão só de leitura: verificação no dia seguinte com mais questões, etapa mantida', () => {
@@ -354,19 +359,19 @@ describe('revisão adaptativa', () => {
       scheduleNext({ state, contact: contact('2026-01-11', { questions: q(total, total) }), history: [], scheduledFor: '2026-01-11' }).intervalDays;
     const days = [5, 7, 10, 15, 20, 25, 30, 40].map(run);
     for (let i = 1; i < days.length; i++) expect(days[i]).toBeGreaterThan(days[i - 1]);
-    expect(run(20)).toBe(26); // 100% → D21 × 1,2 (excelente) × 1,05 (facilidade)
+    expect(days).toEqual([21, 22, 24, 27, 30, 32, 33, 36]); // 100% → 30 dias × fator da quantidade
     expect(run(50)).toBe(run(40)); // acima de 40 não cresce mais
   });
 
-  it('7 questões certas + "Razoável" não levam mais para longe como 20 questões', () => {
+  it('7 questões certas + "Razoável" não vão tão longe quanto 20 questões', () => {
     const state: LearningSnapshot = { stage: 1, ease: 1, intervalDays: 10, lastContactOn: '2026-01-01', lastScore: 80, contacts: 2, lapses: 0 };
     const run = (total: number) =>
       scheduleNext({ state, contact: contact('2026-01-11', { questions: q(total, total), quality: 3 }), history: [], scheduledFor: '2026-01-11' });
     const sete = run(7);
     expect(sete.score).toBe(88.6);
-    expect(sete.intervalDays).toBe(16); // D21 (21 dias) × 0,74
-    expect(sete.explanation.steps.find((s) => s.label === 'Quantidade de questões')?.detail).toMatch(/7 questões \(referência: 20\) → ×0,74: 21 → 16 dias/);
-    expect(run(20).intervalDays).toBeGreaterThanOrEqual(21);
+    expect(sete.intervalDays).toBe(22); // 100% → 30 dias × 0,74
+    expect(sete.explanation.steps.find((s) => s.label === 'Quantidade de questões')?.detail).toMatch(/7 questões \(referência: 20\) → ×0,74: 30 → 22 dias/);
+    expect(run(20).intervalDays).toBe(30);
   });
 
   it('com poucas questões a autoavaliação só puxa a pontuação para baixo', () => {
@@ -380,13 +385,15 @@ describe('revisão adaptativa', () => {
     expect(run(5, 7).intervalDays).toBeLessThan(run(15, 21).intervalDays);
   });
 
-  it('com desempenho abaixo de 70% a quantidade não muda o intervalo', () => {
+  it('abaixo de 60% a quantidade não muda o intervalo (volta em 7 dias)', () => {
     const state: LearningSnapshot = { stage: 3, ease: 1, intervalDays: 60, lastContactOn: '2026-01-01', lastScore: 85, contacts: 4, lapses: 0 };
     const run = (correct: number, total: number) =>
       scheduleNext({ state, contact: contact('2026-03-02', { questions: q(correct, total) }), history: [], scheduledFor: '2026-03-02' });
-    expect(run(6, 10).intervalDays).toBe(21); // fraco → volta para D21
-    expect(run(24, 40).intervalDays).toBe(21);
-    expect(run(24, 40).explanation.modifiers.some((m) => m.key === 'questoes')).toBe(false);
+    expect(run(5, 10).intervalDays).toBe(7);
+    expect(run(20, 40).intervalDays).toBe(7);
+    expect(run(20, 40).explanation.modifiers.some((m) => m.key === 'questoes')).toBe(false);
+    // 60–70%: a tabela dá 13 ou 18 dias e a quantidade ajusta
+    expect(run(26, 40).intervalDays).toBe(16); // 65% → 13 × 1,2
   });
 
   it('sugestões nunca ficam abaixo da referência de 20 questões', () => {
@@ -402,8 +409,10 @@ describe('revisão adaptativa', () => {
 
   it('respeita o intervalo máximo configurado', () => {
     const state: LearningSnapshot = { stage: 8, ease: 1.4, intervalDays: 180, lastContactOn: '2026-01-01', lastScore: 95, contacts: 9, lapses: 0 };
-    const r = scheduleNext({ state, contact: contact('2026-06-30', { questions: q(20, 20), quality: 5 }), history: [] });
+    const r = scheduleNext({ state, contact: contact('2026-06-30', { methods: ['FLASHCARDS'], quality: 5 }), history: [] });
     expect(r.intervalDays).toBe(DEFAULT_SCHEDULER_CONFIG.maxIntervalDays);
+    const short = { ...DEFAULT_SCHEDULER_CONFIG, maxIntervalDays: 20 };
+    expect(scheduleNext({ state, contact: contact('2026-06-30', { questions: q(20, 20) }), history: [] }, short).intervalDays).toBe(20);
   });
 
   it('gera explicação transparente', () => {
