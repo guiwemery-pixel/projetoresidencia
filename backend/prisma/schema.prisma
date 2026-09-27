@@ -115,6 +115,8 @@ model User {
   examAttempts     ExamAttempt[]
   notifications    Notification[]
   groupsCreated    Group[]
+  studyPlans       StudyPlan[]
+  planItems        PlanItem[]
 
   @@map("users")
 }
@@ -209,6 +211,7 @@ model Subject {
   reviews          Review[]
   learningState    LearningState?
   goals            Goal[]
+  planItems        PlanItem[]
 
   @@index([userId, areaId])
   @@index([userId, name])
@@ -237,6 +240,7 @@ model StudySession {
   subject          Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   questionSessions QuestionSession[]
   completedReview  Review?           @relation("ReviewCompletion")
+  planItems        PlanItem[]
 
   @@index([userId, studiedOn])
   @@index([subjectId, studiedOn])
@@ -369,6 +373,59 @@ model Goal {
 
   @@index([userId, status])
   @@map("goals")
+}
+
+// ───────────────────────────── Cronograma ────────────────────────────
+
+enum PlanItemStatus {
+  PENDING
+  DONE
+  SKIPPED
+}
+
+// Cronograma de estudos (ex.: o de um cursinho): assuntos previstos por semana
+model StudyPlan {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  // Arquivo de onde veio (só o nome)
+  source    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items PlanItem[]
+
+  @@index([userId])
+  @@map("study_plans")
+}
+
+model PlanItem {
+  id             String         @id @default(cuid())
+  userId         String         @map("user_id")
+  planId         String         @map("plan_id")
+  subjectId      String         @map("subject_id")
+  // Início da semana prevista; atrasado quando a semana termina sem estudo
+  weekStart      DateTime       @map("week_start") @db.Date
+  // Ex.: "Módulo 01", "Módulo 02 · bônus"
+  label          String?
+  position       Int            @default(0)
+  status         PlanItemStatus @default(PENDING)
+  doneOn         DateTime?      @map("done_on") @db.Date
+  // Estudo registrado que cumpriu o item
+  studySessionId String?        @map("study_session_id")
+  // O assunto foi criado pelo cronograma (pode sair junto com ele se nunca foi estudado)
+  createdSubject Boolean        @default(false) @map("created_subject")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         StudyPlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  subject      Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  studySession StudySession? @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, weekStart])
+  @@index([planId, weekStart])
+  @@index([subjectId])
+  @@map("plan_items")
 }
 
 // ───────────────────────────── Simulados ─────────────────────────────

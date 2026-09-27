@@ -14,6 +14,8 @@ import { WhyPanel } from './WhyPanel';
 interface OpenOptions {
   subjectId?: string;
   reviewId?: string;
+  /** Assunto do cronograma que este estudo cumpre */
+  planItemId?: string;
   methods?: StudyMethod[];
 }
 
@@ -111,6 +113,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
     try {
       const res = await create.mutateAsync({
         ...(subject.kind === 'existing' ? { subjectId: subject.subject.id } : { newSubject: subject.data }),
+        planItemId: opts.planItemId ?? null,
         date,
         durationMinutes: minutes ?? 0,
         methods,
@@ -137,7 +140,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
     }
   }
 
-  const title = result ? 'Estudo registrado' : opts.reviewId ? 'Registrar revisão' : 'Registrar estudo';
+  const title = result ? 'Estudo registrado' : opts.reviewId ? 'Registrar revisão' : opts.planItemId ? 'Registrar estudo do cronograma' : 'Registrar estudo';
 
   if (result) {
     const s = result.schedule;
@@ -174,6 +177,12 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                 </p>
               )}
               {result.completedReviewId && <p className="mt-1 text-sm text-ink2">✔ A revisão pendente deste assunto foi concluída.</p>}
+              {result.planItem && (
+                <p className="mt-1 text-sm text-ink2">
+                  ✔ {result.planItem.label ? `${result.planItem.label} do cronograma` : 'Assunto do cronograma'} concluído
+                  {result.planItem.late ? ' (estava atrasado)' : ''}.
+                </p>
+              )}
             </div>
           </div>
           {s && (

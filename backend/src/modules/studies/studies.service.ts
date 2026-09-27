@@ -9,6 +9,7 @@ import { getSchedulerConfig } from '../reviews/algorithm-config.js';
 import { reviewPlan, suggestedQuestions } from '../scheduler/index.js';
 import { notify } from '../notifications/notifications.service.js';
 import { refreshGoals } from '../goals/goals.service.js';
+import { linkStudy, unlinkStudy } from '../plans/plans.service.js';
 
 export interface QuestionInput {
   total: number;
@@ -30,6 +31,7 @@ export interface StudyInput {
   difficulty?: number | null;
   notes?: string | null;
   questions?: QuestionInput | null;
+  planItemId?: string | null;
 }
 
 const DROP_ALERT_POINTS = 15;
@@ -97,7 +99,7 @@ export async function createStudy(userId: string, input: StudyInput, today: stri
   if (!subjectId) throw badRequest('Escolha ou crie um assunto');
   const subject = await findOwnedSubject(userId, subjectId);
 
-  const { session, outcome, isFirstContact } = await prisma.$transaction(async (tx) => {
+  const { session, outcome, isFirstContact, planItem } = await prisma.$transaction(async (tx) => {
     const earlier = await tx.studySession.count({ where: { userId, subjectId, studiedOn: { lt: toDb(input.date) } } });
     const session = await tx.studySession.create({
       data: {
@@ -119,7 +121,8 @@ export async function createStudy(userId: string, input: StudyInput, today: stri
     }
     if (subject.archived) await tx.subject.update({ where: { id: subject.id }, data: { archived: false } });
     const outcome = await processContact(tx, userId, subject.id, input.date);
-    return { session, outcome, isFirstContact: earlier === 0 };
+    const planItem = await linkStudy(tx, userId, subject.id, input.date, session.id, input.planItemId);
+    return { session, outcome, isFirstContact: earlier === 0, planItem };
   });
 
   await afterContact(userId, subject.id, subject.name, input.date, outcome, today);
@@ -128,6 +131,7 @@ export async function createStudy(userId: string, input: StudyInput, today: stri
     isFirstContact,
     completedReviewId: outcome.completedReviewId,
     schedule: scheduleView(outcome),
+    planItem,
   };
 }
 
@@ -165,7 +169,10 @@ export async function updateStudy(userId: string, id: string, input: Partial<Stu
         data: { subjectId: newSubjectId, doneOn: toDb(date) },
       });
     }
-    if (newSubjectId !== existing.subjectId) await rebuildSubject(tx, userId, existing.subjectId);
+    if (newSubjectId !== existing.subjectId) {
+      await unlinkStudy(tx, userId, id);
+      await rebuildSubject(tx, userId, existing.subjectId);
+    }
     return rebuildSubject(tx, userId, newSubjectId);
   });
   await refreshGoals(userId, today);
@@ -176,6 +183,7 @@ export async function deleteStudy(userId: string, id: string, today: string) {
   const existing = await prisma.studySession.findFirst({ where: { id, userId } });
   if (!existing) throw notFound('Registro de estudo não encontrado');
   await prisma.$transaction(async (tx) => {
+    await unlinkStudy(tx, userId, id);
     await tx.studySession.delete({ where: { id } });
     await rebuildSubject(tx, userId, existing.subjectId);
   });

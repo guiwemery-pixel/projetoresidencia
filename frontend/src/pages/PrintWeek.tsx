@@ -3,8 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { api } from '../api/client';
-import type { Review } from '../api/types';
+import type { PlanItem, Review } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
+import { usePlanAgenda, usePlanItems } from '../hooks/api';
 import { METHOD_LABEL, QUALITY } from '../lib/constants';
 import { addDaysStr, fmtDay, fmtShort, parseDay, plural, startOfWeekStr, todayLocal } from '../lib/format';
 import { format } from 'date-fns';
@@ -119,6 +120,33 @@ function ReviewTable({ reviews, today, carried }: { reviews: Review[]; today: st
   );
 }
 
+/** Assuntos novos do cronograma (semana da folha e, na semana atual, os atrasados). */
+function PlanSection({ items, today }: { items: PlanItem[]; today: string }) {
+  return (
+    <section className="avoid-break mt-4 overflow-hidden rounded-xl border border-[#c9dcf5]">
+      <h2 className="flex items-center justify-between bg-[#e6f0fc] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#1c5cab]">
+        <span>📚 Cronograma — assuntos novos</span>
+        <span>{plural(items.length, 'assunto', 'assuntos')}</span>
+      </h2>
+      <ul className="grid grid-cols-2 gap-x-4 px-3 py-1.5">
+        {items.map((i) => (
+          <li key={i.id} className="flex items-start gap-1.5 border-b border-[#eef0f3] py-1 last:border-0">
+            <Checkbox done={i.status === 'DONE'} />
+            <span aria-hidden className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: i.subject.area?.color ?? '#898781' }} />
+            <span className="min-w-0">
+              <span className={cx('block text-[11.5px] font-semibold leading-tight text-[#0b0b0b]', i.status === 'SKIPPED' && 'line-through')}>{i.subject.name}</span>
+              <span className="block text-[9.5px] leading-tight text-[#52514e]">
+                {i.label}
+                {i.overdue && i.weekEnd < today && <span className="text-[#b02a2a]"> · atrasado (semana de {fmtShort(i.weekStart)})</span>}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function PrintWeekPage() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
@@ -143,6 +171,14 @@ export default function PrintWeekPage() {
     queryFn: () => api.get<Review[]>('/reviews', { status: 'PENDING', to: addDaysStr(weekStart, -1) }),
     enabled: isCurrentWeek,
   });
+
+  const planWeek = usePlanItems(weekStart, weekEnd);
+  const planAgenda = usePlanAgenda();
+  const planItems = useMemo(() => {
+    const list = (planWeek.data ?? []).filter((i) => i.weekStart <= weekEnd && i.weekEnd >= weekStart && (showDone || i.status === 'PENDING'));
+    const late = isCurrentWeek ? (planAgenda.data?.overdue ?? []).filter((i) => !list.some((x) => x.id === i.id)) : [];
+    return [...late, ...list];
+  }, [planWeek.data, planAgenda.data, weekStart, weekEnd, isCurrentWeek, showDone]);
 
   const byDay = useMemo(() => {
     const map = new Map<string, Review[]>(days.map((d) => [d, []]));
@@ -250,6 +286,8 @@ export default function PrintWeekPage() {
               </div>
             </section>
           )}
+
+          {planItems.length > 0 && <PlanSection items={planItems} today={today} />}
 
           {/* Dias da semana */}
           <div className="mt-4 space-y-3">

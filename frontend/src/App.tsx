@@ -22,6 +22,8 @@ const ProfilePage = lazy(() => import('./pages/Profile'));
 const SearchPage = lazy(() => import('./pages/Search'));
 const PrintWeekPage = lazy(() => import('./pages/PrintWeek'));
 const ImportPage = lazy(() => import('./pages/Import'));
+const PlanPage = lazy(() => import('./pages/Plan'));
+const PlanImportPage = lazy(() => import('./pages/PlanImport'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -67,6 +69,8 @@ export function App() {
         {[
           ['revisoes', <ReviewsPage />],
           ['calendario', <CalendarPage />],
+          ['cronograma', <PlanPage />],
+          ['cronograma/importar', <PlanImportPage />],
           ['metricas', <MetricsPage />],
           ['estudos', <StudiesPage />],
           ['importar', <ImportPage />],

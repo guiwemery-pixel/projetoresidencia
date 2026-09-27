@@ -14,6 +14,7 @@ import { groupsRouter } from './modules/groups/groups.routes.js';
 import { areasRouter, subjectsRouter } from './modules/taxonomy/taxonomy.routes.js';
 import { studiesRouter } from './modules/studies/studies.routes.js';
 import { importRouter } from './modules/import/import.routes.js';
+import { plansRouter } from './modules/plans/plans.routes.js';
 import { reviewsRouter } from './modules/reviews/reviews.routes.js';
 import { metricsRouter } from './modules/metrics/metrics.routes.js';
 import { goalsRouter } from './modules/goals/goals.routes.js';
@@ -91,6 +92,7 @@ export function createApp() {
   api.use('/subjects', subjectsRouter);
   api.use('/studies', studiesRouter);
   api.use('/import', importRouter);
+  api.use('/plans', plansRouter);
   api.use('/reviews', reviewsRouter);
   api.use('/metrics', metricsRouter);
   api.use('/goals', goalsRouter);

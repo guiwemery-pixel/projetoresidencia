@@ -54,6 +54,7 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | `metrics` | Métricas por período, série temporal, por área e por assunto. |
 | `goals` | Metas recorrentes/personalizadas e cálculo automático do progresso. |
 | `mock-exams` / `exams` | Simulados e banco de provas (banca → prova → tentativas). Simulado e tentativa aceitam só a nota em %, sem a quantidade de questões. |
+| `plans` | Cronograma: assuntos previstos por semana (`study_plans`, `plan_items`). O navegador lê o PDF (`frontend/src/lib/plan`: texto + cor do marcador pelas instruções de desenho do pdf.js, sem renderizar) e envia a lista já com as datas. Registrar um estudo do assunto conclui o item (o indicado pelo botão, ou o pendente cuja semana começa até 7 dias depois do estudo); excluir o estudo o devolve a pendente. Item pendente depois do fim da semana = atrasado. |
 | `import` | Importação de planilhas: o navegador lê o arquivo (`frontend/src/lib/import`) e envia estudos, simulados e notas de provas em lotes pequenos (poucos assuntos por lote); o servidor grava em bloco, sem duplicar, e recalcula o histórico de cada assunto. |
 | `notifications` | Notificações idempotentes (chave de deduplicação) + job periódico. |
 | `insights` | Recomendações automáticas e comparações com o próprio histórico. |
@@ -119,6 +120,7 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 | `reviews` | Cada revisão: prevista, realizada, intervalo, desempenho, qualidade, próximo intervalo e **explicação** (comprimida, ver abaixo). |
 | `algorithm_configs` | Parâmetros do algoritmo ajustáveis sem novo deploy. |
 | `goals` | Metas (métrica, período, alvo, área/assunto opcionais, prazo, status). |
+| `study_plans`, `plan_items` | Cronograma importado e seus assuntos: semana prevista, status (pendente, estudado, pulado), estudo que concluiu e se o assunto foi criado pelo cronograma. |
 | `mock_exams`, `mock_exam_area_results` | Simulados e resultado por área. |
 | `boards`, `exams`, `exam_attempts` | Banco de provas (tentativa com questões/acertos opcionais: pode guardar só a %). |
 | `notifications` | Notificações com chave de deduplicação única por usuário. |

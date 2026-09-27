@@ -46,6 +46,8 @@ const createSchema = z
   .object({
     ...base,
     subjectId: id.optional(),
+    // Estudo feito a partir de um assunto do cronograma
+    planItemId: id.nullish(),
     newSubject: z
       .object({ areaId: id, name: z.string().trim().min(1).max(120), size: z.enum(['SMALL', 'MEDIUM', 'LARGE']).optional() })
       .optional(),

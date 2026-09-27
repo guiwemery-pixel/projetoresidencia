@@ -352,6 +352,105 @@ describe('importar planilha', () => {
   });
 });
 
+describe('cronograma', () => {
+  const week = (offset: number) => addDays(today, offset);
+  async function withPlan(name: string) {
+    const s = await signup(name);
+    const cardio = (await firstArea(s.agent, 'Clínica Médica')).children.find((c) => c.name === 'Cardiologia')!;
+    // Assunto que já existe numa subárea: o cronograma usa o mesmo
+    const existing = await s.agent.post('/api/subjects').send({ areaId: cardio.id, name: 'Insuficiência cardíaca' });
+    expect(existing.status).toBe(201);
+    const items = [
+      { subject: 'Hipertensão arterial', area: 'Clínica Médica', weekStart: week(-14), label: 'Módulo 01' },
+      { subject: 'Hérnias', area: 'Cirurgia', weekStart: week(-14), label: 'Módulo 01' },
+      { subject: 'insuficiência cardíaca', area: 'Clínica Médica', weekStart: week(-3), label: 'Módulo 02' },
+      { subject: 'Pré-natal', area: 'Ginecologia e Obstetrícia', weekStart: week(-3), label: 'Módulo 02' },
+      { subject: 'Asma', area: 'Pediatria', weekStart: week(21), label: 'Módulo 05' },
+    ];
+    const preview = await s.agent.post('/api/plans/preview').send({ name: 'Extensivo', items });
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({ items: 5, weeks: 3, newSubjects: 4, existingSubjects: 1, newAreas: [] });
+    const created = await s.agent.post('/api/plans').send({ name: 'Extensivo', source: 'cronograma.pdf', items });
+    expect(created.status).toBe(201);
+    return { ...s, planId: created.body.id as string, heartId: existing.body.id as string };
+  }
+
+  it('mostra atrasados e a semana atual; estudar conclui e excluir o estudo desfaz', async () => {
+    const { agent, planId, heartId } = await withPlan('Cronos');
+    const agenda = (await agent.get('/api/plans/agenda')).body;
+    expect(agenda.overdue.map((i: { subject: { name: string } }) => i.subject.name)).toEqual(['Hipertensão arterial', 'Hérnias']);
+    expect(agenda.thisWeek.map((i: { subject: { id: string } }) => i.subject.id)).toContain(heartId);
+    expect((await agent.get('/api/dashboard')).body.plan.overdue).toHaveLength(2);
+
+    // Pelo botão do cronograma (item atrasado)
+    const overdueItem = agenda.overdue[0];
+    const study = await agent.post('/api/studies').send({
+      subjectId: overdueItem.subject.id,
+      planItemId: overdueItem.id,
+      date: today,
+      durationMinutes: 60,
+      methods: ['TEORIA', 'QUESTOES'],
+      questions: { total: 20, correct: 16 },
+    });
+    expect(study.status).toBe(201);
+    expect(study.body.planItem).toMatchObject({ id: overdueItem.id, late: true });
+    // Registro normal do assunto da semana atual também conclui
+    const normal = await agent.post('/api/studies').send({ subjectId: heartId, date: today, durationMinutes: 30, methods: ['TEORIA'] });
+    expect(normal.body.planItem).toMatchObject({ label: 'Módulo 02', late: false });
+    // Estudo de um assunto de uma semana distante não conclui o item dela
+    expect(agenda.next).toHaveLength(0);
+    const asma = (await agent.get(`/api/plans/${planId}`)).body.items.find((i: { subject: { name: string } }) => i.subject.name === 'Asma');
+    const early = await agent.post('/api/studies').send({ subjectId: asma.subject.id, date: today, durationMinutes: 30, methods: ['TEORIA'] });
+    expect(early.body.planItem).toBeNull();
+
+    let plan = (await agent.get(`/api/plans/${planId}`)).body;
+    expect(plan).toMatchObject({ total: 5, done: 2, overdue: 1, pending: 3 });
+    expect(plan.items.find((i: { id: string }) => i.id === overdueItem.id)).toMatchObject({ status: 'DONE', doneOn: today, overdue: false });
+
+    await agent.delete(`/api/studies/${study.body.session.id}`);
+    plan = (await agent.get(`/api/plans/${planId}`)).body;
+    expect(plan.items.find((i: { id: string }) => i.id === overdueItem.id)).toMatchObject({ status: 'PENDING', doneOn: null, overdue: true });
+  });
+
+  it('adia, pula, empurra a semana e exclui o cronograma com os assuntos não estudados', async () => {
+    const { agent, planId, heartId } = await withPlan('Adiador');
+    const [first, second] = (await agent.get('/api/plans/agenda')).body.overdue;
+    const moved = await agent.patch(`/api/plans/items/${first.id}`).send({ weekStart: today });
+    expect(moved.body).toMatchObject({ weekStart: today, overdue: false, current: true });
+    const skipped = await agent.patch(`/api/plans/items/${second.id}`).send({ status: 'SKIPPED' });
+    expect(skipped.body).toMatchObject({ status: 'SKIPPED', overdue: false });
+    expect((await agent.get('/api/plans/agenda')).body.overdue).toHaveLength(0);
+
+    const shift = await agent.post(`/api/plans/${planId}/shift`).send({ days: 7 });
+    expect(shift.body.shifted).toBe(4);
+    const items = (await agent.get(`/api/plans/items?from=${addDays(today, 5)}&to=${addDays(today, 12)}`)).body as { weekStart: string }[];
+    expect(items.every((i) => i.weekStart <= addDays(today, 12))).toBe(true);
+
+    // Outra pessoa não vê nem altera
+    const other = await signup('Curioso');
+    expect((await other.agent.get(`/api/plans/${planId}`)).status).toBe(404);
+    expect((await other.agent.patch(`/api/plans/items/${first.id}`).send({ status: 'DONE' })).status).toBe(404);
+
+    await agent.post('/api/studies').send({ subjectId: first.subject.id, date: today, durationMinutes: 30, methods: ['TEORIA'] });
+    const del = await agent.delete(`/api/plans/${planId}?removeSubjects=1`);
+    expect(del.status).toBe(200);
+    // Saem os 3 assuntos criados e nunca estudados; o estudado e o que já existia ficam
+    expect(del.body.removedSubjects).toBe(3);
+    const names = ((await agent.get('/api/subjects')).body as { id: string; name: string }[]).map((s) => s.name).sort();
+    expect(names).toEqual(['Hipertensão arterial', 'Insuficiência cardíaca']);
+    expect((await agent.get('/api/plans')).body).toHaveLength(0);
+    expect(heartId).toBeTruthy();
+  });
+
+  it('apagar o progresso volta o cronograma para pendente', async () => {
+    const { agent, planId, heartId } = await withPlan('Recomeça');
+    await agent.post('/api/studies').send({ subjectId: heartId, date: today, durationMinutes: 30, methods: ['TEORIA'] });
+    expect((await agent.get(`/api/plans/${planId}`)).body.done).toBe(1);
+    await agent.post('/api/me/reset').send({ password: 'senha-segura-123' });
+    expect((await agent.get(`/api/plans/${planId}`)).body).toMatchObject({ done: 0, pending: 5 });
+  });
+});
+
 describe('apagar progresso', () => {
   async function withData(name: string) {
     const s = await signup(name);
