@@ -86,8 +86,10 @@
       classify: 'auto',
       areaName: guess || 'Geral',
       subareaName: guess === 'Cirurgia' ? 'Cirurgia Geral' : guess || 'Geral',
+      innerPath: [],
       deckMode: 'file',
       deckName: deck ? deck : plan.fileName.replace(/\.[^.]+$/, ''),
+      nestFileDecks: false,
       keepScheduling: plan.kind === 'anki' || (plan.kind === 'json' && plan.meta.includesScheduling),
       duplicates: 'skip',
       difficulty: '',
@@ -116,7 +118,8 @@
    * baralho com "::" → só grande área e subárea.
    */
   function resolvePath(row, o) {
-    const base = [o.areaName, o.subareaName];
+    // innerPath: assunto/tema escolhidos como destino (importar a partir da hierarquia)
+    const base = [o.areaName, o.subareaName].concat(o.innerPath || []);
     const fromFile = () => {
       if (row.path && row.path.length) return compact(row.path);
       if (row.explicitPath) {
@@ -143,7 +146,10 @@
   }
 
   function deckFor(row, o, plan) {
-    if (o.deckMode === 'single') return o.deckName || 'Importados';
+    if (o.deckMode === 'single') {
+      const inner = o.nestFileDecks ? row.deck || plan.meta.deck : null;
+      return (o.deckName || 'Importados') + (inner ? '::' + inner : '');
+    }
     return row.deck || plan.meta.deck || o.deckName || 'Importados';
   }
 

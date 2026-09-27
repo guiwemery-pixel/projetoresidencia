@@ -278,6 +278,13 @@ Classificação "Automático": cabeçalho do card → caminho/colunas do arquivo
 Cards repetidos (mesmo id externo ou mesmo texto) são pulados, atualizados (conteúdo +
 agendamento + revisões que faltam) ou duplicados, conforme a opção.
 
+**Destino** (na prévia, em listas de escolha): grande área e subárea entre as que você já tem
+(ou "+ Nova…"); sem palpite pelo nome do arquivo, vem marcada a grande área com mais cards.
+Baralho: o do arquivo, **um baralho que já existe** ou "+ Novo baralho…"; ao escolher um,
+dá para manter os baralhos do arquivo como sub-baralhos dele. Atalhos: **Importar deck aqui**
+no menu (⋯) de qualquer nó da hierarquia (grande área, subárea, assunto…) já abre a
+importação com esse destino, e **Importar para este baralho** no menu do baralho.
+
 ## Exportação
 
 Modelo Anki CSV (idêntico ao seu padrão: cabeçalhos, `assunto-tag`, "Pergunta:", "Resposta:",

@@ -182,6 +182,14 @@ shotPage = page;
 const go = goFor(page);
 const evalFC = (fn, arg) => page.evaluate(fn, arg);
 
+/** Escolhe na lista (grande área, subárea, baralho) ou, se não existir, cria pelo "+ Novo…". */
+async function pickOrType(sel, value) {
+  const exists = await page.$eval(sel, (el, v) => [...el.options].some((o) => o.value === v), value);
+  if (exists) return page.selectOption(sel, value);
+  await page.selectOption(sel, '__novo__');
+  await page.fill(sel + '-novo', value);
+}
+
 async function importFile(file, opts = {}) {
   await go('/importar');
   const chooser = page.waitForEvent('filechooser');
@@ -189,9 +197,10 @@ async function importFile(file, opts = {}) {
   await (await chooser).setFiles(file);
   await page.waitForSelector('text=Prévia', { timeout: 20000 });
   if (opts.area) {
-    await page.fill('input[list="imp-area"]', opts.area);
-    await page.fill('input[list="imp-sub"]', opts.subarea);
+    await pickOrType('#imp-area', opts.area);
+    await pickOrType('#imp-sub', opts.subarea);
   }
+  if (opts.deck) await pickOrType('#imp-deck', opts.deck);
   if (opts.update) await page.selectOption('select:has(option[value="update"])', 'update');
   if (opts.shot) await shot(opts.shot);
   await page.click('button:has-text("Importar ")');
@@ -909,6 +918,45 @@ try {
   await page.waitForSelector('.fc-root .page-head');
   await page.waitForTimeout(500);
   assert.match(await page.textContent('.page-head + .panel'), /cards? encontrados?/);
+
+  step('"Importar deck aqui" na hierarquia: grande área, subárea e baralho escolhidos em listas');
+  {
+    await go('/decks');
+    const row = page.locator('.tree-row', { has: page.locator('.label-btn', { hasText: /^Cirurgia$/ }) });
+    await row.locator('button[title="Mais ações"]').click();
+    await page.click('.menu [role="menuitem"]:has-text("Importar deck aqui")');
+    await page.waitForSelector('text=Os cards vão para');
+    assert.match(page.url(), /\/importar\?node=/);
+    const csv = path.join(FLASH, 'tests/.tmp-trauma.csv');
+    await writeFile(csv, '#separator:semicolon\n#html:true\nQual a primeira prioridade no ATLS?;Via aérea com proteção da coluna cervical\nQual o sinal de Kehr?;Dor no ombro esquerdo por irritação diafragmática\n');
+    const chooser = page.waitForEvent('filechooser');
+    await page.click('.dropzone');
+    await (await chooser).setFiles(csv);
+    await page.waitForSelector('text=Prévia', { timeout: 20000 });
+    // A grande área vem do menu; as outras aparecem na lista mesmo com uma já escolhida
+    assert.equal(await page.inputValue('#imp-area'), 'Cirurgia');
+    const areas = await page.$$eval('#imp-area option', (els) => els.map((e) => e.value));
+    assert.ok(areas.includes('Cirurgia') && areas.includes('Pediatria') && areas.includes('__novo__'), 'lista de grandes áreas: ' + areas);
+    const subs = await page.$$eval('#imp-sub option', (els) => els.map((e) => e.value));
+    assert.ok(subs.includes('Cirurgia Geral') && subs.includes('Digestiva'), 'subáreas da grande área: ' + subs);
+    const decks = await page.$$eval('#imp-deck option', (els) => els.map((e) => e.value));
+    assert.ok(decks.includes('Tutoria CG::Caso 11 - Câncer gástrico'), 'baralhos existentes na lista: ' + decks);
+    await pickOrType('#imp-sub', 'Trauma');
+    await pickOrType('#imp-deck', 'Tutoria CG::Caso 11 - Câncer gástrico');
+    await shot('33b-importar-deck-aqui');
+    await page.click('button:has-text("Importar ")');
+    await page.waitForSelector('text=Importação concluída', { timeout: 30000 });
+    const got = await evalFC(() =>
+      [...FC.store.cards.values()]
+        .filter((c) => /ATLS|Kehr/.test(c.front))
+        .map((c) => [FC.areas.pathNames(c.nodeId).join(' › '), FC.decks.get(c.deckId).name]),
+    );
+    assert.deepEqual(got, [
+      ['Cirurgia › Trauma', 'Tutoria CG::Caso 11 - Câncer gástrico'],
+      ['Cirurgia › Trauma', 'Tutoria CG::Caso 11 - Câncer gástrico'],
+    ]);
+    await rm(csv, { force: true });
+  }
 
   step('tema do site vale para os flashcards');
   {
