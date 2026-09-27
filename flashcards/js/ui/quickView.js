@@ -9,6 +9,10 @@
   const { h, button, icon, link } = FC.ui;
   const U = FC.util;
 
+  // Nós abertos na lista de conteúdo (vale enquanto o app estiver aberto)
+  let openNodes = null;
+  const OPEN_UP_TO = 3; // de início: abre área, subárea e assunto (temas à vista, subtemas recolhidos)
+
   // ── Seleção ────────────────────────────────────────────────────────────────
   FC.views.quickSetup = {
     title: 'Quick Review',
@@ -68,20 +72,37 @@
       };
       drawDecks(FC.decks.tree(), 0);
 
-      // Conteúdo (hierarquia até o tema)
-      const treeBox = h('div', { class: 'stack tight' });
+      // Conteúdo (hierarquia até o subtema), com recolher/expandir
+      const treeBox = h('div', { class: 'stack tight quick-tree' });
       const counts = new Map();
       for (const c of FC.store.cards.values()) for (const n of FC.areas.path(c.nodeId)) counts.set(n.id, (counts.get(n.id) || 0) + 1);
+      const kidsOf = (id) => FC.areas.children(id).filter((n) => counts.get(n.id));
+      const withKids = [...FC.store.nodes.values()].filter((n) => counts.get(n.id) && kidsOf(n.id).length);
+      if (!openNodes) openNodes = new Set(withKids.filter((n) => n.level < OPEN_UP_TO).map((n) => n.id));
+      const markedInside = (id) => kidsOf(id).reduce((sum, k) => sum + (sel.nodeIds.has(k.id) ? 1 : 0) + markedInside(k.id), 0);
       const drawNodes = (parentId, depth) => {
-        for (const n of FC.areas.children(parentId)) {
-          if (!counts.get(n.id)) continue;
-          const row = check(n.name, FC.areas.LEVEL_LABELS[n.level] + ' · ' + counts.get(n.id), (v) => (v ? sel.nodeIds.add(n.id) : sel.nodeIds.delete(n.id)));
-          row.style.paddingLeft = depth * 20 + 'px';
-          treeBox.appendChild(row);
-          if (n.level < 4) drawNodes(n.id, depth + 1);
+        for (const n of kidsOf(parentId)) {
+          const kids = n.level < 4 ? kidsOf(n.id) : [];
+          const open = kids.length && openNodes.has(n.id);
+          const twisty = kids.length
+            ? h('button', { type: 'button', class: 'twisty', 'aria-expanded': String(!!open), 'aria-label': (open ? 'Recolher ' : 'Expandir ') + n.name, onclick: () => (open ? openNodes.delete(n.id) : openNodes.add(n.id), drawTree()) }, icon('right', 16))
+            : h('span', { class: 'twisty', 'aria-hidden': 'true' });
+          const marked = !open && kids.length ? markedInside(n.id) : 0;
+          const row = check(n.name, FC.areas.LEVEL_LABELS[n.level] + ' · ' + counts.get(n.id) + (marked ? ' · ' + U.plural(marked, 'marcado dentro', 'marcados dentro') : ''), (v) => (v ? sel.nodeIds.add(n.id) : sel.nodeIds.delete(n.id)), sel.nodeIds.has(n.id));
+          treeBox.appendChild(h('div', { class: 'tree-name', style: { paddingLeft: depth * 20 + 'px' } }, twisty, row));
+          if (open) drawNodes(n.id, depth + 1);
         }
       };
-      drawNodes(null, 0);
+      const drawTree = () => {
+        FC.ui.clear(treeBox);
+        drawNodes(null, 0);
+      };
+      drawTree();
+      const setAll = (on) => {
+        openNodes = new Set(on ? withKids.map((n) => n.id) : []);
+        drawTree();
+      };
+      const treeTools = withKids.length ? h('div', { class: 'row tight' }, button('Expandir tudo', { size: 'sm', variant: 'ghost', onClick: () => setAll(true) }), button('Recolher tudo', { size: 'sm', variant: 'ghost', onClick: () => setAll(false) })) : null;
 
       // Tags
       const tagsBox = h('div', { class: 'row tight' });
@@ -110,7 +131,7 @@
           h(
             'div',
             { class: 'stack loose' },
-            h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', { text: 'Conteúdo' }), h('p', { text: 'Área, subárea, assunto ou tema' })), treeBox.childNodes.length ? treeBox : h('p', { class: 'muted', text: 'Nenhum card classificado ainda.' })),
+            h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('div', null, h('h2', { text: 'Conteúdo' }), h('p', { text: 'Área, subárea, assunto, tema ou subtema' })), treeTools), treeBox.childNodes.length ? treeBox : h('p', { class: 'muted', text: 'Nenhum card classificado ainda.' })),
             h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', { text: 'Baralhos' })), decksBox.childNodes.length ? decksBox : h('p', { class: 'muted', text: 'Nenhum baralho.' })),
             tagsBox.childNodes.length ? h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', { text: 'Tags' })), tagsBox) : null,
           ),

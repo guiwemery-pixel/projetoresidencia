@@ -461,6 +461,21 @@ try {
   const snapshot = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
   const logsBefore = await evalFC(() => FC.store.logs.length);
   await go('/quick');
+  // Subtemas começam recolhidos; a seta do tema abre e fecha
+  assert.ok(await page.$('.quick-tree .check:has-text("Epidemiologia")'), 'temas à vista');
+  assert.equal(await page.$('.quick-tree .check:has-text("Brasil (INCA)")'), null, 'subtemas recolhidos');
+  await page.click('.quick-tree button[aria-label="Expandir Epidemiologia"]');
+  assert.ok(await page.$('.quick-tree .check:has-text("Brasil (INCA)")'), 'expandiu o tema');
+  await page.click('.quick-tree .check:has-text("Brasil (INCA)")');
+  await page.click('.quick-tree button[aria-label="Recolher Epidemiologia"]');
+  assert.equal(await page.$('.quick-tree .check:has-text("Brasil (INCA)")'), null);
+  assert.match(await page.textContent('.quick-tree .tree-name:has(.check:has-text("Epidemiologia"))'), /1 marcado dentro/);
+  await page.click('button:has-text("Expandir tudo")');
+  assert.ok(await page.$('.quick-tree .check:has-text("Brasil (INCA)") input:checked'), 'a marcação continua');
+  await page.click('.quick-tree .check:has-text("Brasil (INCA)")');
+  await page.click('button:has-text("Recolher tudo")');
+  assert.equal((await page.$$('.quick-tree .tree-name')).length, await evalFC(() => new Set([...FC.store.cards.values()].map((c) => FC.areas.path(c.nodeId)[0]?.id).filter(Boolean)).size), 'só as grandes áreas');
+  await page.click('button:has-text("Expandir tudo")');
   await page.click('.check:has-text("Câncer gástrico")');
   await page.waitForTimeout(200);
   await shot('10-quick-selecao');
