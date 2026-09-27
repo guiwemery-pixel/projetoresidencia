@@ -226,6 +226,10 @@ normal com um estado de memória coerente. O dia de estudo vira às 4h (ajustáv
 vencidas (limite diário) → cards novos (limite diário), respeitando suspensões e baralhos
 arquivados/suspensos. "Z" desfaz a última resposta (restaura o card e apaga o registro).
 
+**Só revisões** (no Início, ao lado de "Começar revisão", e no ▶ "Como quer estudar?"): a
+revisão normal sem os cards novos — só os já estudados que venceram (e os que estão
+aprendendo). Os novos do dia continuam disponíveis para depois.
+
 **Estudar tudo** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
 todos os cards da seleção numa sessão que **entra no cronograma** — novos sem o limite do dia,
 revisões vencidas sem o limite diário e, por fim, as que ainda não venceram (cada uma uma vez,

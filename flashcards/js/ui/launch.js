@@ -27,14 +27,19 @@
     return f;
   }
 
-  /** opts.all: "estudar tudo" — todos os cards da seleção, e as respostas entram no agendamento. */
+  /**
+   * opts.all: "estudar tudo" — todos os cards da seleção, e as respostas entram no agendamento.
+   * opts.noNew: "só revisões" — só os cards já estudados que venceram, sem novos.
+   */
   function review(filter, label, opts) {
     let qs = filterToQuery(filter || {}, label);
     if (opts && opts.all) qs += (qs ? '&' : '') + 'todos=1';
+    else if (opts && opts.noNew) qs += (qs ? '&' : '') + 'novos=0';
     FC.app.go('/revisar' + (qs ? '?' + qs : ''));
   }
 
   const studyAll = (filter, label) => review(filter, 'Estudar tudo · ' + label, { all: true });
+  const onlyReviews = (filter, label) => review(filter, label ? 'Só revisões · ' + label : 'Só revisões', { noNew: true });
 
   function order(cards, mode) {
     if (mode === 'hierarchy') return cards.slice().sort((a, b) => FC.areas.breadcrumb(a.nodeId).localeCompare(FC.areas.breadcrumb(b.nodeId), 'pt-BR') || a.createdAt - b.createdAt);
@@ -77,6 +82,7 @@
           h('h3', { text: 'Revisão normal' }),
           h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' }),
           button(due ? 'Revisar ' + due : 'Nada devido agora', { variant: 'primary', icon: 'play', disabled: !due, onClick: () => (m.close(), review(filter, label)) }),
+          counts.dueNow && counts.newToday ? button('Só revisões (' + counts.dueNow + ', sem novos)', { icon: 'undo', onClick: () => (m.close(), onlyReviews(filter, label)) }) : null,
         ),
         h(
           'div',
@@ -97,5 +103,5 @@
     const m = FC.ui.modal({ title: 'Como quer estudar?', content });
   }
 
-  FC.launch = { filterToQuery, queryToFilter, review, studyAll, quick, quickIds, choose, order };
+  FC.launch = { filterToQuery, queryToFilter, review, studyAll, onlyReviews, quick, quickIds, choose, order };
 })(typeof self !== 'undefined' ? self : globalThis);

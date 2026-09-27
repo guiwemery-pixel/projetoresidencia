@@ -105,7 +105,7 @@
       const filter = FC.launch.queryToFilter(query);
       const label = query.label || 'Revisão de hoje';
       ctx.setTitle(label);
-      const session = FC.review.createSession(filter, label, { all: query.todos === '1' });
+      const session = FC.review.createSession(filter, label, { all: query.todos === '1', noNew: query.novos === '0' });
       let current = null;
       let revealed = false;
       let busy = false;
