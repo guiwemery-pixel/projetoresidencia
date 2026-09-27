@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { startFakeS3 } from '../../backend/tests/fake-s3.mjs';
 
 const require = createRequire(import.meta.url);
 const FLASH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,11 +75,13 @@ const freePort = () =>
 if (!process.env.E2E_NO_BUILD) execSync('npm run build -w frontend', { cwd: ROOT, stdio: 'inherit' });
 execSync('npx prisma migrate deploy', { cwd: BACKEND, stdio: 'ignore', env: { ...process.env, DATABASE_URL: TEST_DB } });
 
+// Imagens dos flashcards num "Cloudflare R2" falso (API S3 em memória)
+const s3 = await startFakeS3();
 const PORT = await freePort();
 const BASE = 'http://127.0.0.1:' + PORT;
 const server = spawn('npx', ['tsx', 'src/index.ts'], {
   cwd: BACKEND,
-  env: { ...process.env, DATABASE_URL: TEST_DB, PORT: String(PORT), NODE_ENV: 'test', NOTIFICATIONS_JOB_MINUTES: '0', FRONTEND_DIST: path.join(ROOT, 'frontend/dist'), CORS_ORIGIN: BASE, COOKIE_SECURE: 'false' },
+  env: { ...process.env, ...s3.env, DATABASE_URL: TEST_DB, PORT: String(PORT), NODE_ENV: 'test', NOTIFICATIONS_JOB_MINUTES: '0', FRONTEND_DIST: path.join(ROOT, 'frontend/dist'), CORS_ORIGIN: BASE, COOKIE_SECURE: 'false' },
   stdio: ['ignore', 'pipe', 'pipe'],
   detached: true, // encerra o grupo inteiro (npx → tsx → node) no fim
 });
@@ -607,10 +610,24 @@ try {
       return [c.state, c.dueDate, c.stability, c.difficulty, c.lapses, FC.store.cardLogs(c.id).length, FC.areas.pathNames(c.nodeId).join(' › ')];
     });
   assert.deepEqual(await sample(B.page), await sample(page), 'agendamento FSRS e histórico iguais');
-  const media = await B.page.evaluate(async () => (await FC.db.getAll('media')).map((m) => m.name));
-  assert.equal(media.length, 1, 'a imagem do Anki também chegou');
-  assert.equal(await B.page.evaluate(() => FC.settings.getApiKey()), '', 'a chave da IA não sai do aparelho');
+  // A imagem do Anki foi para o R2: a conta guarda só nome, tipo e tamanho, e o aparelho baixa o arquivo
+  assert.equal(s3.objects.size, 1, 'imagem no bucket');
+  const pulledMedia = (await (await B.context.request.get(BASE + '/api/flashcards/sync?since=0')).json()).records.filter((r) => r.s === 'media');
+  assert.deepEqual(pulledMedia.map((r) => [r.id, r.d.stored, r.d.type, 'dataUrl' in r.d]), [['figura.png', 'r2', 'image/png', false]]);
+  await B.page.evaluate(() => FC.sync.downloadMissingMedia());
+  const media = await B.page.evaluate(async () => (await FC.db.getAll('media')).map((m) => ({ name: m.name, size: m.blob ? m.blob.size : 0, type: m.blob && m.blob.type })));
+  const onA_media = await page.evaluate(async () => (await FC.db.getAll('media')).map((m) => ({ name: m.name, size: m.blob.size, type: m.blob.type })));
+  assert.deepEqual(media, onA_media, 'a mesma imagem, baixada do R2');
+  const imgSrc = await B.page.evaluate(async () => {
+    const card = [...FC.store.cards.values()].find((c) => /figura\.png/.test(c.front));
+    const el = FC.ui.rich(card.front);
+    for (let i = 0; i < 40 && !el.querySelector('img').src; i++) await new Promise((r) => setTimeout(r, 50));
+    return el.querySelector('img').src.slice(0, 22);
+  });
+  assert.equal(imgSrc, 'data:image/png;base64,', 'a imagem aparece no card');
+  assert.equal((await B.context.request.get(BASE + '/api/flashcards/media?name=figura.png')).status(), 200);
   await shot('29-segundo-aparelho', {}, B.page);
+  assert.equal(await B.page.evaluate(() => FC.settings.getApiKey()), '', 'a chave da IA não sai do aparelho');
 
   step('revisão feita no outro aparelho aparece aqui');
   await answerOne(B.page, '3');
@@ -677,6 +694,7 @@ try {
     await evalFC((json) => FC.backup.restore(JSON.parse(json)), backup);
     assert.deepEqual(await counts(page), beforeBackup);
     assert.equal(await evalFC(() => FC.sync.status().pending), 0, 'restauração enviada para a conta');
+    assert.equal(s3.objects.size, 1, 'a imagem do backup voltou para o bucket (e as antigas foram apagadas)');
     await pull(B.page);
     assert.deepEqual(await counts(B.page), beforeBackup, 'o outro aparelho recomeçou com a coleção restaurada');
   }
@@ -897,6 +915,7 @@ try {
   process.exitCode = 1;
 } finally {
   await browser.close();
+  await s3.close();
   try {
     process.kill(-server.pid, 'SIGTERM');
   } catch (e) {

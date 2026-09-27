@@ -153,6 +153,7 @@ transação, então são confirmadas em ordem — um aparelho nunca pula uma gra
 | `POST /api/flashcards/reset` | Substitui a coleção (restaurar backup, apagar tudo): apaga e muda o **epoch**. |
 | `GET/PUT /api/flashcards/summary` | Resumo do dia calculado pelo app (widget do Início e menu). |
 | `GET /api/flashcards/search?q=` | Busca nos cards (também incluída em `/api/search`). |
+| `GET /api/flashcards/media?name=` | Arquivo de uma imagem do próprio usuário (do R2 ou do banco). Sempre como download opaco (`application/octet-stream`, `Content-Disposition: attachment`, CSP `sandbox`), para uma imagem SVG de um baralho nunca rodar como página do site. |
 
 **No aparelho** (`database.js` + `sync.js`): um banco local por usuário (`fc:<id>`). Cada gravação
 registra, na mesma transação, a chave na fila `outbox`; 1,5 s depois o app envia (sempre o conteúdo
@@ -169,6 +170,13 @@ feito offline chegar antes. Uma alteração local ainda não enviada vence a que
   o aparelho descarta a cópia local e baixa a da conta.
 - **Fica só no aparelho:** o PDF original (o texto extraído vai para a conta), a chave de API da IA e
   imagens maiores que ~2,5 MB.
+- **Imagens (Anki):** sobem como data URL. Com o **Cloudflare R2** configurado (`R2_*`, ver
+  [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md#imagens-dos-flashcards-no-cloudflare-r2-opcional)) o servidor
+  grava o arquivo no bucket (chave `flashcards/<usuário>/<hash do nome>`) e o registro fica só com
+  `{name, type, size, stored: 'r2'}`; os outros aparelhos baixam o arquivo por `/api/flashcards/media`
+  — em segundo plano depois de sincronizar (para funcionar offline) ou na hora de mostrar. Cota
+  própria (`FLASHCARDS_MEDIA_QUOTA_MB`, padrão 1024). Sem R2, a imagem fica dentro do registro no
+  banco, como antes; imagens antigas vão para o R2 pelo job diário, sem mudar de versão.
 - **Cota:** `FLASHCARDS_QUOTA_MB` por usuário (padrão 100). Passando dela, as alterações novas ficam
   no aparelho e a aba avisa.
 - **Quanto ocupa no banco** (medido, com índices): ~0,6 KB por revisão e ~1 KB por card (cards com

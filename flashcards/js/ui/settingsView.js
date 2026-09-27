@@ -139,6 +139,7 @@
             FC.ui.tile('Sincronização', statusText, st.lastSyncAt ? 'última: ' + U.formatDateTime(st.lastSyncAt) : null),
             FC.ui.tile('Alterações a enviar', U.fmtNum(st.pending || 0), st.pending ? 'guardadas neste aparelho' : 'tudo na conta'),
             FC.ui.tile('Espaço na conta', st.bytes != null ? mb(st.bytes) : '—', st.quota ? 'de ' + Math.round(st.quota / 1048576) + ' MB' : null),
+            st.mediaStore === 'r2' ? FC.ui.tile('Imagens (Cloudflare R2)', st.mediaBytes != null ? mb(st.mediaBytes) : '—', st.mediaQuota ? 'de ' + Math.round(st.mediaQuota / 1048576) + ' MB' : null) : null,
           ),
           st.error && st.status !== 'ok' ? FC.ui.callout(st.error, st.status === 'offline' ? 'warn' : 'crit') : null,
           h(

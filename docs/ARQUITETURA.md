@@ -58,7 +58,7 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | `notifications` | Notificações idempotentes (chave de deduplicação) + job periódico. |
 | `insights` | Recomendações automáticas e comparações com o próprio histórico. |
 | `search` / `dashboard` | Pesquisa global e agregação da tela inicial. |
-| `flashcards` | Cópia na conta dos dados da aba Flashcards: sincronização entre aparelhos (envio/recebimento por versão, com trava por usuário), cota, resumo do dia para o Início e busca nos cards. As regras (FSRS, análises) rodam no navegador — ver [`FLASHCARDS.md`](FLASHCARDS.md). |
+| `flashcards` | Cópia na conta dos dados da aba Flashcards: sincronização entre aparelhos (envio/recebimento por versão, com trava por usuário), cota, resumo do dia para o Início, busca nos cards e imagens no Cloudflare R2 (opcional, `media.ts`). As regras (FSRS, análises) rodam no navegador — ver [`FLASHCARDS.md`](FLASHCARDS.md). |
 
 ### O motor de revisão é isolado
 

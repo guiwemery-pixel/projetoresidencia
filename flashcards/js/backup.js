@@ -33,7 +33,11 @@
     const stores = {};
     for (const name of STORES) stores[name] = await FC.db.getAll(name);
     const media = [];
-    for (const m of await FC.db.getAll('media')) media.push({ name: m.name, dataUrl: await blobToDataUrl(m.blob) });
+    for (const m of await FC.db.getAll('media')) {
+      // Imagem guardada só na conta (R2) e ainda não baixada: baixa para o backup
+      const blob = m.blob || (FC.sync ? await FC.sync.mediaBlob(m.name).catch(() => null) : null);
+      if (blob) media.push({ name: m.name, dataUrl: await blobToDataUrl(blob) });
+    }
     stores.media = media;
     const data = {
       format: FC.formats.FORMAT_BACKUP,

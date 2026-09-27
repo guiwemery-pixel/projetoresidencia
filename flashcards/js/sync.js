@@ -39,6 +39,9 @@
     pending: 0,
     bytes: null,
     quota: null,
+    mediaStore: null, // 'r2' (imagens no Cloudflare R2) | 'db' (dentro do banco)
+    mediaBytes: null,
+    mediaQuota: null,
     progress: null, // {received, total} na primeira carga
   };
 
@@ -77,14 +80,18 @@
   }
 
   function setUsage(r) {
-    if (r && typeof r.bytes === 'number') state.bytes = r.bytes;
-    if (r && typeof r.quota === 'number') state.quota = r.quota;
+    if (!r) return;
+    for (const k of ['bytes', 'quota', 'mediaBytes', 'mediaQuota']) if (typeof r[k] === 'number') state[k] = r[k];
+    if (r.mediaStore) state.mediaStore = r.mediaStore;
   }
 
-  // ── Conversão (imagens viajam como data URL) ───────────────────────────────
+  // ── Imagens ────────────────────────────────────────────────────────────────
+  // Sobem como data URL. Com o R2 configurado no servidor, voltam dos outros aparelhos
+  // só com nome, tipo e tamanho ({stored: 'r2'}): o arquivo é baixado pela API depois
+  // (em segundo plano, para funcionar offline, ou na hora de mostrar).
   async function serialize(store, value) {
     if (store !== 'media') return value;
-    if (!value.blob) return null;
+    if (!value.blob) return null; // ainda não baixada: já está na conta
     const dataUrl = await FC.backup.blobToDataUrl(value.blob);
     return dataUrl.length > MEDIA_MAX_CHARS ? null : { name: value.name, dataUrl };
   }
@@ -92,11 +99,51 @@
   function deserialize(store, d) {
     if (d == null) return null;
     if (store !== 'media') return d;
+    if (d.stored === 'r2') return { name: d.name, blob: null, type: d.type || '', size: d.size || 0, remote: true };
     try {
       return { name: d.name, blob: FC.backup.dataUrlToBlob(d.dataUrl) };
     } catch (e) {
       return null;
     }
+  }
+
+  const downloads = new Map();
+
+  /** Arquivo de uma imagem: do aparelho ou, se ainda não baixada, da conta. */
+  function mediaBlob(name) {
+    if (downloads.has(name)) return downloads.get(name);
+    const p = (async () => {
+      const row = await FC.db.get('media', name);
+      if (!row) return null;
+      if (row.blob) return row.blob;
+      if (!row.remote) return null;
+      const res = await fetch(apiBase + '/media?name=' + encodeURIComponent(name), { credentials: 'include' });
+      if (!res.ok) return null;
+      const blob = new Blob([await res.arrayBuffer()], { type: row.type || 'application/octet-stream' });
+      // Pode ter sido excluída ou trocada enquanto baixava
+      const now = await FC.db.get('media', name);
+      if (now && !now.blob) await FC.db.putQuiet('media', Object.assign({}, now, { blob }));
+      return blob;
+    })().finally(() => downloads.delete(name));
+    downloads.set(name, p);
+    return p;
+  }
+
+  let fetchingAll = null;
+
+  /** Baixa em segundo plano as imagens que faltam neste aparelho (para usar offline). */
+  function downloadMissingMedia() {
+    if (fetchingAll) return fetchingAll;
+    fetchingAll = (async () => {
+      const missing = (await FC.db.getAll('media')).filter((m) => !m.blob && m.remote).map((m) => m.name);
+      let next = 0;
+      const worker = async () => {
+        while (next < missing.length) await mediaBlob(missing[next++]).catch(() => null);
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      return missing.length;
+    })().finally(() => (fetchingAll = null));
+    return fetchingAll;
   }
 
   // ── Envio ──────────────────────────────────────────────────────────────────
@@ -187,6 +234,14 @@
       if (total == null && r.total != null) total = r.total;
       const changes = [];
       for (const x of r.records) if (FC.db.synced(x.s, x.id) && FC.db.STORES[x.s]) changes.push({ store: x.s, id: x.id, value: deserialize(x.s, x.d) });
+      // Imagem que já está no aparelho continua (a conta só avisou que ela foi para o R2)
+      const remote = changes.filter((c) => c.store === 'media' && c.value && c.value.remote);
+      if (remote.length) {
+        const local = await FC.db.getMany('media', remote.map((c) => c.id));
+        remote.forEach((c, i) => {
+          if (local[i] && local[i].blob) c.value = Object.assign({}, c.value, { blob: local[i].blob });
+        });
+      }
       const done = await FC.db.applyRemote(changes);
       await FC.db.setMeta({ cursor: r.cursor, epoch: r.epoch });
       cursor = r.cursor;
@@ -258,6 +313,7 @@
           if (replaced || canApplyNow() || !FC.store.loaded) {
             await applyToMemory(await pullAll(opts.onProgress));
             pullWaiting = false;
+            downloadMissingMedia().catch(() => {});
           } else pullWaiting = true;
         }
         state.status = 'ok';
@@ -351,6 +407,8 @@
     flush,
     resume,
     now: (opts) => run(Object.assign({ pull: true }, opts || {})),
+    mediaBlob,
+    downloadMissingMedia,
     push: () => run({ pull: false }),
     status: () => Object.assign({}, state),
   };

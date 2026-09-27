@@ -16,6 +16,16 @@ const schema = z.object({
   CRON_SECRET: z.string().optional(),
   // Espaço máximo dos flashcards de cada usuário na conta (MB)
   FLASHCARDS_QUOTA_MB: z.coerce.number().positive().default(100),
+  // Imagens dos flashcards no Cloudflare R2 (opcional: sem isto elas ficam no banco).
+  // Lidas em modules/flashcards/media.ts; declaradas aqui para aparecerem na validação.
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  // Outro serviço compatível com S3 (testes, MinIO). Padrão: https://<conta>.r2.cloudflarestorage.com
+  R2_ENDPOINT: z.string().optional(),
+  // Espaço máximo das imagens de cada usuário no R2 (MB)
+  FLASHCARDS_MEDIA_QUOTA_MB: z.coerce.number().positive().default(1024),
 });
 
 // Aceita a URL do banco com outros nomes/prefixos (integrações do Vercel)

@@ -508,6 +508,8 @@ model FlashcardSync {
   epoch         Int       @default(1)
   // Tamanho dos documentos guardados, para a cota por usuário
   bytes         BigInt    @default(0)
+  // Imagens guardadas fora do banco (Cloudflare R2), para a cota de imagens
+  mediaBytes    BigInt    @default(0) @map("media_bytes")
   // Exclusões com versão até aqui já foram descartadas pela faxina
   purgedVersion BigInt    @default(0) @map("purged_version")
   // Resumo do dia calculado pelo app (widget da página inicial e menu)
@@ -527,6 +529,8 @@ model FlashcardRecord {
   // JSON do registro, como o app gravou; null = excluído (avisa os outros aparelhos)
   data      String?
   size      Int      @default(0)
+  // Bytes do arquivo guardado fora do banco (imagem no R2); 0 = tudo está em `data`
+  blobSize  Int      @default(0) @map("blob_size")
   version   BigInt
   updatedAt DateTime @default(now()) @map("updated_at")
 

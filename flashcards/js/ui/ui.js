@@ -378,13 +378,14 @@
   async function mediaUrl(name) {
     if (mediaCache.has(name)) return mediaCache.get(name);
     const p = (async () => {
-      const row = await FC.db.get('media', name);
-      if (!row || !row.blob) return null;
+      // Imagem ainda não baixada da conta (R2): baixa agora
+      const blob = FC.sync ? await FC.sync.mediaBlob(name).catch(() => null) : ((await FC.db.get('media', name)) || {}).blob;
+      if (!blob) return null;
       return new Promise((resolve) => {
         const r = new FileReader();
         r.onload = () => resolve(r.result);
         r.onerror = () => resolve(null);
-        r.readAsDataURL(row.blob);
+        r.readAsDataURL(blob);
       });
     })();
     mediaCache.set(name, p);

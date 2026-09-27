@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { currentUser } from '../../middleware/auth.js';
 import { parse } from '../../lib/validation.js';
-import { SYNC_STORES, getSummary, pull, pullBody, push, resetCollection, saveSummary, searchCards, status } from './flashcards.service.js';
+import { SYNC_STORES, getSummary, pull, pullBody, push, readMedia, resetCollection, saveSummary, searchCards, status } from './flashcards.service.js';
 
 export const flashcardsRouter = Router();
 
@@ -51,6 +51,26 @@ flashcardsRouter.put('/summary', async (req, res) => {
   }
   await saveSummary(currentUser(req).id, summary);
   res.status(204).end();
+});
+
+/**
+ * Uma imagem do próprio usuário. Sempre como download "opaco" (o app monta a imagem
+ * com o tipo que guardou): um SVG enviado num baralho nunca roda como página do site.
+ */
+flashcardsRouter.get('/media', async (req, res) => {
+  const { name } = parse(z.object({ name: z.string().min(1).max(200) }), req.query);
+  const bytes = await readMedia(currentUser(req).id, name);
+  if (!bytes) {
+    res.status(404).json({ error: 'Imagem não encontrada' });
+    return;
+  }
+  res.set({
+    'Content-Type': 'application/octet-stream',
+    'Content-Disposition': 'attachment',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Cache-Control': 'private, max-age=86400',
+  });
+  res.send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
 });
 
 flashcardsRouter.get('/search', async (req, res) => {

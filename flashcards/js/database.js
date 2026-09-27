@@ -223,6 +223,14 @@
     );
   }
 
+  /** Grava só neste aparelho, sem ir para a fila de envio (ex.: imagem baixada da conta). */
+  async function putQuiet(storeName, value) {
+    const db = await open();
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(value);
+    return txDone(tx);
+  }
+
   async function getKV(key, fallback) {
     const row = await get('kv', key);
     return row ? row.value : fallback;
@@ -399,6 +407,7 @@
     get,
     getMany,
     put,
+    putQuiet,
     bulkPut,
     del,
     bulkDel,
