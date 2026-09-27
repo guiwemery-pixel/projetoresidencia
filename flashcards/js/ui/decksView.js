@@ -121,11 +121,15 @@
     });
   }
 
+  // "Nova subárea", "Novo assunto", "Novo tema"…
+  const newChildLabel = (node) => (node.level + 1 <= 1 ? 'Nova ' : 'Novo ') + FC.areas.LEVEL_LABELS[node.level + 1].toLowerCase();
+
   function nodeMenu(node, refresh) {
     return [
       { label: 'Ver cards', icon: 'list', run: () => FC.app.go('/decks/no/' + node.id) },
       { label: 'Novo card aqui', icon: 'plus', run: () => FC.cardEditor.open({ nodeId: node.id }) },
-      node.level < 4 ? { label: 'Novo ' + FC.areas.LEVEL_LABELS[node.level + 1].toLowerCase() + ' aqui', icon: 'folder', run: async () => { const name = await FC.ui.prompt('Novo ' + FC.areas.LEVEL_LABELS[node.level + 1].toLowerCase(), ''); if (name) { await FC.areas.create(name, node.id); expanded.add(node.id); refresh(); } } } : null,
+      { label: 'Importar deck aqui', icon: 'upload', run: () => FC.app.go('/importar?node=' + node.id) },
+      node.level < 4 ? { label: newChildLabel(node) + ' aqui', icon: 'folder', run: async () => { const name = await FC.ui.prompt(newChildLabel(node), ''); if (name) { await FC.areas.create(name, node.id); expanded.add(node.id); refresh(); } } } : null,
       { label: 'Desempenho e pontos fracos', icon: 'target', run: () => FC.app.go('/pontos-fracos/' + node.id) },
       { label: 'Exportar', icon: 'download', run: () => FC.importView.exportDialog({ nodeId: node.id, label: node.name }) },
       '-',

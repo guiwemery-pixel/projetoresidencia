@@ -165,10 +165,140 @@
     );
   }
 
-  function importPanel(presetDeckId) {
+  const NEW = '__novo__';
+  const FILE_DECK = '__arquivo__';
+  const STANDARD_AREAS = ['Clínica Médica', 'Cirurgia', 'Pediatria', 'Ginecologia e Obstetrícia', 'Medicina Preventiva'];
+
+  /**
+   * Lista de escolha com "+ Novo…" no fim, que abre um campo de texto. (Um <input list>
+   * já preenchido só sugere o que combina com o texto, então a lista some.)
+   * fill(groups, atual) com groups: [{label, values: [{value, label}]}]
+   */
+  function pickOrType(id, newLabel, onChange) {
+    const sel = h('select', { class: 'select', id });
+    const input = h('input', { class: 'input hidden', id: id + '-novo', placeholder: 'Nome', 'aria-label': newLabel.replace(/[+…]/g, '').trim() });
+    const value = () => (sel.value === NEW ? input.value.trim() : sel.value);
+    function fill(groups, current) {
+      FC.ui.clear(sel);
+      let found = false;
+      for (const g of groups) {
+        if (!g.values.length) continue;
+        const parent = g.label ? h('optgroup', { label: g.label }) : sel;
+        for (const v of g.values) {
+          parent.appendChild(h('option', { value: v.value, text: v.label || v.value }));
+          if (v.value === current) found = true;
+        }
+        if (parent !== sel) sel.appendChild(parent);
+      }
+      sel.appendChild(h('option', { value: NEW, text: newLabel }));
+      sel.value = found ? current : NEW;
+      if (!found) input.value = current || '';
+      input.classList.toggle('hidden', found);
+    }
+    sel.addEventListener('change', () => {
+      const typing = sel.value === NEW;
+      input.classList.toggle('hidden', !typing);
+      if (typing) {
+        input.value = '';
+        input.focus();
+      }
+      onChange(value());
+    });
+    input.addEventListener('input', () => onChange(value()));
+    return { sel, input, fill, value, el: h('div', { class: 'stack tight' }, sel, input) };
+  }
+
+  const pickField = (label, id, content) => h('div', { class: 'field' }, h('label', { for: id, text: label }), content);
+
+  const cardCount = (node) => FC.areas.cardsIn(node.id).length;
+  const busiest = (nodes) => nodes.slice().sort((a, b) => cardCount(b) - cardCount(a))[0] || null;
+
+  /** Grande área, subárea (e, vindo do menu da hierarquia, o nó de dentro) para a importação. */
+  function destinationFields(o, presetNodeId, onChange) {
+    const rootByName = (name) => FC.areas.roots().find((n) => n.name === name) || null;
+    const preset = presetNodeId ? FC.areas.path(presetNodeId) : [];
+    if (preset.length) {
+      o.areaName = preset[0].name;
+      if (preset[1]) o.subareaName = preset[1].name;
+      o.innerPath = preset.slice(2).map((n) => n.name);
+    } else {
+      const roots = FC.areas.roots();
+      // Sem palpite pelo nome do arquivo, vai para a grande área que você mais usa
+      if (!rootByName(o.areaName) && o.areaName === 'Geral' && roots.length) o.areaName = busiest(roots).name;
+      o.innerPath = [];
+    }
+    const inner = h('p', { class: 'hint' });
+    const drawInner = () => {
+      FC.ui.clear(inner);
+      if (!o.innerPath.length) return inner.classList.add('hidden');
+      inner.classList.remove('hidden');
+      FC.ui.add(inner, 'Dentro de: ', h('strong', { text: o.innerPath.join(' › ') }), ' ', h('button', { type: 'button', class: 'link-btn tiny', text: 'tirar', onclick: () => ((o.innerPath = []), drawInner(), onChange()) }));
+    };
+    const sub = pickOrType('imp-sub', '+ Nova subárea…', (v) => {
+      o.subareaName = v;
+      o.innerPath = [];
+      drawInner();
+      onChange();
+    });
+    const fillSub = (keep) => {
+      const root = rootByName(o.areaName);
+      const children = root ? FC.areas.children(root.id) : [];
+      let current = o.subareaName;
+      if (!keep && !children.some((n) => n.name === current)) current = children.length ? busiest(children).name : o.subareaName || 'Geral';
+      sub.fill([{ values: children.map((n) => ({ value: n.name })) }], current);
+      o.subareaName = sub.value();
+    };
+    const area = pickOrType('imp-area', '+ Nova grande área…', (v) => {
+      o.areaName = v;
+      o.innerPath = [];
+      fillSub(false);
+      drawInner();
+      onChange();
+    });
+    const roots = FC.areas.roots().map((n) => n.name);
+    const others = STANDARD_AREAS.concat(o.areaName && o.areaName !== 'Geral' ? [o.areaName] : []).filter((n, i, a) => !roots.includes(n) && a.indexOf(n) === i);
+    area.fill(
+      [
+        { label: roots.length ? 'Suas grandes áreas' : '', values: roots.map((n) => ({ value: n })) },
+        { label: 'Criar', values: others.map((n) => ({ value: n, label: n + ' (nova)' })) },
+      ],
+      o.areaName,
+    );
+    fillSub(!!preset[1]);
+    drawInner();
+    return h('div', { class: 'stack tight' }, h('div', { class: 'form-grid' }, pickField('Grande área', 'imp-area', area.el), pickField('Subárea', 'imp-sub', sub.el)), inner);
+  }
+
+  /** Baralho: o do arquivo, um que já existe ou um novo (e se os do arquivo viram sub-baralhos). */
+  function deckFields(plan, o, fileDeck, onChange) {
+    const hasFileDecks = plan.rows.some((r) => r.deck) || !!plan.meta.deck;
+    const nest = FC.ui.checkbox('Manter os baralhos do arquivo como sub-baralhos', o.nestFileDecks, (v) => ((o.nestFileDecks = v), onChange()));
+    const toggleNest = () => nest.el.classList.toggle('hidden', o.deckMode !== 'single' || !hasFileDecks);
+    const pick = pickOrType('imp-deck', '+ Novo baralho…', (v) => {
+      o.deckMode = v === FILE_DECK ? 'file' : 'single';
+      if (v !== FILE_DECK) o.deckName = v;
+      toggleNest();
+      onChange();
+    });
+    pick.fill(
+      [
+        { values: [{ value: FILE_DECK, label: 'Usar o baralho do arquivo' + (fileDeck ? ' ("' + fileDeck.split('::').join(' › ') + '")' : '') }] },
+        { label: 'Colocar todos em', values: FC.decks.all().map((d) => ({ value: d.name, label: d.name.split('::').join(' › ') })) },
+      ],
+      o.deckMode === 'single' ? o.deckName : FILE_DECK,
+    );
+    toggleNest();
+    return h('div', { class: 'stack tight' }, pick.el, nest.el);
+  }
+
+  function importPanel(preset) {
+    preset = preset || {};
+    const presetDeckId = preset.deckId || null;
     const box = h('div', { class: 'stack' });
+    const presetNode = preset.nodeId ? FC.areas.get(preset.nodeId) : null;
     const start = () => {
       FC.ui.add(FC.ui.clear(box), 
+        presetNode ? FC.ui.callout(h('span', null, 'Os cards vão para ', h('strong', { text: FC.areas.pathNames(presetNode.id).join(' › ') }), ' (dá para mudar depois de escolher o arquivo).'), null, 'folder') : null,
         FC.ui.dropzone({
           label: 'Arraste um arquivo ou clique para escolher',
           hint: 'CSV/TXT (modelo Anki ou planilha) · JSON (baralho com revisões) · .apkg/.colpkg do Anki (com agendamento e histórico) · backup',
@@ -228,12 +358,6 @@
       }
       const preview = h('div');
       const refresh = () => FC.ui.clear(preview).appendChild(previewTable(plan, o));
-      const areaList = [...new Set([...FC.store.nodes.values()].filter((n) => n.level === 0).map((n) => n.name).concat(['Clínica Médica', 'Cirurgia', 'Pediatria', 'Ginecologia e Obstetrícia', 'Medicina Preventiva']))];
-      const subList = [...new Set([...FC.store.nodes.values()].filter((n) => n.level === 1).map((n) => n.name))];
-      const areaIn = h('input', { class: 'input', value: o.areaName, list: 'imp-area' });
-      const subIn = h('input', { class: 'input', value: o.subareaName, list: 'imp-sub' });
-      areaIn.addEventListener('input', () => ((o.areaName = areaIn.value.trim()), refresh()));
-      subIn.addEventListener('input', () => ((o.subareaName = subIn.value.trim()), refresh()));
       const classify = FC.ui.select(
         [
           { value: 'auto', label: 'Automático (cabeçalho do card → tags hierárquicas → nomes dos baralhos)' },
@@ -246,17 +370,10 @@
         o.classify,
         { onchange: (e) => ((o.classify = e.target.value), baseFields.classList.toggle('hidden', o.classify === 'deck'), refresh()) },
       );
-      const baseFields = h('div', { class: 'form-grid' + (o.classify === 'deck' ? ' hidden' : '') }, h('div', { class: 'field' }, h('label', { class: 'label', text: 'Grande área' }), areaIn, FC.ui.datalist('imp-area', areaList)), h('div', { class: 'field' }, h('label', { class: 'label', text: 'Subárea' }), subIn, FC.ui.datalist('imp-sub', subList)));
-      const deckMode = FC.ui.select(
-        [
-          { value: 'file', label: 'Usar o baralho do arquivo' + (FC.importer.preview(plan, Object.assign({}, o, { deckMode: 'file' }), 1)[0] ? ' ("' + FC.importer.preview(plan, Object.assign({}, o, { deckMode: 'file' }), 1)[0].deck + '")' : '') },
-          { value: 'single', label: 'Colocar todos em um baralho:' },
-        ],
-        o.deckMode,
-        { onchange: (e) => ((o.deckMode = e.target.value), deckName.classList.toggle('hidden', o.deckMode !== 'single'), refresh()) },
-      );
-      const deckName = h('input', { class: 'input' + (o.deckMode === 'single' ? '' : ' hidden'), value: o.deckName, list: 'imp-decks' });
-      deckName.addEventListener('input', () => ((o.deckName = deckName.value.trim()), refresh()));
+      const baseFields = destinationFields(o, presetNode ? presetNode.id : null, refresh);
+      baseFields.classList.toggle('hidden', o.classify === 'deck');
+      const fileDeck = FC.importer.preview(plan, Object.assign({}, o, { deckMode: 'file' }), 1)[0];
+      const deckBox = deckFields(plan, o, fileDeck ? fileDeck.deck : '', refresh);
       const hasSched = plan.kind === 'anki' || (plan.kind === 'json' && plan.meta.includesScheduling);
       const keep = FC.ui.checkbox('Manter as informações de revisão (agendamento, estabilidade/dificuldade, esquecimentos, suspensão e histórico)', o.keepScheduling, (v) => ((o.keepScheduling = v), refresh()));
       const dup = FC.ui.select(
@@ -283,6 +400,7 @@
       const importBtn = button('Importar ' + U.plural(plan.rows.length, 'card', 'cards'), { variant: 'primary', size: 'lg', icon: 'upload' });
       importBtn.addEventListener('click', async () => {
         if (o.classify !== 'deck' && (!o.areaName || !o.subareaName)) return FC.ui.toast('Informe a grande área e a subárea.', { error: true });
+        if (o.deckMode === 'single' && !o.deckName) return FC.ui.toast('Informe o nome do baralho.', { error: true });
         FC.ui.busy(importBtn, true, 'Importando…');
         try {
           const res = await FC.importer.execute(plan, o, (msg) => (importBtn.querySelector('span:last-child').textContent = msg));
@@ -309,7 +427,7 @@
         h('div', { class: 'row between' }, h('div', { class: 'row' }, icon(plan.kind === 'anki' ? 'layers' : 'file', 20), h('div', null, h('strong', { text: plan.fileName }), h('div', { class: 'small muted', text: KIND_TEXT[plan.kind] + ' · ' + planSummary(plan) }))), button('Trocar arquivo', { size: 'sm', variant: 'ghost', onClick: start })),
         plan.warnings && plan.warnings.length ? FC.ui.callout(plan.warnings.slice(0, 3).join(' · ') + (plan.warnings.length > 3 ? ' …' : ''), 'warn') : null,
         hasSched ? keep.el : null,
-        h('div', { class: 'form-grid' }, FC.ui.field('Classificação', classify), h('div', { class: 'field' }, h('label', { class: 'label', text: 'Baralho' }), deckMode, deckName, FC.ui.datalist('imp-decks', FC.decks.all().map((d) => d.name)))),
+        h('div', { class: 'form-grid' }, FC.ui.field('Classificação', classify), pickField('Baralho', 'imp-deck', deckBox)),
         baseFields,
         h('div', { class: 'form-grid' }, FC.ui.field('Cards repetidos', dup), FC.ui.field('Dificuldade estimada (opcional)', diff), h('div', { class: 'full' }, FC.ui.field('Tags extras (opcional)', extraTags))),
         h('h3', { text: 'Prévia' }),
@@ -372,7 +490,7 @@
         h(
           'div',
           { class: 'stack loose' },
-          h('section', { class: 'panel stack' }, h('h2', { text: 'Importar' }), importPanel(query.deck || null)),
+          h('section', { class: 'panel stack' }, h('h2', { text: 'Importar' }), importPanel({ deckId: query.deck || null, nodeId: query.node || null })),
           h(
             'section',
             { class: 'panel stack' },
