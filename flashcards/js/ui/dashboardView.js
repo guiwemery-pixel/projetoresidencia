@@ -109,8 +109,11 @@
       ),
     );
     const actions = h('div', { class: 'row' });
-    if (total) actions.appendChild(button('Começar revisão', { variant: 'primary', size: 'lg', icon: 'play', onClick: () => FC.app.go('/revisar') }));
-    else {
+    if (total) {
+      actions.appendChild(button('Começar revisão', { variant: 'primary', size: 'lg', icon: 'play', onClick: () => FC.app.go('/revisar') }));
+      // Só os cards já estudados que venceram, deixando os novos para depois
+      if (c.dueNow && c.newToday) actions.appendChild(button('Só revisões (' + U.fmtNum(c.dueNow) + ')', { icon: 'undo', title: 'Revisar só os cards já estudados, sem os novos', onClick: () => FC.launch.onlyReviews({}) }));
+    } else {
       const next = nextDue();
       actions.appendChild(FC.ui.callout(next ? 'Tudo em dia! Próxima revisão ' + next : 'Tudo em dia!', 'good', 'check'));
     }

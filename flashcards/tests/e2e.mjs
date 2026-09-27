@@ -494,6 +494,32 @@ try {
     await go('/');
   }
 
+  step('"Só revisões": só os cards já estudados que venceram, sem os novos');
+  {
+    // Um card já estudado vencido (só na memória; volta ao que era no fim)
+    const snap = await evalFC(() => {
+      const c = [...FC.store.cards.values()].find((x) => /padrão-ouro/.test(x.front));
+      const s = FC.cards.schedulingSnapshot(c);
+      const now = Date.now();
+      Object.assign(c, { state: 'review', stability: 5, difficulty: 5, lastReview: now - 6 * 86400000, dueDate: now - 3600e3, scheduledDays: 5 });
+      return { id: c.id, s };
+    });
+    await go('/');
+    const c = await evalFC(() => FC.review.counts({}));
+    assert.ok(c.dueNow >= 1 && c.newToday >= 1, 'há revisões e novos hoje: ' + JSON.stringify(c));
+    await page.click('.today-main button:has-text("Só revisões")');
+    await page.waitForSelector('.show-answer .btn');
+    assert.match(await page.textContent('.study-top .title'), /Só revisões/);
+    const q = await page.$$eval('.queue-counts > span', (els) => els.map((e) => Number(e.textContent.replace(/\D/g, ''))));
+    assert.equal(q[0], 0, 'sem novos');
+    // + os que estão aprendendo e voltam em até 20 min
+    assert.ok(q[1] + q[2] >= c.dueNow, 'todas as revisões vencidas: ' + JSON.stringify(q));
+    assert.notEqual(await page.$$eval('.queue-counts > span', (els) => els.findIndex((e) => e.classList.contains('current'))), 0, 'o card na tela não é novo');
+    await shot('08d-so-revisoes');
+    await evalFC((x) => Object.assign(FC.cards.get(x.id), x.s), snap);
+    await go('/');
+  }
+
   step('Quick Review não altera o agendamento');
   const snapshot = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
   const logsBefore = await evalFC(() => FC.store.logs.length);

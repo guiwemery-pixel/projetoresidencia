@@ -64,7 +64,10 @@
   }
 
   class Session {
-    /** opts.all: estudar tudo da seleção — novos sem limite diário e também os que ainda não venceram. */
+    /**
+     * opts.all: estudar tudo da seleção — novos sem limite diário e também os que ainda não venceram.
+     * opts.noNew: só revisões — cards já estudados que venceram, sem novos.
+     */
     constructor(filter, label, opts) {
       this.id = uid('s');
       this.filter = filter || {};
@@ -79,7 +82,8 @@
       const s = FC.settings.get();
       const today = todayCounts(this.startedAt);
       this.all = !!(opts && opts.all);
-      this.newLimit = this.all ? Infinity : Math.max(0, s.newPerDay - today.newDone);
+      this.noNew = !this.all && !!(opts && opts.noNew);
+      this.newLimit = this.all ? Infinity : this.noNew ? 0 : Math.max(0, s.newPerDay - today.newDone);
       this.reviewLimit = this.all ? Infinity : Math.max(0, s.reviewsPerDay - today.reviewsDone);
       this.answered = new Set(); // no modo "tudo", cada card em revisão aparece uma vez
     }
