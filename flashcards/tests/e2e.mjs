@@ -457,10 +457,62 @@ try {
     }, id);
   }
 
+  step('"Estudar tudo": todos os cards da seleção, sem o limite do dia, e as respostas entram no cronograma');
+  {
+    const prevNew = await evalFC(() => FC.settings.get().newPerDay);
+    await evalFC(() => FC.settings.set({ newPerDay: 1 }));
+    const nodeId = await evalFC(() => [...FC.store.nodes.values()].find((n) => n.name === 'Câncer gástrico').id);
+    const exp = await evalFC((id) => {
+      const cards = FC.cards.select({ nodeIds: [id] });
+      return { total: cards.length, fresh: cards.filter((c) => (c.state || 'new') === 'new').length, review: cards.filter((c) => c.state === 'review').length, normal: FC.review.counts({ nodeIds: [id] }).newToday };
+    }, nodeId);
+    assert.ok(exp.fresh > 1 && exp.normal <= 1, 'a revisão normal libera no máximo 1 novo hoje: ' + JSON.stringify(exp));
+    await evalFC((id) => FC.launch.choose({ nodeIds: [id] }, 'Câncer gástrico'), nodeId);
+    await page.waitForSelector('.modal h3:has-text("Estudar tudo")');
+    await shot('08c-como-quer-estudar');
+    await page.click('.modal button:has-text("Estudar ' + exp.total + ' cards")');
+    await page.waitForSelector('.show-answer .btn');
+    assert.match(await page.textContent('.study-top .title'), /Estudar tudo · Câncer gástrico/);
+    const q = await page.$$eval('.queue-counts > span', (els) => els.map((e) => Number(e.textContent.replace(/\D/g, ''))));
+    assert.equal(q[0], exp.fresh, 'todos os novos liberados');
+    assert.equal(q[2], exp.review, 'todas as revisões, vencidas ou não');
+    const logs0 = await evalFC(() => FC.store.logs.length);
+    await page.keyboard.press('Space');
+    await page.waitForSelector('.rating-bar');
+    await page.keyboard.press('4');
+    await page.waitForTimeout(300);
+    assert.equal(await evalFC(() => FC.store.logs.length), logs0 + 1, 'a resposta vai para o histórico e o agendamento');
+    await page.keyboard.press('z');
+    await page.waitForTimeout(300);
+    assert.equal(await evalFC(() => FC.store.logs.length), logs0);
+    await evalFC((n) => FC.settings.set({ newPerDay: n }), prevNew);
+    await go('/decks');
+    const row = page.locator('.tree-row', { has: page.locator('.label-btn', { hasText: /^Cirurgia$/ }) });
+    await row.locator('button[title="Mais ações"]').click();
+    assert.ok(await page.$('.menu [role="menuitem"]:has-text("Estudar tudo (entra no cronograma)")'), 'também no menu da hierarquia');
+    await page.keyboard.press('Escape');
+    await go('/');
+  }
+
   step('Quick Review não altera o agendamento');
   const snapshot = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
   const logsBefore = await evalFC(() => FC.store.logs.length);
   await go('/quick');
+  // Subtemas começam recolhidos; a seta do tema abre e fecha
+  assert.ok(await page.$('.quick-tree .check:has-text("Epidemiologia")'), 'temas à vista');
+  assert.equal(await page.$('.quick-tree .check:has-text("Brasil (INCA)")'), null, 'subtemas recolhidos');
+  await page.click('.quick-tree button[aria-label="Expandir Epidemiologia"]');
+  assert.ok(await page.$('.quick-tree .check:has-text("Brasil (INCA)")'), 'expandiu o tema');
+  await page.click('.quick-tree .check:has-text("Brasil (INCA)")');
+  await page.click('.quick-tree button[aria-label="Recolher Epidemiologia"]');
+  assert.equal(await page.$('.quick-tree .check:has-text("Brasil (INCA)")'), null);
+  assert.match(await page.textContent('.quick-tree .tree-name:has(.check:has-text("Epidemiologia"))'), /1 marcado dentro/);
+  await page.click('button:has-text("Expandir tudo")');
+  assert.ok(await page.$('.quick-tree .check:has-text("Brasil (INCA)") input:checked'), 'a marcação continua');
+  await page.click('.quick-tree .check:has-text("Brasil (INCA)")');
+  await page.click('button:has-text("Recolher tudo")');
+  assert.equal((await page.$$('.quick-tree .tree-name')).length, await evalFC(() => new Set([...FC.store.cards.values()].map((c) => FC.areas.path(c.nodeId)[0]?.id).filter(Boolean)).size), 'só as grandes áreas');
+  await page.click('button:has-text("Expandir tudo")');
   await page.click('.check:has-text("Câncer gástrico")');
   await page.waitForTimeout(200);
   await shot('10-quick-selecao');

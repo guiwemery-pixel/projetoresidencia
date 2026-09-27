@@ -64,7 +64,8 @@
   }
 
   class Session {
-    constructor(filter, label) {
+    /** opts.all: estudar tudo da seleção — novos sem limite diário e também os que ainda não venceram. */
+    constructor(filter, label, opts) {
       this.id = uid('s');
       this.filter = filter || {};
       this.label = label || 'Revisão';
@@ -77,8 +78,10 @@
       this.shownAt = null;
       const s = FC.settings.get();
       const today = todayCounts(this.startedAt);
-      this.newLimit = Math.max(0, s.newPerDay - today.newDone);
-      this.reviewLimit = Math.max(0, s.reviewsPerDay - today.reviewsDone);
+      this.all = !!(opts && opts.all);
+      this.newLimit = this.all ? Infinity : Math.max(0, s.newPerDay - today.newDone);
+      this.reviewLimit = this.all ? Infinity : Math.max(0, s.reviewsPerDay - today.reviewsDone);
+      this.answered = new Set(); // no modo "tudo", cada card em revisão aparece uma vez
     }
 
     pool() {
@@ -91,12 +94,15 @@
       const learning = [];
       const reviews = [];
       const fresh = [];
+      const ahead = []; // modo "tudo": em revisão, mas ainda não venceram
       for (const c of cards) {
         const state = c.state || 'new';
         if (state === 'new') fresh.push(c);
         else if (state === 'learning') learning.push(c);
         else if (c.dueDate != null && c.dueDate <= now) reviews.push(c);
+        else if (this.all && !this.answered.has(c.id)) ahead.push(c);
       }
+      ahead.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
       learning.sort((a, b) => a.dueDate - b.dueDate);
       const learnDue = learning.filter((c) => c.dueDate <= now);
       let pick = null;
@@ -112,6 +118,10 @@
       } else if (fresh.length && this.seenNew < this.newLimit) {
         pick = newOrder(fresh, now)[0];
         kind = 'new';
+      } else if (ahead.length) {
+        pick = ahead[0];
+        kind = 'review';
+        early = 'ahead';
       } else if (learning.length) {
         const soonest = learning[0];
         if (soonest.dueDate - now <= LEARN_AHEAD_MIN * MIN) {
@@ -132,7 +142,7 @@
         remaining: {
           // Inclui o que volta daqui a pouco (ex.: "Errei" → 1 min), que ainda sai nesta sessão
           learning: learning.filter((c) => c.dueDate <= now + LEARN_AHEAD_MIN * MIN).length,
-          review: Math.min(reviews.length, Math.max(0, this.reviewLimit - this.seenReviews)),
+          review: Math.min(reviews.length, Math.max(0, this.reviewLimit - this.seenReviews)) + ahead.length,
           new: Math.min(fresh.length, Math.max(0, this.newLimit - this.seenNew)),
         },
       };
@@ -158,6 +168,7 @@
       store().addLogs([log]);
       if (log.stateBefore === 'new') this.seenNew++;
       else if (log.stateBefore === 'review') this.seenReviews++;
+      this.answered.add(cardId);
       const correct = rating >= 2;
       this.answers.push({ cardId, rating, date: now, correct, logId: log.id, responseTime: log.responseTime, nodeId: card.nodeId });
       this.undoStack.push({ cardId, snapshot, logId: log.id, stateBefore: log.stateBefore });
@@ -177,6 +188,7 @@
       await FC.db.batch([card ? { store: 'cards', put: card } : null, { store: 'logs', del: last.logId }].filter(Boolean));
       store().removeLogs([last.logId]);
       this.answers = this.answers.filter((a) => a.logId !== last.logId);
+      if (!this.answers.some((a) => a.cardId === last.cardId)) this.answered.delete(last.cardId);
       if (last.stateBefore === 'new') this.seenNew = Math.max(0, this.seenNew - 1);
       else if (last.stateBefore === 'review') this.seenReviews = Math.max(0, this.seenReviews - 1);
       store().emit('review', { cardId: last.cardId, undo: true });
@@ -219,5 +231,5 @@
     }
   }
 
-  FC.review = { counts, todayCounts, Session, createSession: (filter, label) => new Session(filter, label) };
+  FC.review = { counts, todayCounts, Session, createSession: (filter, label, opts) => new Session(filter, label, opts) };
 })(typeof self !== 'undefined' ? self : globalThis);
