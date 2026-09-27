@@ -100,7 +100,8 @@
   }
 
   .fc-root .tree-stats .bar-cell,
-  .fc-root .tree-stats .hide-sm {
+  .fc-root .tree-stats .hide-sm,
+  .fc-root .panel-head .hide-sm {
     display: none;
   }
 

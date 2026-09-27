@@ -90,6 +90,8 @@
   // só com nome, tipo e tamanho ({stored: 'r2'}): o arquivo é baixado pela API depois
   // (em segundo plano, para funcionar offline, ou na hora de mostrar).
   async function serialize(store, value) {
+    // Card dos cards da plataforma ainda com o texto original: vai sem frente/verso
+    if (store === 'cards') return FC.platform ? FC.platform.slim(value) : value;
     if (store !== 'media') return value;
     if (!value.blob) return null; // ainda não baixada: já está na conta
     const dataUrl = await FC.backup.blobToDataUrl(value.blob);
@@ -242,6 +244,8 @@
           if (local[i] && local[i].blob) c.value = Object.assign({}, c.value, { blob: local[i].blob });
         });
       }
+      // Cards da plataforma chegam sem frente/verso: completa daqui ou do R2
+      if (FC.platform) await FC.platform.hydrate(changes);
       const done = await FC.db.applyRemote(changes);
       await FC.db.setMeta({ cursor: r.cursor, epoch: r.epoch });
       cursor = r.cursor;
@@ -261,11 +265,12 @@
   async function applyToMemory(res) {
     if (!FC.store.loaded) return;
     if (res.reload) {
+      if (FC.platform) FC.platform.forget();
       await FC.settings.load();
       await FC.store.load();
       FC.cards.invalidateIndex();
       FC.ui.forgetMedia();
-      for (const ev of ['cards', 'decks', 'nodes', 'drafts', 'sources', 'quick']) FC.store.emit(ev, { remote: true });
+      for (const ev of ['cards', 'decks', 'nodes', 'drafts', 'sources', 'quick', 'platform']) FC.store.emit(ev, { remote: true });
       FC.store.emit('settings', FC.settings.get());
       return;
     }
@@ -275,6 +280,10 @@
     if (media.length) FC.ui.forgetMedia(media);
     if (res.applied.some((c) => c.store === 'cards')) FC.cards.invalidateIndex();
     FC.store.applyRemote(res.applied.filter((c) => c.store !== 'kv' && c.store !== 'media'));
+    if (kv.some((c) => String(c.id).startsWith('platform'))) {
+      if (FC.platform) FC.platform.forget();
+      FC.store.emit('platform', { remote: true });
+    }
     if (kv.some((c) => c.id === 'settings')) {
       await FC.settings.load();
       FC.store.emit('settings', FC.settings.get());
@@ -402,6 +411,7 @@
     state,
     configure,
     request,
+    url: (path) => apiBase + path,
     start,
     stop,
     flush,

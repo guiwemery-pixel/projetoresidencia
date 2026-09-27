@@ -25,6 +25,9 @@
     { re: /^\/decks\/?$/, view: 'decks', nav: 'decks' },
     { re: /^\/decks\/no\/([^/]+)$/, view: 'nodeDetail', nav: 'decks', keys: ['id'] },
     { re: /^\/decks\/baralho\/([^/]+)$/, view: 'deckDetail', nav: 'decks', keys: ['id'] },
+    { re: /^\/plataforma\/?$/, view: 'platform', nav: 'platform' },
+    { re: /^\/plataforma\/sessao\/?$/, view: 'platformSession', nav: 'platform' },
+    { re: /^\/plataforma\/baralho\/([^/]+)\/([^/]+)$/, view: 'platformDeck', nav: 'platform', keys: ['pkg', 'deck'] },
     { re: /^\/gerar\/?$/, view: 'generate', nav: 'generate' },
     { re: /^\/gerar\/revisao\/?$/, view: 'drafts', nav: 'generate' },
     { re: /^\/pontos-fracos\/?$/, view: 'weak', nav: 'weak' },
@@ -43,6 +46,7 @@
     { key: 'review', label: 'Revisar', path: '/revisar', count: 'due' },
     { key: 'quick', label: 'Quick Review', path: '/quick' },
     { key: 'decks', label: 'Decks', path: '/decks' },
+    { key: 'platform', label: 'Cards da plataforma', path: '/plataforma' },
     { key: 'generate', label: 'Gerar com IA', path: '/gerar', count: 'drafts' },
     { key: 'import', label: 'Importar', path: '/importar' },
     { key: 'weak', label: 'Pontos fracos', path: '/pontos-fracos' },
@@ -177,9 +181,9 @@
     if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
-  /** Revisão ou Quick Review em andamento: a sincronização não mexe na tela. */
+  /** Revisão, Quick Review ou estudo da plataforma em andamento: a sincronização não mexe na tela. */
   function inSession() {
-    return mounted && (app.current === 'review' || app.current === 'quickSession');
+    return mounted && (app.current === 'review' || app.current === 'quickSession' || app.current === 'platformSession');
   }
 
   // ── Layout ─────────────────────────────────────────────────────────────────

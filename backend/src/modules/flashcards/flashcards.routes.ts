@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { currentUser } from '../../middleware/auth.js';
 import { parse } from '../../lib/validation.js';
 import { SYNC_STORES, getSummary, pull, pullBody, push, readMedia, resetCollection, saveSummary, searchCards, status } from './flashcards.service.js';
+import { finishPublish, listPlatform, readDeckCards, removePackage, startPublish, uploadDecks } from './platform.js';
 
 export const flashcardsRouter = Router();
 
@@ -76,4 +77,69 @@ flashcardsRouter.get('/media', async (req, res) => {
 flashcardsRouter.get('/search', async (req, res) => {
   const { q } = parse(z.object({ q: z.string().max(200).default('') }), req.query);
   res.json(await searchCards(currentUser(req).id, q, 20));
+});
+
+// ── Cards da plataforma (conteúdo no Cloudflare R2; ver platform.ts) ──────────
+
+const platformId = z.string().regex(/^[a-z0-9]{4,40}$/, 'Identificador inválido');
+const deckId = z.string().regex(/^[A-Za-z0-9_-]{1,40}$/, 'Baralho inválido');
+
+flashcardsRouter.get('/platform', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.json(await listPlatform(currentUser(req).email));
+});
+
+/** Cards de um baralho. A versão está no endereço: o navegador pode guardar a resposta. */
+flashcardsRouter.get('/platform/cards', async (req, res) => {
+  const q = parse(z.object({ package: platformId, version: platformId, deck: deckId }), req.query);
+  const bytes = await readDeckCards(q.package, q.version, q.deck);
+  res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, max-age=604800, immutable' });
+  res.send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+});
+
+flashcardsRouter.post('/platform/publish', async (req, res) => {
+  const body = parse(z.object({ packageId: platformId.optional() }), req.body);
+  res.json(await startPublish(currentUser(req).email, body.packageId));
+});
+
+const platformCard = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,60}$/),
+  front: z.string().max(300_000),
+  back: z.string().max(300_000),
+  tags: z.array(z.string().max(200)).max(100).default([]),
+});
+
+flashcardsRouter.post('/platform/publish/:packageId/:version/decks', async (req, res) => {
+  const p = parse(z.object({ packageId: platformId, version: platformId }), req.params);
+  const body = parse(z.object({ decks: z.array(z.object({ id: deckId, cards: z.array(platformCard).max(5000) })).min(1).max(1000) }), req.body);
+  res.json(await uploadDecks(currentUser(req).email, p.packageId, p.version, body.decks));
+});
+
+flashcardsRouter.post('/platform/publish/:packageId/:version/finish', async (req, res) => {
+  const p = parse(z.object({ packageId: platformId, version: platformId }), req.params);
+  const body = parse(
+    z.object({
+      name: z.string().trim().min(1).max(200),
+      decks: z
+        .array(
+          z.object({
+            id: deckId,
+            name: z.string().min(1).max(500),
+            parent: deckId.nullable(),
+            own: z.number().int().min(0),
+            total: z.number().int().min(0),
+          }),
+        )
+        .min(1)
+        .max(20_000),
+    }),
+    req.body,
+  );
+  res.json(await finishPublish(currentUser(req).email, p.packageId, p.version, body.name, body.decks));
+});
+
+flashcardsRouter.delete('/platform/packages/:packageId', async (req, res) => {
+  const p = parse(z.object({ packageId: platformId }), req.params);
+  await removePackage(currentUser(req).email, p.packageId);
+  res.status(204).end();
 });

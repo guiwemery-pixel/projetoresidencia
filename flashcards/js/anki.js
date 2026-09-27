@@ -142,8 +142,10 @@
     const base = { fields, ord, cloze: isCloze, tags: String(note.tags || '').trim(), deck: deckName, card: tmpl.name, notetype: model.name };
     const front = renderTemplate(tmpl.qfmt, Object.assign({}, base, { isAnswer: false }));
     let back = renderTemplate(tmpl.afmt, Object.assign({}, base, { isAnswer: true, frontSide: FRONT_MARK }));
+    // "{{FrontSide}}<hr id=answer>…": o verso começa depois da linha. Sem a frente
+    // antes da linha (verso próprio, ex.: resposta<hr id=answer>referência), fica tudo
     const hr = back.search(/<hr[^>]*id\s*=\s*["']?answer["']?[^>]*>/i);
-    if (hr >= 0) back = back.slice(hr).replace(/^<hr[^>]*>/i, '');
+    if (hr >= 0 && back.slice(0, hr).includes(FRONT_MARK)) back = back.slice(hr).replace(/^<hr[^>]*>/i, '');
     back = back.split(FRONT_MARK).join('');
     return { front: cleanRendered(front), back: cleanRendered(back) };
   }

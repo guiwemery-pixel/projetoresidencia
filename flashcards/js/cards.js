@@ -76,6 +76,12 @@
     if (data.scheduling) {
       for (const f of SCHED_FIELDS) if (data.scheduling[f] !== undefined) card[f] = data.scheduling[f];
     }
+    // Veio dos cards da plataforma: guarda de onde e a marca do texto original
+    // (enquanto não for editado, o texto não vai para a conta — ver platform.js)
+    if (data.platform) {
+      const ref = data.platform;
+      card.platform = { p: ref.p, d: ref.d, c: ref.c, h: ref.original === false ? null : FC.platform.contentHash(card.front, card.back) };
+    }
     Object.assign(card, FC.areas.pathFields(nodeId));
     return card;
   }

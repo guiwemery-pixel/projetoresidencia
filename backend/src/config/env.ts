@@ -26,6 +26,9 @@ const schema = z.object({
   R2_ENDPOINT: z.string().optional(),
   // Espaço máximo das imagens de cada usuário no R2 (MB)
   FLASHCARDS_MEDIA_QUOTA_MB: z.coerce.number().positive().default(1024),
+  // E-mails (separados por vírgula) que podem publicar os "Cards da plataforma" (ficam no R2).
+  // Lida em modules/flashcards/platform.ts.
+  PLATFORM_ADMIN_EMAILS: z.string().optional(),
 });
 
 // Aceita a URL do banco com outros nomes/prefixos (integrações do Vercel)
