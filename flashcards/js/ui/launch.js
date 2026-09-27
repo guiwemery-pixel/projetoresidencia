@@ -27,10 +27,14 @@
     return f;
   }
 
-  function review(filter, label) {
-    const qs = filterToQuery(filter || {}, label);
+  /** opts.all: "estudar tudo" — todos os cards da seleção, e as respostas entram no agendamento. */
+  function review(filter, label, opts) {
+    let qs = filterToQuery(filter || {}, label);
+    if (opts && opts.all) qs += (qs ? '&' : '') + 'todos=1';
     FC.app.go('/revisar' + (qs ? '?' + qs : ''));
   }
+
+  const studyAll = (filter, label) => review(filter, 'Estudar tudo · ' + label, { all: true });
 
   function order(cards, mode) {
     if (mode === 'hierarchy') return cards.slice().sort((a, b) => FC.areas.breadcrumb(a.nodeId).localeCompare(FC.areas.breadcrumb(b.nodeId), 'pt-BR') || a.createdAt - b.createdAt);
@@ -58,6 +62,7 @@
   function choose(filter, label) {
     const counts = FC.review.counts(filter);
     const all = FC.cards.select(Object.assign({ includeBlockedDecks: true }, filter)).length;
+    const studyable = FC.cards.select(filter).length;
     const due = counts.dueNow + counts.newToday;
     const content = h(
       'div',
@@ -65,13 +70,20 @@
       h('p', { class: 'ink2', text: label }),
       h(
         'div',
-        { class: 'grid two' },
+        { class: 'grid three' },
         h(
           'div',
           { class: 'panel flat stack' },
           h('h3', { text: 'Revisão normal' }),
           h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' }),
           button(due ? 'Revisar ' + due : 'Nada devido agora', { variant: 'primary', icon: 'play', disabled: !due, onClick: () => (m.close(), review(filter, label)) }),
+        ),
+        h(
+          'div',
+          { class: 'panel flat stack' },
+          h('h3', { text: 'Estudar tudo' }),
+          h('p', { class: 'small ink2', text: 'Todos os ' + U.plural(studyable, 'card', 'cards') + ': novos sem o limite do dia (' + U.plural(counts.newAvailable, 'novo', 'novos') + ') e também os que ainda não venceram. As respostas entram no cronograma.' }),
+          button('Estudar ' + U.plural(studyable, 'card', 'cards'), { icon: 'layers', disabled: !studyable, onClick: () => (m.close(), studyAll(filter, label)) }),
         ),
         h(
           'div',
@@ -85,5 +97,5 @@
     const m = FC.ui.modal({ title: 'Como quer estudar?', content });
   }
 
-  FC.launch = { filterToQuery, queryToFilter, review, quick, quickIds, choose, order };
+  FC.launch = { filterToQuery, queryToFilter, review, studyAll, quick, quickIds, choose, order };
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -226,10 +226,17 @@ normal com um estado de memória coerente. O dia de estudo vira às 4h (ajustáv
 vencidas (limite diário) → cards novos (limite diário), respeitando suspensões e baralhos
 arquivados/suspensos. "Z" desfaz a última resposta (restaura o card e apaga o registro).
 
+**Estudar tudo** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
+todos os cards da seleção numa sessão que **entra no cronograma** — novos sem o limite do dia,
+revisões vencidas sem o limite diário e, por fim, as que ainda não venceram (cada uma uma vez,
+marcadas "Antes do vencimento"; o FSRS considera que a revisão foi antecipada). Os novos
+estudados assim contam no limite do dia da revisão normal.
+
 ## Quick Review
 
 Revisa **todos** os cards da seleção (baralhos, áreas, subáreas, assuntos, temas, tags ou
-favoritos), vencidos ou não, com três respostas. Não altera `dueDate`, intervalo,
+favoritos), vencidos ou não, com três respostas. Na lista de conteúdo, cada nó recolhe e
+expande (de início, os subtemas ficam recolhidos; há "Expandir tudo" e "Recolher tudo"). Não altera `dueDate`, intervalo,
 estabilidade, dificuldade, estado nem o histórico principal — só grava o resumo em
 `quickSessions`. Reapresentação na própria sessão:
 

@@ -105,7 +105,7 @@
       const filter = FC.launch.queryToFilter(query);
       const label = query.label || 'Revisão de hoje';
       ctx.setTitle(label);
-      const session = FC.review.createSession(filter, label);
+      const session = FC.review.createSession(filter, label, { all: query.todos === '1' });
       let current = null;
       let revealed = false;
       let busy = false;
@@ -163,7 +163,7 @@
         const card = res.card;
         const front = FC.ui.rich(card.front, 'fc-front');
         const flash = h('article', { class: 'flashcard', 'aria-live': 'polite' }, pathHeader(card), front);
-        if (res.early) flash.appendChild(h('span', { class: 'badge warn', text: 'Adiantado (aprendizagem)' }));
+        if (res.early) flash.appendChild(h('span', { class: 'badge warn', text: res.early === 'ahead' ? 'Antes do vencimento' : 'Adiantado (aprendizagem)' }));
         const showBtn = button('Mostrar resposta', { variant: 'primary', size: 'lg', onClick: reveal });
         FC.ui.add(stage, flash, h('div', { class: 'show-answer' }, showBtn));
         showBtn.focus({ preventScroll: true });

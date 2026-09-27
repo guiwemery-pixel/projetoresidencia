@@ -127,6 +127,7 @@
   function nodeMenu(node, refresh) {
     return [
       { label: 'Ver cards', icon: 'list', run: () => FC.app.go('/decks/no/' + node.id) },
+      { label: 'Estudar tudo (entra no cronograma)', icon: 'layers', run: () => FC.launch.studyAll({ nodeIds: [node.id] }, FC.areas.breadcrumb(node.id)) },
       { label: 'Novo card aqui', icon: 'plus', run: () => FC.cardEditor.open({ nodeId: node.id }) },
       { label: 'Importar deck aqui', icon: 'upload', run: () => FC.app.go('/importar?node=' + node.id) },
       node.level < 4 ? { label: newChildLabel(node) + ' aqui', icon: 'folder', run: async () => { const name = await FC.ui.prompt(newChildLabel(node), ''); if (name) { await FC.areas.create(name, node.id); expanded.add(node.id); refresh(); } } } : null,
@@ -194,6 +195,7 @@
   function deckMenu(deck, refresh) {
     return [
       { label: 'Ver cards', icon: 'list', run: () => FC.app.go('/decks/baralho/' + deck.id) },
+      { label: 'Estudar tudo (entra no cronograma)', icon: 'layers', run: () => FC.launch.studyAll({ deckIds: [deck.id] }, deck.name) },
       { label: 'Quick Review', icon: 'zap', run: () => FC.launch.quick({ deckIds: [deck.id] }, 'Quick Review · ' + deck.name) },
       { label: 'Novo card neste baralho', icon: 'plus', run: () => FC.cardEditor.open({ deckId: deck.id }) },
       { label: 'Importar para este baralho', icon: 'upload', run: () => FC.app.go('/importar?deck=' + deck.id) },

@@ -457,6 +457,43 @@ try {
     }, id);
   }
 
+  step('"Estudar tudo": todos os cards da seleção, sem o limite do dia, e as respostas entram no cronograma');
+  {
+    const prevNew = await evalFC(() => FC.settings.get().newPerDay);
+    await evalFC(() => FC.settings.set({ newPerDay: 1 }));
+    const nodeId = await evalFC(() => [...FC.store.nodes.values()].find((n) => n.name === 'Câncer gástrico').id);
+    const exp = await evalFC((id) => {
+      const cards = FC.cards.select({ nodeIds: [id] });
+      return { total: cards.length, fresh: cards.filter((c) => (c.state || 'new') === 'new').length, review: cards.filter((c) => c.state === 'review').length, normal: FC.review.counts({ nodeIds: [id] }).newToday };
+    }, nodeId);
+    assert.ok(exp.fresh > 1 && exp.normal <= 1, 'a revisão normal libera no máximo 1 novo hoje: ' + JSON.stringify(exp));
+    await evalFC((id) => FC.launch.choose({ nodeIds: [id] }, 'Câncer gástrico'), nodeId);
+    await page.waitForSelector('.modal h3:has-text("Estudar tudo")');
+    await shot('08c-como-quer-estudar');
+    await page.click('.modal button:has-text("Estudar ' + exp.total + ' cards")');
+    await page.waitForSelector('.show-answer .btn');
+    assert.match(await page.textContent('.study-top .title'), /Estudar tudo · Câncer gástrico/);
+    const q = await page.$$eval('.queue-counts > span', (els) => els.map((e) => Number(e.textContent.replace(/\D/g, ''))));
+    assert.equal(q[0], exp.fresh, 'todos os novos liberados');
+    assert.equal(q[2], exp.review, 'todas as revisões, vencidas ou não');
+    const logs0 = await evalFC(() => FC.store.logs.length);
+    await page.keyboard.press('Space');
+    await page.waitForSelector('.rating-bar');
+    await page.keyboard.press('4');
+    await page.waitForTimeout(300);
+    assert.equal(await evalFC(() => FC.store.logs.length), logs0 + 1, 'a resposta vai para o histórico e o agendamento');
+    await page.keyboard.press('z');
+    await page.waitForTimeout(300);
+    assert.equal(await evalFC(() => FC.store.logs.length), logs0);
+    await evalFC((n) => FC.settings.set({ newPerDay: n }), prevNew);
+    await go('/decks');
+    const row = page.locator('.tree-row', { has: page.locator('.label-btn', { hasText: /^Cirurgia$/ }) });
+    await row.locator('button[title="Mais ações"]').click();
+    assert.ok(await page.$('.menu [role="menuitem"]:has-text("Estudar tudo (entra no cronograma)")'), 'também no menu da hierarquia');
+    await page.keyboard.press('Escape');
+    await go('/');
+  }
+
   step('Quick Review não altera o agendamento');
   const snapshot = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
   const logsBefore = await evalFC(() => FC.store.logs.length);
