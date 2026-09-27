@@ -1,11 +1,14 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { packExplanation } from '../reviews/explanation-codec.js';
+import { migrateMediaToBlobStore, purgeOldTombstones } from '../flashcards/flashcards.service.js';
 
 // Faxina do banco para ocupar menos espaço, sem mudar nada do que se vê no app:
 // - apaga sessões de login vencidas (já seriam recusadas de qualquer forma);
 // - converte explicações do "Por quê?" gravadas no formato antigo (JSON) para o
-//   comprimido (ver reviews/explanation-codec.ts).
+//   comprimido (ver reviews/explanation-codec.ts);
+// - descarta marcas de exclusão antigas dos flashcards e, com o R2 configurado,
+//   leva para lá as imagens que ainda estão no banco (ver flashcards.service.ts).
 
 export async function deleteExpiredSessions(userId?: string) {
   const { count } = await prisma.session.deleteMany({
@@ -50,5 +53,7 @@ export async function tidyUpUser(userId: string) {
 export async function runMaintenance() {
   const expiredSessions = await deleteExpiredSessions();
   const { converted } = await compactLegacyExplanations();
-  return { expiredSessions, convertedExplanations: converted };
+  const flashcardUsersPurged = await purgeOldTombstones();
+  const { migrated: flashcardImagesMoved } = await migrateMediaToBlobStore();
+  return { expiredSessions, convertedExplanations: converted, flashcardUsersPurged, flashcardImagesMoved };
 }

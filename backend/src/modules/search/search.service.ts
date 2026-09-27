@@ -2,14 +2,15 @@ import { prisma } from '../../lib/prisma.js';
 import { fromDb } from '../../lib/dates.js';
 import { percent } from '../../lib/math.js';
 import { getAreaMap } from '../taxonomy/taxonomy.service.js';
+import { searchCards } from '../flashcards/flashcards.service.js';
 
 // Pesquisa global nos dados do próprio usuário.
 export async function globalSearch(userId: string, rawQuery: string, today: string) {
   const q = rawQuery.trim();
-  if (q.length < 2) return { query: q, areas: [], subjects: [], mockExams: [], exams: [], goals: [] };
+  if (q.length < 2) return { query: q, areas: [], subjects: [], mockExams: [], exams: [], goals: [], flashcards: { total: 0, cards: [] } };
   const contains = { contains: q, mode: 'insensitive' as const };
 
-  const [areaMap, areas, subjects, mockExams, exams, goals] = await Promise.all([
+  const [areaMap, areas, subjects, mockExams, exams, goals, flashcards] = await Promise.all([
     getAreaMap(userId),
     prisma.area.findMany({ where: { userId, name: contains }, take: 10 }),
     prisma.subject.findMany({ where: { userId, OR: [{ name: contains }, { tags: { has: q.toLowerCase() } }] }, take: 20 }),
@@ -24,6 +25,7 @@ export async function globalSearch(userId: string, rawQuery: string, today: stri
       take: 10,
     }),
     prisma.goal.findMany({ where: { userId, OR: [{ title: contains }, { description: contains }] }, take: 10 }),
+    searchCards(userId, q),
   ]);
 
   const subjectIds = subjects.map((s) => s.id);
@@ -74,6 +76,7 @@ export async function globalSearch(userId: string, rawQuery: string, today: stri
     mockExams: mockExams.map((m) => ({ id: m.id, name: m.name, board: m.board, takenOn: fromDb(m.takenOn), accuracy: m.accuracy, status: m.status })),
     exams: exams.map((e) => ({ id: e.id, name: e.name, board: e.board.name, year: e.year, attempts: e._count.attempts })),
     goals: goals.map((g) => ({ id: g.id, title: g.title, status: g.status })),
+    flashcards,
   };
 }
 

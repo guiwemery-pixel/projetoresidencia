@@ -6,6 +6,7 @@ import { StudyDialogProvider } from './components/study/StudyDialog';
 import { Loading } from './components/ui';
 import { LoginPage, RegisterPage } from './pages/Auth';
 import { DashboardPage } from './pages/Dashboard';
+import { CARDS_BASE, isFlashcardsHost } from './flashcards/standalone';
 
 // Páginas secundárias carregadas sob demanda (bundle inicial menor)
 const ReviewsPage = lazy(() => import('./pages/Reviews'));
@@ -22,6 +23,8 @@ const ProfilePage = lazy(() => import('./pages/Profile'));
 const SearchPage = lazy(() => import('./pages/Search'));
 const PrintWeekPage = lazy(() => import('./pages/PrintWeek'));
 const ImportPage = lazy(() => import('./pages/Import'));
+const FlashcardsPage = lazy(() => import('./pages/Flashcards'));
+const FlashcardsAppPage = lazy(() => import('./pages/FlashcardsApp'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -33,8 +36,10 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 function PublicOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <Loading />;
-  if (user) return <Navigate to="/" replace />;
+  // Já entrou: vai para onde estava (ex.: /cards, a versão só de flashcards) ou para o início
+  if (user) return <Navigate to={(location.state as { from?: string } | null)?.from ?? '/'} replace />;
   return <>{children}</>;
 }
 
@@ -43,6 +48,19 @@ export function App() {
     <Routes>
       <Route path="/entrar" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/cadastro" element={<PublicOnly><RegisterPage /></PublicOnly>} />
+      {/* Versão só de flashcards: mesma conta, sem o menu do site (app instalável à parte) */}
+      <Route
+        path={`${CARDS_BASE}/*`}
+        element={
+          <RequireAuth>
+            <StudyDialogProvider>
+              <Suspense fallback={<Loading />}>
+                <FlashcardsAppPage />
+              </Suspense>
+            </StudyDialogProvider>
+          </RequireAuth>
+        }
+      />
       {/* Folha de impressão: sem menu lateral */}
       <Route
         path="/calendario/imprimir"
@@ -63,7 +81,8 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<DashboardPage />} />
+        {/* Aberto pelo domínio próprio dos flashcards: o início é a versão só de flashcards */}
+        <Route index element={isFlashcardsHost() ? <Navigate to={CARDS_BASE} replace /> : <DashboardPage />} />
         {[
           ['revisoes', <ReviewsPage />],
           ['calendario', <CalendarPage />],
@@ -79,6 +98,7 @@ export function App() {
           ['grupo/:id', <GroupPage />],
           ['perfil', <ProfilePage />],
           ['busca', <SearchPage />],
+          ['flashcards/*', <FlashcardsPage />],
         ].map(([path, el]) => (
           <Route key={path as string} path={path as string} element={<Suspense fallback={<Loading />}>{el}</Suspense>} />
         ))}

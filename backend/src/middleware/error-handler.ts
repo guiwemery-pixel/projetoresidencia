@@ -29,7 +29,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   // Erros de cliente vindos de middlewares/runtime (ex.: corpo inválido no Vercel)
   const status = (err as { status?: unknown; statusCode?: unknown })?.statusCode ?? (err as { status?: unknown })?.status;
   if (typeof status === 'number' && status >= 400 && status < 500) {
-    res.status(status).json({ error: 'Requisição inválida' });
+    res.status(status).json({ error: status === 413 ? 'Envio grande demais' : 'Requisição inválida' });
     return;
   }
   console.error(err);
