@@ -54,6 +54,7 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | `metrics` | Métricas por período, série temporal, por área e por assunto. |
 | `goals` | Metas recorrentes/personalizadas e cálculo automático do progresso. |
 | `mock-exams` / `exams` | Simulados e banco de provas (banca → prova → tentativas). Simulado e tentativa aceitam só a nota em %, sem a quantidade de questões. |
+| `calendar` | Agenda assinada por URL (iCal, RFC 5545): link secreto por usuário (`calendar_feeds`), servido sem login em `GET /api/ical/<token>.ics` com as revisões pendentes (atrasadas no dia de hoje), as semanas do cronograma e a previsão dos flashcards (do resumo enviado pelo app). Opções: cronograma, flashcards, horário fixo (convertido para UTC pelo fuso do usuário) e um evento por dia. O Google Agenda relê a agenda sozinho, algumas vezes por dia. |
 | `plans` | Cronograma: assuntos previstos por semana (`study_plans`, `plan_items`). O navegador lê o PDF (`frontend/src/lib/plan`: texto + cor do marcador pelas instruções de desenho do pdf.js, sem renderizar) e envia a lista já com as datas. Registrar um estudo do assunto conclui o item (o indicado pelo botão, ou o pendente cuja semana começa até 7 dias depois do estudo); excluir o estudo o devolve a pendente. Item pendente depois do fim da semana = atrasado. |
 | `import` | Importação de planilhas: o navegador lê o arquivo (`frontend/src/lib/import`) e envia estudos, simulados e notas de provas em lotes pequenos (poucos assuntos por lote); o servidor grava em bloco, sem duplicar, e recalcula o histórico de cada assunto. |
 | `notifications` | Notificações idempotentes (chave de deduplicação) + job periódico. |
@@ -121,6 +122,7 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 | `reviews` | Cada revisão: prevista, realizada, intervalo, desempenho, qualidade, próximo intervalo e **explicação** (comprimida, ver abaixo). |
 | `algorithm_configs` | Parâmetros do algoritmo ajustáveis sem novo deploy. |
 | `goals` | Metas (métrica, período, alvo, área/assunto opcionais, prazo, status). |
+| `calendar_feeds` | Link da agenda (token secreto), opções e a última leitura (quando e por qual calendário). |
 | `study_plans`, `plan_items` | Cronograma importado e seus assuntos: semana prevista, status (pendente, estudado, pulado), estudo que concluiu e se o assunto foi criado pelo cronograma. |
 | `mock_exams`, `mock_exam_area_results` | Simulados e resultado por área. |
 | `boards`, `exams`, `exam_attempts` | Banco de provas (tentativa com questões/acertos opcionais: pode guardar só a %). |
@@ -161,7 +163,7 @@ o usuário abre o app e pelo job diário, que também apaga sessões de login ve
 | IA para analisar desempenho | Novo gerador em `insights/` usando `metrics` como fonte; o contrato `Insight` já é genérico. |
 | Banco de questões | Novo módulo que registra contatos via `studies` → o motor de revisão já os trata como “recuperação ativa” (os flashcards já fazem isso pelo “Registrar estudo” ao fim de cada sessão). |
 | Importação de outros formatos | Novo leitor em `frontend/src/lib/import` que gere os mesmos registros; o endpoint `/api/import` e o reprocessamento já existem. |
-| Google Calendar | Exportar `reviews` pendentes (já por dia) via OAuth; a agenda já é calculada no backend. |
+| Google Calendar em tempo real | Hoje a agenda é assinada por URL (o Google relê algumas vezes por dia). Para atualizar na hora: OAuth + Calendar API, gravando os eventos a cada revisão agendada. |
 | Upload de PDFs de provas | `exams.file_url` já existe; trocar por armazenamento de objetos (S3/R2) respeitando direitos autorais. |
 | Ranking opcional | Seria um novo campo **opt-in** no resumo público — a lista de permissão torna a mudança explícita. |
 | App mobile / PWA / push | Manifest pronto; notificações já são geradas no backend (falta só o canal push). |

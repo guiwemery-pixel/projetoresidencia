@@ -27,6 +27,7 @@ GUILHERME
 | **Importar planilha** | Em Estudos ou Perfil: envie .xlsx ou .csv (uma linha por estudo, ou uma linha por assunto com revisões lado a lado, inclusive com cabeçalho em duas linhas como “1ª REVISÃO” sobre Data · Questões · Acertos). Escolhe a aba com o histórico, entende data realizada × programada, organiza siglas (“NEFRO 2”, “OBS1”) nas grandes áreas e traz também as notas das abas de **simulados** e de **provas por instituição e ano**. Colunas ajustáveis, prévia, reimportação sem duplicar e revisões recalculadas pelo algoritmo. O arquivo é lido no navegador; só os dados vão para a conta de quem importa. |
 | **Revisão espaçada adaptativa** | Com questões, os dias saem do percentual de acertos pelas tabelas da planilha de revisões (1ª revisão: 3/10/13/20/23 dias; seguintes: 7/13/18/25/30), ajustados pela quantidade de questões (25 é a referência; as sugestões nunca ficam abaixo de 25–30). Fases D0 → D10 → D21 → D60 → D90+ (reforço D3 abaixo de 60%); sem questões, a data vem da autoavaliação, do tempo, da dificuldade, do método e do histórico do assunto. Cada agendamento tem um **“Por quê?”**. |
 | **Revisões e calendário** | Hoje / atrasadas / próximas / histórico, adiar/antecipar, calendário mensal com detalhe do dia e **folha semanal para imprimir/salvar em PDF** (A4, com caixas para marcar, acertos e anotações). |
+| **Google Agenda** | Em Calendário → **Google Agenda**: um link de agenda (iCal) só seu, que o Google Agenda (e o Calendário da Apple e o Outlook) assina e relê sozinho. Mostra as revisões pendentes (as atrasadas no dia de hoje), as semanas do cronograma e quantos flashcards há para revisar em cada dia — de dia inteiro ou num horário fixo, uma por assunto ou todas num evento por dia. Dá para gerar um link novo ou desligar. |
 | **Dashboard** | Resumo do dia (revisões, atrasadas, questões planejadas, metas), semana, progresso, próximas atividades, estudos recentes, recomendações e comparação com o próprio histórico. **Personalizável**: arraste os balões, troque de coluna ou oculte (salvo por usuário). |
 | **Métricas** | Tempo, sessões, dias, sequência; questões por dia/semana/mês; acertos ao longo do tempo; desempenho por área/subárea (com variação em p.p.) e por assunto; revisões. Filtros 7/30/90 dias, 6 meses, 1 ano e personalizado. Gráficos com alternância para tabela. |
 | **Metas** | Diárias, semanais, mensais ou com prazo; progresso automático (questões, acertos, horas, dias, sessões, revisões, simulados, zerar atrasadas) ou manual; por área/assunto. |
@@ -128,6 +129,6 @@ docs/                   arquitetura, algoritmo e flashcards
 
 ## Próximos passos sugeridos
 
-Google Calendar, importação de questões, IA para análise de desempenho e geração de questões,
+Importação de questões, IA para análise de desempenho e geração de questões,
 ranking opcional, tags avançadas, notificações push (PWA), IA dos flashcards pelo servidor.
 Veja em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#preparado-para-crescer) onde cada uma se encaixa.

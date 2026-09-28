@@ -119,6 +119,7 @@ model User {
   planItems        PlanItem[]
   flashcardSync    FlashcardSync?
   flashcardRecords FlashcardRecord[]
+  calendarFeed     CalendarFeed?
 
   @@map("users")
 }
@@ -596,4 +597,21 @@ model FlashcardRecord {
   @@id([userId, store, id])
   @@index([userId, version])
   @@map("flashcard_records")
+}
+
+/// Agenda assinada no Google Agenda / Apple / Outlook: link iCal secreto por usuário
+/// (revisões, cronograma e flashcards). Quem tem o link lê a agenda; gerar outro invalida o anterior.
+model CalendarFeed {
+  userId        String    @id @map("user_id")
+  token         String    @unique
+  /// { plan, flashcards, time: "HH:MM" | null, duration (min), group }
+  options       Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastFetchedAt DateTime? @map("last_fetched_at")
+  /// Quem leu por último (Google Agenda, Apple, Outlook…), pelo User-Agent
+  lastClient    String?   @map("last_client")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("calendar_feeds")
 }

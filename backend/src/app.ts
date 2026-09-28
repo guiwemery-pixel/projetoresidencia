@@ -24,6 +24,7 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { searchRouter } from './modules/search/search.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { flashcardsRouter } from './modules/flashcards/flashcards.routes.js';
+import { calendarRouter, icalRouter } from './modules/calendar/calendar.routes.js';
 import { invalidateProgressCache } from './modules/progress/public-summary.js';
 import { runNotificationJob } from './modules/notifications/notifications.service.js';
 import { runMaintenance } from './modules/maintenance/maintenance.service.js';
@@ -77,6 +78,8 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRouter);
+  // Agenda assinada pelo Google Agenda/Apple/Outlook: sem login, o link secreto autoriza
+  app.use('/api/ical', icalRouter);
 
   // Tudo abaixo exige usuário autenticado; cada serviço filtra por userId.
   const api = Router();
@@ -92,6 +95,7 @@ export function createApp() {
     }
     next();
   });
+  api.use('/me/calendar', calendarRouter);
   api.use('/me', usersRouter);
   api.use('/groups', groupsRouter);
   api.use('/areas', areasRouter);

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { useCalendar, usePlanItems } from '../hooks/api';
 import { fmtLong, fmtMonth, plural, startOfWeekStr, todayLocal } from '../lib/format';
 import { AreaDot, Card, ErrorState, IconButton, PageHeader, cx } from '../components/ui';
 import { ReviewCard } from '../components/study/ReviewCard';
 import { PlanItemCard, weekLabel } from '../components/study/PlanItemCard';
+import { GoogleCalendarDialog } from '../components/calendar/GoogleCalendarDialog';
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
@@ -19,6 +20,7 @@ export default function CalendarPage() {
   const today = todayLocal();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [selected, setSelected] = useState<string | null>(today);
+  const [syncOpen, setSyncOpen] = useState(false);
   const { data, error, isFetching } = useCalendar(month);
   const monthEnd = useMemo(() => {
     const [y, m] = month.split('-').map(Number);
@@ -51,14 +53,24 @@ export default function CalendarPage() {
         title="Calendário"
         subtitle="Suas revisões dia a dia e os assuntos do cronograma de cada semana. Apenas você vê este calendário."
         actions={
-          <Link
-            to={`/calendario/imprimir?semana=${startOfWeekStr(selected ?? today)}`}
-            className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-subtle"
-          >
-            <Printer className="h-4 w-4" /> Imprimir semana
-          </Link>
+          <>
+            <button
+              type="button"
+              onClick={() => setSyncOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-subtle"
+            >
+              <CalendarPlus className="h-4 w-4" /> Google Agenda
+            </button>
+            <Link
+              to={`/calendario/imprimir?semana=${startOfWeekStr(selected ?? today)}`}
+              className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-subtle"
+            >
+              <Printer className="h-4 w-4" /> Imprimir semana
+            </Link>
+          </>
         }
       />
+      <GoogleCalendarDialog open={syncOpen} onClose={() => setSyncOpen(false)} />
       {error && <ErrorState error={error} />}
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <Card>
