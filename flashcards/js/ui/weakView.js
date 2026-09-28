@@ -242,7 +242,7 @@
                   h(
                     'div',
                     { class: 'tree-row' + (a.isWeak ? ' perf-weak' : '') },
-                    h('div', { class: 'tree-name' }, h('a', { class: 'label-btn', href: '#/pontos-fracos/' + a.nodeId, text: FC.areas.get(a.nodeId).name }), a.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null),
+                    h('div', { class: 'tree-name' }, h('div', { class: 'tree-label' }, h('a', { class: 'label-btn', href: '#/pontos-fracos/' + a.nodeId, text: FC.areas.get(a.nodeId).name }), a.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null)),
                     h('div', { class: 'tree-stats' }, h('span', { class: 'hide-sm', text: a.n + ' revisões' }), h('span', { class: 'perf' }, h('span', { class: 'bar-cell' }, h('span', { style: { width: Math.round((a.accuracy || 0) * 100) + '%' } })), h('span', { text: a.n ? U.pct(a.accuracy) : '—' }))),
                   ),
                 ),

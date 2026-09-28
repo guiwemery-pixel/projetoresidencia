@@ -178,7 +178,7 @@
           h(
             'div',
             { class: 'tree-row' + (agg && agg.isWeak ? ' perf-weak' : '') },
-            h('div', { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } }, twisty, h('button', { type: 'button', class: 'label-btn', text: node.name, onclick: () => FC.app.go('/decks/no/' + node.id) }), h('span', { class: 'tree-level', text: FC.areas.LEVEL_LABELS[node.level] }), node.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null, agg && agg.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null),
+            h('div', { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } }, twisty, h('div', { class: 'tree-label' }, h('button', { type: 'button', class: 'label-btn', text: node.name, onclick: () => FC.app.go('/decks/no/' + node.id) }), h('span', { class: 'tree-level', text: FC.areas.LEVEL_LABELS[node.level] }), node.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null, agg && agg.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null)),
             h(
               'div',
               { class: 'tree-stats' },
@@ -270,10 +270,14 @@
               'div',
               { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } },
               h('span', { class: 'twisty' }, icon('layers', 15)),
-              h('button', { type: 'button', class: 'label-btn', text: d.name.split('::').pop(), onclick: () => FC.app.go('/decks/baralho/' + d.id) }),
-              d.archived ? h('span', { class: 'badge', text: 'Arquivado' }) : null,
-              d.suspended ? h('span', { class: 'badge warn', text: 'Suspenso' }) : null,
-              d.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null,
+              h(
+                'div',
+                { class: 'tree-label' },
+                h('button', { type: 'button', class: 'label-btn', text: d.name.split('::').pop(), onclick: () => FC.app.go('/decks/baralho/' + d.id) }),
+                d.archived ? h('span', { class: 'badge', text: 'Arquivado' }) : null,
+                d.suspended ? h('span', { class: 'badge warn', text: 'Suspenso' }) : null,
+                d.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null,
+              ),
             ),
             h(
               'div',

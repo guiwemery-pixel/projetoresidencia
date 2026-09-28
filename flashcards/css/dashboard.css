@@ -304,6 +304,15 @@
   color: var(--accent);
 }
 
+/* Nome + nível + etiquetas (ponto fraco, sem novos no dia…) */
+.fc-root .tree-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .fc-root .tree-level {
   font-size: 0.7rem;
   color: var(--muted);

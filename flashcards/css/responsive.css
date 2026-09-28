@@ -117,7 +117,14 @@
     gap: 10px;
   }
 
+  /* Etiquetas que não cabem ao lado do nome vão para baixo dele, alinhadas com o nome */
+  .fc-root .tree-label {
+    flex-wrap: wrap;
+    row-gap: 3px;
+  }
+
   .fc-root .tree-name .label-btn {
+    flex: 0 1 auto;
     white-space: normal;
     overflow-wrap: anywhere;
     line-height: 1.3;
