@@ -121,6 +121,23 @@
     });
   }
 
+  /**
+   * "Nunca entrar como card novo": os novos daqui ficam fora dos novos do dia (assuntos
+   * paralelos, estudados pelo "Estudar tudo"). Quem herda de cima só avisa onde desmarcar.
+   */
+  function noNewItem(own, inheritedFrom, name, save, refresh) {
+    if (!own && inheritedFrom) return { label: 'Sem novos no dia (vem de "' + inheritedFrom + '")', icon: 'pause', run: () => FC.ui.toast('Para liberar, desmarque em "' + inheritedFrom + '".') };
+    return {
+      label: own ? 'Liberar cards novos no dia' : 'Nunca entrar como card novo',
+      icon: own ? 'play' : 'pause',
+      run: async () => {
+        await save(!own);
+        FC.ui.toast(own ? 'Os cards novos de "' + name + '" voltam a entrar nos novos do dia.' : 'Os cards novos de "' + name + '" não entram mais nos novos do dia. Estude-os pelo "Estudar tudo".', { duration: 5000 });
+        refresh();
+      },
+    };
+  }
+
   // "Nova subárea", "Novo assunto", "Novo tema"…
   const newChildLabel = (node) => (node.level + 1 <= 1 ? 'Nova ' : 'Novo ') + FC.areas.LEVEL_LABELS[node.level + 1].toLowerCase();
 
@@ -130,6 +147,7 @@
       { label: 'Estudar tudo (entra no cronograma)', icon: 'layers', run: () => FC.launch.studyAll({ nodeIds: [node.id] }, FC.areas.breadcrumb(node.id)) },
       { label: 'Novo card aqui', icon: 'plus', run: () => FC.cardEditor.open({ nodeId: node.id }) },
       { label: 'Importar deck aqui', icon: 'upload', run: () => FC.app.go('/importar?node=' + node.id) },
+      noNewItem(!!node.noNew, (FC.areas.path(node.id).slice(0, -1).find((n) => n.noNew) || {}).name, node.name, (v) => FC.areas.update(node.id, { noNew: v }), refresh),
       node.level < 4 ? { label: newChildLabel(node) + ' aqui', icon: 'folder', run: async () => { const name = await FC.ui.prompt(newChildLabel(node), ''); if (name) { await FC.areas.create(name, node.id); expanded.add(node.id); refresh(); } } } : null,
       { label: 'Desempenho e pontos fracos', icon: 'target', run: () => FC.app.go('/pontos-fracos/' + node.id) },
       { label: 'Exportar', icon: 'download', run: () => FC.importView.exportDialog({ nodeId: node.id, label: node.name }) },
@@ -160,7 +178,7 @@
           h(
             'div',
             { class: 'tree-row' + (agg && agg.isWeak ? ' perf-weak' : '') },
-            h('div', { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } }, twisty, h('button', { type: 'button', class: 'label-btn', text: node.name, onclick: () => FC.app.go('/decks/no/' + node.id) }), h('span', { class: 'tree-level', text: FC.areas.LEVEL_LABELS[node.level] }), agg && agg.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null),
+            h('div', { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } }, twisty, h('button', { type: 'button', class: 'label-btn', text: node.name, onclick: () => FC.app.go('/decks/no/' + node.id) }), h('span', { class: 'tree-level', text: FC.areas.LEVEL_LABELS[node.level] }), node.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null, agg && agg.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null),
             h(
               'div',
               { class: 'tree-stats' },
@@ -199,6 +217,7 @@
       { label: 'Quick Review', icon: 'zap', run: () => FC.launch.quick({ deckIds: [deck.id] }, 'Quick Review · ' + deck.name) },
       { label: 'Novo card neste baralho', icon: 'plus', run: () => FC.cardEditor.open({ deckId: deck.id }) },
       { label: 'Importar para este baralho', icon: 'upload', run: () => FC.app.go('/importar?deck=' + deck.id) },
+      noNewItem(!!deck.noNew, (FC.decks.all().find((p) => p.noNew && deck.name.startsWith(p.name + '::')) || {}).name, deck.name, (v) => FC.decks.update(deck.id, { noNew: v }), refresh),
       { label: 'Exportar', icon: 'download', run: () => FC.importView.exportDialog({ deckId: deck.id, label: deck.name }) },
       '-',
       { label: 'Renomear', icon: 'edit', run: async () => { const name = await FC.ui.prompt('Renomear baralho', deck.name, { hint: 'Use "::" para sub-baralhos (ex.: Cirurgia::Esôfago).' }); if (name) { try { await FC.decks.rename(deck.id, name); refresh(); } catch (e) { FC.ui.errorToast(e); } } } },
@@ -254,6 +273,7 @@
               h('button', { type: 'button', class: 'label-btn', text: d.name.split('::').pop(), onclick: () => FC.app.go('/decks/baralho/' + d.id) }),
               d.archived ? h('span', { class: 'badge', text: 'Arquivado' }) : null,
               d.suspended ? h('span', { class: 'badge warn', text: 'Suspenso' }) : null,
+              d.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null,
             ),
             h(
               'div',
@@ -368,7 +388,7 @@
       const kids = FC.areas.children(node.id);
       detail(ctx, {
         title: node.name,
-        subtitle: FC.areas.LEVEL_LABELS[node.level],
+        subtitle: FC.areas.LEVEL_LABELS[node.level] + (node.noNew ? ' · sem novos no dia' : ''),
         crumb: h('p', { class: 'crumb', style: { marginBottom: '4px' } }, FC.areas.path(node.id).slice(0, -1).map((n, i) => [i ? ' › ' : '', h('a', { href: '#/decks/no/' + n.id, text: n.name })])),
         cards: () => FC.areas.cardsIn(node.id),
         children: kids.length ? h('div', { class: 'row tight', style: { marginBottom: '16px' } }, h('span', { class: 'label', text: FC.areas.LEVEL_LABELS[node.level + 1] + ':' }), kids.map((k) => link(k.name, '#/decks/no/' + k.id, { size: 'sm', variant: 'ghost' }))) : null,
@@ -389,7 +409,7 @@
       ctx.setTitle(deck.name.split('::').pop());
       detail(ctx, {
         title: deck.name.split('::').pop(),
-        subtitle: 'Baralho' + (deck.name.includes('::') ? ' · ' + deck.name.split('::').slice(0, -1).join(' › ') : '') + (deck.archived ? ' · arquivado' : '') + (deck.suspended ? ' · suspenso' : ''),
+        subtitle: 'Baralho' + (deck.name.includes('::') ? ' · ' + deck.name.split('::').slice(0, -1).join(' › ') : '') + (deck.archived ? ' · arquivado' : '') + (deck.suspended ? ' · suspenso' : '') + (deck.noNew ? ' · sem novos no dia' : ''),
         cards: () => FC.decks.cardsIn(deck.id),
         actions: [button('Estudar', { variant: 'primary', icon: 'play', onClick: () => FC.launch.choose({ deckIds: [deck.id] }, deck.name) }), FC.ui.moreButton(() => deckMenu(deck, () => ctx.rerender()))],
       });

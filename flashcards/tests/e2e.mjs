@@ -521,6 +521,49 @@ try {
     await go('/');
   }
 
+  step('"Nunca entrar como card novo": assunto paralelo fica fora dos novos do dia');
+  {
+    const before = await evalFC(() => FC.review.counts({}));
+    const cir = await evalFC(() => {
+      const n = FC.areas.roots().find((x) => x.name === 'Cirurgia');
+      return { id: n.id, fresh: FC.areas.cardsIn(n.id).filter((c) => !c.suspended && (c.state || 'new') === 'new').length };
+    });
+    assert.ok(cir.fresh > 0 && before.newHeld === 0, JSON.stringify({ before, cir }));
+    await go('/decks');
+    const row = page.locator('.tree-row', { has: page.locator('.label-btn', { hasText: /^Cirurgia$/ }) });
+    await row.locator('button[title="Mais ações"]').click();
+    await page.click('.menu [role="menuitem"]:has-text("Nunca entrar como card novo")');
+    await page.waitForTimeout(400);
+    assert.ok(await row.locator('.badge:has-text("sem novos no dia")').count(), 'etiqueta na hierarquia');
+    const after = await evalFC(() => FC.review.counts({}));
+    assert.equal(after.newHeld, cir.fresh, 'os novos de toda a grande área (e de dentro dela) ficam de fora');
+    assert.equal(after.newAvailable, before.newAvailable - cir.fresh);
+    const q = await evalFC((id) => ({
+      normal: FC.review.createSession({ nodeIds: [id] }).next(),
+      all: FC.review.createSession({ nodeIds: [id] }, 'x', { all: true }).next(),
+    }), cir.id);
+    assert.equal(q.normal ? (q.normal.remaining || { new: 0 }).new : 0, 0, 'revisão normal sem os novos daqui');
+    assert.equal(q.all.remaining.new, cir.fresh, '"Estudar tudo" libera os novos daqui');
+    await shot('08e-nunca-novo');
+    // Baralho: vale para os sub-baralhos
+    const deckHeld = await evalFC(async () => {
+      const d = FC.decks.findByName('Tutoria CG') || FC.decks.all().find((x) => x.name.startsWith('Tutoria CG'));
+      await FC.decks.update(d.id, { noNew: true });
+      const n = FC.review.counts({}).newHeld;
+      await FC.decks.update(d.id, { noNew: false });
+      return n;
+    });
+    assert.ok(deckHeld >= after.newHeld, 'baralho marcado também segura os novos (com sub-baralhos)');
+    // Desmarcar pelo mesmo menu
+    await row.locator('button[title="Mais ações"]').click();
+    await page.click('.menu [role="menuitem"]:has-text("Liberar cards novos no dia")');
+    await page.waitForTimeout(400);
+    const back = await evalFC(() => FC.review.counts({}));
+    assert.equal(back.newHeld, 0);
+    assert.equal(back.newAvailable, before.newAvailable);
+    await go('/');
+  }
+
   step('Quick Review não altera o agendamento');
   const snapshot = await evalFC(() => JSON.stringify([...FC.store.cards.values()].map((c) => [c.id, c.dueDate, c.stability, c.difficulty, c.state, c.repetitions])));
   const logsBefore = await evalFC(() => FC.store.logs.length);

@@ -301,6 +301,12 @@ novo número.
 revisão normal sem os cards novos — só os já estudados que venceram (e os que estão
 aprendendo). Os novos do dia continuam disponíveis para depois.
 
+**Nunca entrar como card novo** (menu ⋯ de qualquer nó da hierarquia — grande área, subárea,
+assunto… — ou de um baralho): para assuntos paralelos. Os cards novos dali (e de tudo que está
+dentro) não entram nos novos do dia nem gastam o limite diário; aparecem com a etiqueta "sem
+novos no dia" e são estudados quando você quiser pelo **Estudar tudo**. Depois de estudados, as
+revisões deles entram normalmente na revisão do dia. "Liberar cards novos no dia" desfaz.
+
 **Estudar tudo** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
 todos os cards da seleção numa sessão que **entra no cronograma** — novos sem o limite do dia,
 revisões vencidas sem o limite diário e, por fim, as que ainda não venceram (cada uma uma vez,
