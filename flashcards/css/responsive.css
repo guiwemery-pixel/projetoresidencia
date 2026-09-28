@@ -95,6 +95,34 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Árvores (áreas, baralhos, desempenho, plataforma): o nome nunca some. Se nome e números
+     não cabem na mesma linha, os números descem para a linha de baixo e o nome quebra em
+     mais de uma linha em vez de ser cortado. */
+  .fc-root .tree-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 0;
+    padding: 8px 4px;
+  }
+
+  .fc-root .tree-row > .tree-name {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+
+  .fc-root .tree-row > .tree-stats {
+    margin-left: auto;
+    gap: 10px;
+  }
+
+  .fc-root .tree-name .label-btn {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+
   .fc-root .tree-stats .perf {
     width: auto;
   }
@@ -116,6 +144,44 @@
 
   .fc-root .cal-day .n {
     font-size: 0.95rem;
+  }
+
+  /* Atrasados de hoje: só o número, dentro da célula */
+  .fc-root .cal-day .over {
+    position: static;
+    align-self: flex-start;
+    padding: 1px 5px;
+    font-size: 0.66rem;
+  }
+
+  .fc-root .cal-day .over .full {
+    display: none;
+  }
+
+  .fc-root .cal-head {
+    flex-wrap: wrap;
+  }
+
+  .fc-root .cal-head h2 {
+    min-width: 0;
+  }
+
+  /* "Hoje você tem": os três números lado a lado */
+  .fc-root .today-counts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .fc-root .today-count .label {
+    font-size: 0.8rem;
+    align-items: flex-start;
+    line-height: 1.25;
+  }
+
+  .fc-root .today-count .label .dot {
+    margin-top: 4px;
+    flex: none;
   }
 
   .fc-root .modal-backdrop {
@@ -149,11 +215,8 @@
   .fc-root .rate .ivl {
     font-size: 0.72rem;
   }
-  .fc-root .today-counts {
-    gap: 18px;
-  }
   .fc-root .today-count .value {
-    font-size: 1.9rem;
+    font-size: 1.8rem;
   }
 }
 

@@ -78,7 +78,7 @@
               'button',
               { type: 'button', class: 'cal-day' + (key === todayKey ? ' today' : ''), dataset: { level: String(isPast ? 0 : level(info.due)) }, onclick: () => dayDetail(date), 'aria-label': d + ': ' + info.due + ' previstos' + (info.done ? ', ' + info.done + ' feitas' : '') },
               h('span', { class: 'd', text: String(d) }),
-              info.overdue ? h('span', { class: 'badge crit over', text: info.overdue + ' atras.' }) : null,
+              info.overdue ? h('span', { class: 'badge crit over', title: U.plural(info.overdue, 'atrasado', 'atrasados') }, String(info.overdue), h('span', { class: 'full', text: ' atras.' })) : null,
               isPast ? (info.done ? h('span', { class: 'n', text: String(info.done) }) : null) : info.due ? h('span', { class: 'n', text: String(info.due) }) : null,
               isPast ? (info.done ? h('span', { class: 's', text: 'feitas' }) : null) : info.due ? h('span', { class: 's', text: 'previstos' }) : null,
             ),

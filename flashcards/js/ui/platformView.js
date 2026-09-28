@@ -262,8 +262,8 @@
                 h(
                   'div',
                   { class: 'tree-stats' },
-                  h('span', { class: 'hide-sm', text: U.plural(deck.total, 'card', 'cards') }),
-                  have ? h('span', { class: 'badge good hide-sm', title: 'Na sua coleção', text: (have >= deck.total ? '✓ ' : '') + U.fmtNum(have) + ' na coleção' }) : null,
+                  h('span', { class: 'nowrap', text: U.plural(deck.total, 'card', 'cards') }),
+                  have ? h('span', { class: 'badge good', title: 'Na sua coleção', text: (have >= deck.total ? '✓ ' : '') + U.fmtNum(have) + ' na coleção' }) : null,
                   button('', { icon: 'play', size: 'sm', variant: 'ghost', title: 'Estudar', onClick: () => studyDialog(pkg, deck) }),
                   button('', { icon: 'plus', size: 'sm', variant: 'ghost', title: 'Adicionar à minha coleção', disabled: have >= deck.total, onClick: () => addDialog(pkg, deck, draw) }),
                   FC.ui.moreButton(() => deckMenu(pkg, deck, draw)),
