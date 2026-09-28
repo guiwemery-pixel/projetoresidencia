@@ -4,6 +4,9 @@ import { packExplanation } from '../reviews/explanation-codec.js';
 import { migrateMediaToBlobStore, purgeOldTombstones } from '../flashcards/flashcards.service.js';
 import { getSchedulerConfig } from '../reviews/algorithm-config.js';
 import { rebuildSubject } from '../reviews/learning.service.js';
+import { balanceReviews } from '../reviews/balance.service.js';
+import { requeueOverdue } from '../plans/requeue.service.js';
+import { todayIn } from '../../lib/dates.js';
 
 // Faxina do banco para ocupar menos espaço, sem mudar nada do que se vê no app:
 // - apaga sessões de login vencidas (já seriam recusadas de qualquer forma);
@@ -12,7 +15,8 @@ import { rebuildSubject } from '../reviews/learning.service.js';
 // - descarta marcas de exclusão antigas dos flashcards e, com o R2 configurado,
 //   leva para lá as imagens que ainda estão no banco (ver flashcards.service.ts);
 // - quando o algoritmo de revisão muda de versão, recalcula o histórico dos
-//   assuntos calculados pela versão anterior (as revisões pendentes seguem a regra nova).
+//   assuntos calculados pela versão anterior (as revisões pendentes seguem a regra nova);
+// - todo dia: limite de revisões por dia e revisões muito atrasadas de volta ao cronograma.
 
 export async function deleteExpiredSessions(userId?: string) {
   const { count } = await prisma.session.deleteMany({
@@ -52,20 +56,59 @@ export async function upgradeAlgorithm(opts: { userId?: string; timeBudgetMs?: n
   const { version } = await getSchedulerConfig();
   const deadline = Date.now() + (opts.timeBudgetMs ?? 20_000);
   let upgraded = 0;
+  const users = new Set<string>();
+  const finish = async (done: boolean) => {
+    // Revisões recalculadas: aplica de novo o limite por dia
+    for (const id of users) {
+      const u = await prisma.user.findUnique({ where: { id }, select: { timezone: true } });
+      if (u) await balanceReviews(prisma, id, todayIn(u.timezone));
+    }
+    return { upgraded, done };
+  };
   while (Date.now() < deadline) {
     const states = await prisma.learningState.findMany({
       where: { ...(opts.userId ? { userId: opts.userId } : {}), algorithmVersion: { not: version } },
       select: { userId: true, subjectId: true },
       take: 20,
     });
-    if (!states.length) return { upgraded, done: true };
+    if (!states.length) return finish(true);
     for (const s of states) {
       if (Date.now() >= deadline) break;
       await prisma.$transaction((tx) => rebuildSubject(tx, s.userId, s.subjectId), { timeout: 30_000 });
+      users.add(s.userId);
       upgraded++;
     }
   }
-  return { upgraded, done: false };
+  return finish(false);
+}
+
+const upkeepDay = new Map<string, string>();
+
+/**
+ * Rotina do dia de um usuário: limite de revisões por dia e revisões muito atrasadas
+ * de volta ao cronograma. Ao abrir o Início (uma vez por dia por instância) e no job diário.
+ */
+export async function dailyUpkeep(userId: string, today: string, opts: { force?: boolean } = {}) {
+  if (!opts.force && upkeepDay.get(userId) === today) return null;
+  const moves = await balanceReviews(prisma, userId, today);
+  const requeued = await requeueOverdue(userId, today);
+  upkeepDay.set(userId, today);
+  return { moves: moves.length, requeued: requeued.length };
+}
+
+/** Rotina do dia para todos os usuários com revisões pendentes (job diário). */
+export async function upkeepAllUsers(timeBudgetMs = 20_000) {
+  const deadline = Date.now() + timeBudgetMs;
+  const users = await prisma.user.findMany({ where: { reviews: { some: { status: 'PENDING' } } }, select: { id: true, timezone: true } });
+  let moved = 0;
+  let requeued = 0;
+  for (const u of users) {
+    if (Date.now() >= deadline) break;
+    const r = await dailyUpkeep(u.id, todayIn(u.timezone), { force: true });
+    moved += r?.moves ?? 0;
+    requeued += r?.requeued ?? 0;
+  }
+  return { moved, requeued };
 }
 
 const tidyUsers = new Set<string>();
@@ -84,5 +127,6 @@ export async function runMaintenance() {
   const flashcardUsersPurged = await purgeOldTombstones();
   const { migrated: flashcardImagesMoved } = await migrateMediaToBlobStore();
   const { upgraded: subjectsRecalculated } = await upgradeAlgorithm({ timeBudgetMs: 25_000 });
-  return { expiredSessions, convertedExplanations: converted, flashcardUsersPurged, flashcardImagesMoved, subjectsRecalculated };
+  const { moved: reviewsMoved, requeued: subjectsRequeued } = await upkeepAllUsers();
+  return { expiredSessions, convertedExplanations: converted, flashcardUsersPurged, flashcardImagesMoved, subjectsRecalculated, reviewsMoved, subjectsRequeued };
 }

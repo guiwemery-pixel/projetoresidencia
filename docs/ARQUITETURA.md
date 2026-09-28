@@ -49,13 +49,13 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 | `taxonomy` | Área → Subárea → Assunto, mover/renomear/arquivar, templates por área do conhecimento. |
 | `studies` | Registro de sessões de estudo e de questões; dispara o processamento do contato. |
 | **`scheduler`** | **Motor de revisão espaçada — puro, sem dependência de banco ou HTTP.** |
-| `reviews` | Ponte banco ↔ motor (histórico, reprocessamento), agenda, calendário, reagendamento, configuração do algoritmo. |
+| `reviews` | Ponte banco ↔ motor (histórico, reprocessamento), agenda, calendário, reagendamento, configuração do algoritmo e **limite de revisões por dia** (`balance.service.ts`: o excedente vai para o dia anterior/seguinte, alternando; a data calculada fica em `shifted_from` e a revisão volta quando abre vaga). |
 | `progress` | Indicador de progresso detalhado (só para o dono) e **resumo público** (para o grupo). |
 | `metrics` | Métricas por período, série temporal, por área e por assunto. |
 | `goals` | Metas recorrentes/personalizadas e cálculo automático do progresso. |
 | `mock-exams` / `exams` | Simulados e banco de provas (banca → prova → tentativas). Simulado e tentativa aceitam só a nota em %, sem a quantidade de questões. |
 | `calendar` | Agenda assinada por URL (iCal, RFC 5545): link secreto por usuário (`calendar_feeds`), servido sem login em `GET /api/ical/<token>.ics` com as revisões pendentes (atrasadas no dia de hoje), as semanas do cronograma e a previsão dos flashcards (do resumo enviado pelo app). Opções: cronograma, flashcards, horário fixo (convertido para UTC pelo fuso do usuário) e um evento por dia. O Google Agenda relê a agenda sozinho, algumas vezes por dia. |
-| `plans` | Cronograma: assuntos previstos por semana (`study_plans`, `plan_items`). O navegador lê o PDF (`frontend/src/lib/plan`: texto + cor do marcador pelas instruções de desenho do pdf.js, sem renderizar) e envia a lista já com as datas. Registrar um estudo do assunto conclui o item (o indicado pelo botão, ou o pendente cuja semana começa até 7 dias depois do estudo); excluir o estudo o devolve a pendente. Item pendente depois do fim da semana = atrasado. |
+| `plans` | Cronograma: assuntos previstos por semana (`study_plans`, `plan_items`). O navegador lê o PDF (`frontend/src/lib/plan`: texto + cor do marcador pelas instruções de desenho do pdf.js, sem renderizar) e envia a lista já com as datas. Registrar um estudo do assunto conclui o item (o indicado pelo botão, ou o pendente cuja semana começa até 7 dias depois do estudo); excluir o estudo o devolve a pendente. Item pendente depois do fim da semana = atrasado. Revisão atrasada há `users.requeue_overdue_days` dias (padrão 20) volta para o cronograma automático “Assuntos para repetir”, na semana atual (`requeue.service.ts`). |
 | `import` | Importação de planilhas: o navegador lê o arquivo (`frontend/src/lib/import`) e envia estudos, simulados e notas de provas em lotes pequenos (poucos assuntos por lote); o servidor grava em bloco, sem duplicar, e recalcula o histórico de cada assunto. |
 | `notifications` | Notificações idempotentes (chave de deduplicação) + job periódico. |
 | `insights` | Recomendações automáticas e comparações com o próprio histórico. |
@@ -119,7 +119,7 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 | `study_sessions` | Data, duração, métodos (vários), autoavaliação, dificuldade. |
 | `question_sessions` | Total, acertos, erros, %, banca, prova, dificuldade, tempo. |
 | `learning_states` | Estado de aprendizagem por assunto (etapa, facilidade, último contato, quedas). |
-| `reviews` | Cada revisão: prevista, realizada, intervalo, desempenho, qualidade, próximo intervalo e **explicação** (comprimida, ver abaixo). |
+| `reviews` | Cada revisão: prevista, realizada, intervalo, desempenho, qualidade, próximo intervalo, data calculada quando o limite por dia a mudou de dia (`shifted_from`) e **explicação** (comprimida, ver abaixo). |
 | `algorithm_configs` | Parâmetros do algoritmo ajustáveis sem novo deploy. |
 | `goals` | Metas (métrica, período, alvo, área/assunto opcionais, prazo, status). |
 | `calendar_feeds` | Link da agenda (token secreto), opções e a última leitura (quando e por qual calendário). |

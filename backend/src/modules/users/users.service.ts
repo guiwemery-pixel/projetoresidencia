@@ -16,6 +16,8 @@ export function toPrivateUser(user: User) {
     weeklyStudyHoursTarget: user.weeklyStudyHoursTarget,
     weeklyStudyDaysTarget: user.weeklyStudyDaysTarget,
     dailyQuestionsTarget: user.dailyQuestionsTarget,
+    dailyReviewLimit: user.dailyReviewLimit,
+    requeueOverdueDays: user.requeueOverdueDays,
     dashboardLayout: user.dashboardLayout,
     createdAt: user.createdAt,
   };

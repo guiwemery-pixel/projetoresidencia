@@ -10,6 +10,7 @@ import { reviewPlan, suggestedQuestions } from '../scheduler/index.js';
 import { notify } from '../notifications/notifications.service.js';
 import { refreshGoals } from '../goals/goals.service.js';
 import { linkStudy, unlinkStudy } from '../plans/plans.service.js';
+import { balanceReviews, reviewLimitOf, type ReviewMove } from '../reviews/balance.service.js';
 
 export interface QuestionInput {
   total: number;
@@ -54,12 +55,21 @@ function questionData(userId: string, subjectId: string, date: string, q: Questi
   };
 }
 
-function scheduleView(outcome: ContactOutcome) {
+/** Aplica o limite de revisões por dia depois de um estudo (ver reviews/balance.service.ts). */
+async function balanceAfter(userId: string, today: string) {
+  const limit = await reviewLimitOf(prisma, userId);
+  return { limit, moves: await balanceReviews(prisma, userId, today, limit) };
+}
+
+function scheduleView(outcome: ContactOutcome, balance?: { limit: number; moves: ReviewMove[] }) {
   const r = outcome.result;
   if (!r) return null;
   return {
     reviewId: outcome.nextReview?.id ?? null,
-    dueOn: r.dueOn,
+    // O dia calculado já tinha o máximo de revisões: foi para um dia vizinho
+    dueOn: (outcome.nextReview && balance?.moves.find((m) => m.id === outcome.nextReview!.id)?.to) || r.dueOn,
+    shiftedFrom: outcome.nextReview && balance?.moves.some((m) => m.id === outcome.nextReview!.id) ? r.dueOn : null,
+    dailyReviewLimit: balance?.limit ?? null,
     intervalDays: r.intervalDays,
     stageLabel: r.stageLabel,
     checkup: r.checkup,
@@ -125,12 +135,13 @@ export async function createStudy(userId: string, input: StudyInput, today: stri
     return { session, outcome, isFirstContact: earlier === 0, planItem };
   });
 
+  const balance = await balanceAfter(userId, today);
   await afterContact(userId, subject.id, subject.name, input.date, outcome, today);
   return {
     session: await getStudy(userId, session.id),
     isFirstContact,
     completedReviewId: outcome.completedReviewId,
-    schedule: scheduleView(outcome),
+    schedule: scheduleView(outcome, balance),
     planItem,
   };
 }
@@ -175,8 +186,9 @@ export async function updateStudy(userId: string, id: string, input: Partial<Stu
     }
     return rebuildSubject(tx, userId, newSubjectId);
   });
+  const balance = await balanceAfter(userId, today);
   await refreshGoals(userId, today);
-  return { session: await getStudy(userId, id), schedule: scheduleView(outcome) };
+  return { session: await getStudy(userId, id), schedule: scheduleView(outcome, balance) };
 }
 
 export async function deleteStudy(userId: string, id: string, today: string) {
@@ -187,6 +199,7 @@ export async function deleteStudy(userId: string, id: string, today: string) {
     await tx.studySession.delete({ where: { id } });
     await rebuildSubject(tx, userId, existing.subjectId);
   });
+  await balanceAfter(userId, today);
   await refreshGoals(userId, today);
 }
 

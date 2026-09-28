@@ -89,6 +89,11 @@ export function ReviewCard({ review, compact }: { review: Review; compact?: bool
           <AreaDot color={review.subject.area?.color} /> {review.subject.area?.path}
           {!compact && !overdue && <span className="text-muted">· {relativeDay(review.scheduledFor, today)}</span>}
         </p>
+        {review.shiftedFrom && review.shiftedFrom !== review.scheduledFor && (
+          <p className="mt-0.5 text-xs text-muted" title="O dia calculado já tinha o máximo de revisões (Perfil → Revisões por dia)">
+            ↔ era {fmtShort(review.shiftedFrom)} · limite de revisões por dia
+          </p>
+        )}
         {!compact && (
           <p className="mt-1 text-xs text-muted">
             {review.phase} · {review.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')}

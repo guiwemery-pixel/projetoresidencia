@@ -10,6 +10,8 @@ import { SESSION_COOKIE, destroyOtherSessions, sessionCookieOptions } from '../a
 import { computeProgress } from '../progress/progress.service.js';
 import { exportUserData, resetProgress, toPrivateUser } from './users.service.js';
 import { removeUserMedia } from '../flashcards/flashcards.service.js';
+import { balanceReviews } from '../reviews/balance.service.js';
+import { requeueOverdue } from '../plans/requeue.service.js';
 
 export const usersRouter = Router();
 
@@ -49,6 +51,10 @@ const profileSchema = z.object({
   weeklyStudyHoursTarget: z.number().int().min(1).max(100).optional(),
   weeklyStudyDaysTarget: z.number().int().min(1).max(7).optional(),
   dailyQuestionsTarget: z.number().int().min(0).max(1000).optional(),
+  // Máximo de revisões (assuntos) por dia; 0 = sem limite
+  dailyReviewLimit: z.number().int().min(0).max(50).optional(),
+  // Revisão atrasada há tantos dias volta ao cronograma; 0 = nunca
+  requeueOverdueDays: z.number().int().min(0).max(365).optional(),
   dashboardLayout: dashboardLayoutSchema.nullable().optional(),
 });
 
@@ -61,6 +67,9 @@ usersRouter.patch('/', async (req, res) => {
       ...(dashboardLayout !== undefined ? { dashboardLayout: dashboardLayout ?? Prisma.DbNull } : {}),
     },
   });
+  // Mudou a regra: aplica já (o limite remaneja as revisões; o prazo devolve ao cronograma)
+  if (rest.dailyReviewLimit !== undefined) await balanceReviews(prisma, user.id, today(req));
+  if (rest.requeueOverdueDays !== undefined) await requeueOverdue(user.id, today(req));
   res.json({ user: toPrivateUser(user) });
 });
 

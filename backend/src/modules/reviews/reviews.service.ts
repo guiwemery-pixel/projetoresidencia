@@ -114,7 +114,7 @@ export async function rescheduleReview(userId: string, id: string, date: string,
   if (date < today) throw badRequest('Escolha hoje ou uma data futura');
   await prisma.review.update({
     where: { id },
-    data: { scheduledFor: toDb(date), originalScheduledOn: review.originalScheduledOn ?? review.scheduledFor },
+    data: { scheduledFor: toDb(date), originalScheduledOn: review.originalScheduledOn ?? review.shiftedFrom ?? review.scheduledFor, shiftedFrom: null },
   });
   return getReview(userId, id);
 }

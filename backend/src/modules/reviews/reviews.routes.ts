@@ -4,6 +4,7 @@ import { dateString, id, parse } from '../../lib/validation.js';
 import { currentUser, today } from '../../middleware/auth.js';
 import { getSchedulerConfig } from './algorithm-config.js';
 import * as svc from './reviews.service.js';
+import { dailyUpkeep } from '../maintenance/maintenance.service.js';
 
 export const reviewsRouter = Router();
 
@@ -24,6 +25,7 @@ reviewsRouter.get('/', async (req, res) => {
 
 reviewsRouter.get('/agenda', async (req, res) => {
   const { days } = parse(z.object({ days: z.coerce.number().int().min(0).max(60).optional() }), req.query);
+  await dailyUpkeep(currentUser(req).id, today(req)).catch((err) => console.error(err));
   res.json(await svc.reviewAgenda(currentUser(req).id, today(req), days ?? 7));
 });
 

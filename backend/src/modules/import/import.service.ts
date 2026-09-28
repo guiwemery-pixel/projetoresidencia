@@ -4,6 +4,7 @@ import { prisma, type Tx } from '../../lib/prisma.js';
 import { badRequest } from '../../lib/errors.js';
 import { fromDb, toDb } from '../../lib/dates.js';
 import { round } from '../../lib/math.js';
+import { balanceReviews } from '../reviews/balance.service.js';
 import { rebuildSubject } from '../reviews/learning.service.js';
 
 // Importação de planilhas: o arquivo é lido no navegador e chegam aqui só os
@@ -338,6 +339,13 @@ export async function runImport(userId: string, payload: ImportPayload, today: s
   const { events, mocks = [], exams = [] } = payload;
   validateEvents(events, today);
   validateResults([...mocks, ...exams], today);
+  const result = await importInTransaction(userId, events, mocks, exams);
+  // Revisões recalculadas: limite de revisões por dia
+  if (result.subjects) await balanceReviews(prisma, userId, today);
+  return result;
+}
+
+function importInTransaction(userId: string, events: ImportEvent[], mocks: ImportMock[], exams: ImportExamResult[]) {
   return prisma.$transaction(
     async (tx) => {
       let created = 0;

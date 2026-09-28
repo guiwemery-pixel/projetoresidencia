@@ -180,6 +180,11 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                   {s.phase.toLowerCase()}.
                 </p>
               )}
+              {s?.shiftedFrom && (
+                <p className="mt-1 text-sm text-ink2">
+                  ↔ Seria {fmtLong(s.shiftedFrom)}, mas esse dia já tinha {s.dailyReviewLimit} revisões (seu limite por dia): foi para o dia vizinho.
+                </p>
+              )}
               {result.completedReviewId && <p className="mt-1 text-sm text-ink2">✔ A revisão pendente deste assunto foi concluída.</p>}
               {result.planItem && (
                 <p className="mt-1 text-sm text-ink2">

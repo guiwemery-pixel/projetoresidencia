@@ -187,6 +187,10 @@ export default function ProfilePage() {
     weeklyStudyDaysTarget: user?.weeklyStudyDaysTarget ?? 5,
     dailyQuestionsTarget: user?.dailyQuestionsTarget ?? 30,
   }));
+  const [reviewRules, setReviewRules] = useState(() => ({
+    dailyReviewLimit: user?.dailyReviewLimit ?? 5,
+    requeueOverdueDays: user?.requeueOverdueDays ?? 20,
+  }));
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePw, setDeletePw] = useState('');
@@ -202,6 +206,8 @@ export default function ProfilePage() {
       setUser(user);
       qc.invalidateQueries({ queryKey: ['progress'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      // O limite de revisões por dia remaneja revisões; o prazo de atraso mexe no cronograma
+      for (const key of ['reviews', 'plans', 'notifications']) qc.invalidateQueries({ queryKey: [key] });
       toast.success('Alterações salvas.');
     },
     onError: toast.error,
@@ -277,6 +283,32 @@ export default function ProfilePage() {
           </div>
         </Card>
       </div>
+
+      <Card title="Revisões por dia" subtitle="Organiza o calendário de revisões.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <NumberInput
+            label="Máximo de revisões por dia"
+            min={0}
+            max={50}
+            value={reviewRules.dailyReviewLimit}
+            onChange={(v) => setReviewRules({ ...reviewRules, dailyReviewLimit: v ?? 0 })}
+            hint="Assuntos por dia. Se um dia passar disso, as revisões que chegaram por último vão para o dia anterior ou o seguinte (as que você remarcou ficam onde estão). 0 = sem limite."
+          />
+          <NumberInput
+            label="Atrasada volta ao cronograma depois de (dias)"
+            min={0}
+            max={365}
+            value={reviewRules.requeueOverdueDays}
+            onChange={(v) => setReviewRules({ ...reviewRules, requeueOverdueDays: v ?? 0 })}
+            hint="O assunto entra em “Assuntos para repetir”, na semana atual do cronograma, para ser estudado de novo. 0 = nunca."
+          />
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button loading={patch.isPending} onClick={() => patch.mutate(reviewRules)}>
+            Salvar
+          </Button>
+        </div>
+      </Card>
 
       <Card title="Privacidade no grupo">
         <label className="flex items-start gap-3">

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { dateString, parse } from '../../lib/validation.js';
 import { currentUser, today } from '../../middleware/auth.js';
 import * as svc from './plans.service.js';
+import { dailyUpkeep } from '../maintenance/maintenance.service.js';
 
 export const plansRouter = Router();
 
@@ -24,11 +25,14 @@ const planSchema = z.object({
 });
 
 plansRouter.get('/', async (req, res) => {
+  // Revisões atrasadas há muito tempo voltam para o cronograma (uma vez por dia)
+  await dailyUpkeep(currentUser(req).id, today(req)).catch((err) => console.error(err));
   res.json(await svc.listPlans(currentUser(req).id, today(req)));
 });
 
 /** Pendências de todos os cronogramas (atrasadas, desta semana e da próxima). */
 plansRouter.get('/agenda', async (req, res) => {
+  await dailyUpkeep(currentUser(req).id, today(req)).catch((err) => console.error(err));
   res.json(await svc.planAgenda(currentUser(req).id, today(req)));
 });
 

@@ -95,6 +95,10 @@ model User {
   weeklyStudyHoursTarget Int      @default(20) @map("weekly_study_hours_target")
   weeklyStudyDaysTarget  Int      @default(5) @map("weekly_study_days_target")
   dailyQuestionsTarget   Int      @default(30) @map("daily_questions_target")
+  // Máximo de revisões (assuntos) por dia: o excedente vai para o dia anterior ou o seguinte. 0 = sem limite
+  dailyReviewLimit       Int      @default(5) @map("daily_review_limit")
+  // Revisão atrasada há tantos dias volta para o cronograma ("Assuntos para repetir"). 0 = nunca
+  requeueOverdueDays     Int      @default(20) @map("requeue_overdue_days")
   // Organização da página inicial: { main: [...], side: [...], hidden: [...] }
   dashboardLayout        Json?    @map("dashboard_layout")
   createdAt              DateTime @default(now()) @map("created_at")
@@ -309,6 +313,9 @@ model Review {
   stage               Int
   scheduledFor        DateTime      @map("scheduled_for") @db.Date
   originalScheduledOn DateTime?     @map("original_scheduled_on") @db.Date
+  // Data calculada pelo algoritmo quando a revisão foi para um dia vizinho por causa do
+  // limite de revisões por dia (volta para ela se abrir vaga). Remarcação manual limpa
+  shiftedFrom         DateTime?     @map("shifted_from") @db.Date
   intervalDays        Int           @map("interval_days")
   status              ReviewStatus  @default(PENDING)
   completedOn         DateTime?     @map("completed_on") @db.Date

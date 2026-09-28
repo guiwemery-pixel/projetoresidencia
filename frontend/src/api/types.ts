@@ -27,6 +27,10 @@ export interface User {
   weeklyStudyHoursTarget: number;
   weeklyStudyDaysTarget: number;
   dailyQuestionsTarget: number;
+  /** Máximo de revisões (assuntos) por dia; 0 = sem limite */
+  dailyReviewLimit: number;
+  /** Revisão atrasada há tantos dias volta ao cronograma; 0 = nunca */
+  requeueOverdueDays: number;
   /** Organização da página inicial (ids dos balões por coluna) */
   dashboardLayout?: { main: string[]; side: string[]; hidden: string[] } | null;
   createdAt: string;
@@ -121,6 +125,8 @@ export interface Review {
   phase: string;
   scheduledFor: string;
   originalScheduledOn: string | null;
+  /** Data calculada, quando a revisão foi para um dia vizinho pelo limite de revisões por dia */
+  shiftedFrom?: string | null;
   intervalDays: number;
   status: 'PENDING' | 'DONE' | 'SKIPPED';
   completedOn: string | null;
@@ -167,6 +173,9 @@ export interface Study {
 export interface ScheduleView {
   reviewId: string | null;
   dueOn: string;
+  /** O dia calculado já tinha o máximo de revisões: dueOn é o dia vizinho, esta é a data calculada */
+  shiftedFrom?: string | null;
+  dailyReviewLimit?: number | null;
   intervalDays: number;
   stageLabel: string;
   phase: string;

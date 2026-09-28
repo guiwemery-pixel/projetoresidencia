@@ -311,6 +311,8 @@ export function serializeReview(r: Review) {
     stage: r.stage,
     scheduledFor: fromDb(r.scheduledFor),
     originalScheduledOn: r.originalScheduledOn ? fromDb(r.originalScheduledOn) : null,
+    // Foi para um dia vizinho pelo limite de revisões por dia (data calculada)
+    shiftedFrom: r.shiftedFrom ? fromDb(r.shiftedFrom) : null,
     intervalDays: r.intervalDays,
     status: r.status,
     completedOn: r.completedOn ? fromDb(r.completedOn) : null,
