@@ -7,6 +7,7 @@ import { AreaDot, Card, ErrorState, IconButton, PageHeader, cx } from '../compon
 import { ReviewCard } from '../components/study/ReviewCard';
 import { PlanItemCard, weekLabel } from '../components/study/PlanItemCard';
 import { GoogleCalendarDialog } from '../components/calendar/GoogleCalendarDialog';
+import { ReviewLimitButton } from '../components/study/ReviewLimit';
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
@@ -51,7 +52,12 @@ export default function CalendarPage() {
     <div>
       <PageHeader
         title="Calendário"
-        subtitle="Suas revisões dia a dia e os assuntos do cronograma de cada semana. Apenas você vê este calendário."
+        subtitle={
+          <>
+            Suas revisões dia a dia e os assuntos do cronograma de cada semana. Apenas você vê este calendário.
+            <ReviewLimitButton className="mt-1.5 flex" />
+          </>
+        }
         actions={
           <>
             <button

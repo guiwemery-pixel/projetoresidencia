@@ -240,8 +240,9 @@ de 84% para 60%”.
 
 ## 5b. Limite de revisões por dia e revisões muito atrasadas
 
-**No máximo 5 revisões (assuntos) por dia** — ajustável em *Perfil → Revisões por dia* (0 = sem
-limite). Quando um dia passa do limite, as revisões que chegaram por último vão para o dia vizinho
+**No máximo 5 revisões (assuntos) por dia** por padrão — cada pessoa escolhe o seu limite em
+*Revisões* ou *Calendário* (“Até 5 revisões por dia · Alterar”: 3, 5, 7, 10, outro número de 1 a 50
+ou sem limite) ou em *Perfil → Revisões por dia*. Quando um dia passa do limite, as revisões que chegaram por último vão para o dia vizinho
 com vaga, **alternando**: uma para o dia anterior, a seguinte para o dia seguinte (o intervalo
 médio não muda). Sem vaga, dois dias antes/depois… até uma semana; depois, o primeiro dia livre.
 Ex.: 7 revisões calculadas para 18/10 → 5 ficam no dia 18, uma vai para 17/10 e outra para 19/10.
@@ -253,7 +254,7 @@ Ex.: 7 revisões calculadas para 18/10 → 5 ficam no dia 18, uma vai para 17/10
 - A data calculada fica guardada (`reviews.shifted_from`): **quando abre vaga nela, a revisão
   volta**. A tela mostra “↔ era 18/10 · limite de revisões por dia”, e o registro do estudo avisa.
 - Roda depois de cada estudo registrado, editado ou excluído, da importação de planilha, da troca
-  de versão do algoritmo, de mudar o limite no Perfil e todo dia (`reviews/balance.service.ts`).
+  de versão do algoritmo, de mudar o limite e todo dia (`reviews/balance.service.ts`).
 
 **Revisão atrasada há 20 dias ou mais volta para o cronograma** (*Perfil*, 0 = nunca): o assunto
 precisa ser estudado de novo. Ele entra no cronograma automático **“Assuntos para repetir”**, na

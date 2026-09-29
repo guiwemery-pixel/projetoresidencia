@@ -9,6 +9,7 @@ import { QUALITY } from '../lib/constants';
 import { AreaDot, Card, EmptyState, ErrorState, Loading, PageHeader, Segmented } from '../components/ui';
 import { ReviewCard, WhyDialog } from '../components/study/ReviewCard';
 import { PlanItemCard } from '../components/study/PlanItemCard';
+import { ReviewLimitButton } from '../components/study/ReviewLimit';
 
 type Tab = 'hoje' | 'proximas' | 'historico';
 
@@ -34,7 +35,12 @@ export default function ReviewsPage() {
     <div>
       <PageHeader
         title="Revisões"
-        subtitle="Agendadas automaticamente pelo algoritmo a partir do seu desempenho em cada assunto."
+        subtitle={
+          <>
+            Agendadas automaticamente pelo algoritmo a partir do seu desempenho em cada assunto.
+            <ReviewLimitButton className="mt-1.5 flex" />
+          </>
+        }
         actions={
           <Segmented<Tab>
             value={tab}
