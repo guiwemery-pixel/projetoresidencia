@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { User } from '../api/types';
@@ -91,6 +91,14 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // Cadastro só para e-mails liberados pela Administração: avisa antes de preencher
+  const [inviteOnly, setInviteOnly] = useState(false);
+  useEffect(() => {
+    api
+      .get<{ mode: string }>('/auth/signup')
+      .then((r) => setInviteOnly(r.mode === 'invite'))
+      .catch(() => {});
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -118,6 +126,7 @@ export function RegisterPage() {
       subtitle={cards ? 'Uma conta do Projeto Residente vale para os flashcards e para o site completo.' : 'Seus dados detalhados ficam privados. O grupo vê apenas um resumo visual.'}
     >
       <form onSubmit={submit} className="space-y-4">
+        {inviteOnly && <p className="rounded-xl bg-accent-wash px-3 py-2 text-sm text-ink2">O cadastro está liberado só para e-mails autorizados. Use o e-mail que você informou ao administrador.</p>}
         <Input label="Nome" autoComplete="name" required minLength={2} value={form.name} onChange={set('name')} />
         <Input label="E-mail" type="email" autoComplete="email" required value={form.email} onChange={set('email')} />
         <Input label="Senha" type="password" autoComplete="new-password" required minLength={8} hint="Mínimo de 8 caracteres." value={form.password} onChange={set('password')} />

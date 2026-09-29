@@ -27,6 +27,7 @@ const PlanPage = lazy(() => import('./pages/Plan'));
 const PlanImportPage = lazy(() => import('./pages/PlanImport'));
 const FlashcardsPage = lazy(() => import('./pages/Flashcards'));
 const FlashcardsAppPage = lazy(() => import('./pages/FlashcardsApp'));
+const AdminPage = lazy(() => import('./pages/Admin'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -101,6 +102,7 @@ export function App() {
           ['grupo', <GroupPage />],
           ['grupo/:id', <GroupPage />],
           ['perfil', <ProfilePage />],
+          ['admin', <AdminPage />],
           ['busca', <SearchPage />],
           ['flashcards/*', <FlashcardsPage />],
         ].map(([path, el]) => (

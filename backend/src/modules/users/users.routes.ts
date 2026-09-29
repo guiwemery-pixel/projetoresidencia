@@ -8,7 +8,7 @@ import { currentUser, today } from '../../middleware/auth.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import { SESSION_COOKIE, destroyOtherSessions, sessionCookieOptions } from '../auth/session.js';
 import { computeProgress } from '../progress/progress.service.js';
-import { exportUserData, resetProgress, toPrivateUser } from './users.service.js';
+import { exportUserData, resetProgress, sessionUser } from './users.service.js';
 import { removeUserMedia } from '../flashcards/flashcards.service.js';
 import { balanceReviews } from '../reviews/balance.service.js';
 import { requeueOverdue } from '../plans/requeue.service.js';
@@ -70,7 +70,7 @@ usersRouter.patch('/', async (req, res) => {
   // Mudou a regra: aplica já (o limite remaneja as revisões; o prazo devolve ao cronograma)
   if (rest.dailyReviewLimit !== undefined) await balanceReviews(prisma, user.id, today(req));
   if (rest.requeueOverdueDays !== undefined) await requeueOverdue(user.id, today(req));
-  res.json({ user: toPrivateUser(user) });
+  res.json({ user: await sessionUser(user) });
 });
 
 const passwordSchema = z.object({

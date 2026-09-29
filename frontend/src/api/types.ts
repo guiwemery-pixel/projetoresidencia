@@ -34,6 +34,8 @@ export interface User {
   /** Organização da página inicial (ids dos balões por coluna) */
   dashboardLayout?: { main: string[]; side: string[]; hidden: string[] } | null;
   createdAt: string;
+  /** Administra o site (página Administração, cards da plataforma) */
+  isAdmin?: boolean;
 }
 
 export interface AreaInfo {

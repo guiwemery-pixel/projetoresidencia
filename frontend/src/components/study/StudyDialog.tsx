@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarCheck2, ChevronDown, Info, Lightbulb, Sparkles } from 'lucide-react';
+import { CalendarCheck2, ChevronDown, Info, Lightbulb, Sparkles, WifiOff } from 'lucide-react';
 import { api } from '../../api/client';
+import { isQueuedOffline } from '../../api/offline';
 import type { StudyMethod, StudyResult, StudySuggestion } from '../../api/types';
 import { useCreateStudy, useSubjects } from '../../hooks/api';
 import { DIFFICULTY, METHODS, METHOD_LABEL, QUALITY, SIZES } from '../../lib/constants';
@@ -62,6 +63,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [notes, setNotes] = useState(opts.notes ?? '');
   const [result, setResult] = useState<StudyResult | null>(null);
+  const [queued, setQueued] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
 
   // Pré-seleciona o assunto (ex.: ao abrir a partir de uma revisão)
@@ -140,8 +142,24 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
       setResult(res);
       toast.success('Estudo registrado!');
     } catch (err) {
-      toast.error(err);
+      // Sem internet: ficou na fila deste aparelho e vai quando a conexão voltar
+      if (isQueuedOffline(err)) setQueued(true);
+      else toast.error(err);
     }
+  }
+
+  if (queued) {
+    return (
+      <Modal open onClose={onClose} title="Salvo neste aparelho" footer={<Button onClick={onClose}>Fechar</Button>}>
+        <div className="flex items-start gap-3 rounded-2xl bg-accent-wash p-4 text-sm text-ink2">
+          <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+          <p>
+            Você está sem internet. O estudo de <strong className="text-ink">{subject?.kind === 'existing' ? subject.subject.name : subject?.data.name}</strong> ficou salvo
+            neste aparelho e será enviado quando a conexão voltar — aí a próxima revisão é calculada e aparece no calendário.
+          </p>
+        </div>
+      </Modal>
+    );
   }
 
   const title = result ? 'Estudo registrado' : opts.reviewId ? 'Registrar revisão' : opts.planItemId ? 'Registrar estudo do cronograma' : 'Registrar estudo';

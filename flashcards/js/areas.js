@@ -212,8 +212,20 @@
     if (!node) return;
     const ids = descendantIds(id);
     const affected = [...store().cards.values()].filter((c) => ids.has(c.nodeId));
+    // Área/tema vai para a lixeira; mantendo os cards, lembra onde cada um estava
+    const batch = FC.trash ? FC.trash.batch(LEVEL_LABELS[node.level] + ' "' + node.name + '"') : null;
+    if (batch) {
+      const byNode = new Map();
+      if (mode !== 'delete') {
+        for (const c of affected) {
+          if (!byNode.has(c.nodeId)) byNode.set(c.nodeId, []);
+          byNode.get(c.nodeId).push(c.id);
+        }
+      }
+      await FC.trash.put(batch, [...ids].map((nid) => ({ store: 'nodes', value: get(nid), cardIds: byNode.get(nid) })));
+    }
     if (mode === 'delete') {
-      await FC.cards.remove(affected.map((c) => c.id));
+      await FC.cards.remove(affected.map((c) => c.id), { trash: batch || false });
     } else {
       const ops = [];
       for (const card of affected) {
@@ -228,6 +240,7 @@
     await FC.db.batch(nodeOps);
     store().emit('nodes');
     store().emit('cards');
+    return batch;
   }
 
   async function refreshCardPaths(nodeIds) {

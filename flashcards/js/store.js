@@ -131,6 +131,7 @@
       if (touched.has('drafts')) this.emit('drafts', { remote: true });
       if (touched.has('sources')) this.emit('sources', { remote: true });
       if (touched.has('quickSessions')) this.emit('quick', { remote: true });
+      if (touched.has('trash')) this.emit('trash', { remote: true });
       return touched;
     },
   };

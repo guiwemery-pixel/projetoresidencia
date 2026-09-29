@@ -156,17 +156,28 @@
     store().emit('cards', { updated: ids });
   }
 
-  async function remove(ids) {
+  /**
+   * Exclui cards e o histórico deles. Vão para a lixeira (FC.trash), de onde podem
+   * voltar por 30 dias: opts.trash = lote da lixeira ou o nome dele; false = exclui de vez.
+   */
+  async function remove(ids, opts = {}) {
     ids = [].concat(ids).filter((id) => store().cards.has(id));
-    if (!ids.length) return;
+    if (!ids.length) return null;
     const set = new Set(ids);
     const logIds = store().logs.filter((l) => set.has(l.cardId)).map((l) => l.id);
+    let batch = null;
+    if (opts.trash !== false && FC.trash) {
+      const label = ids.length === 1 ? 'Card "' + FC.util.truncate(stripHtml(store().cards.get(ids[0]).front || ''), 60) + '"' : FC.util.plural(ids.length, 'card', 'cards');
+      batch = opts.trash && typeof opts.trash === 'object' ? opts.trash : FC.trash.batch(opts.trash || label);
+      await FC.trash.put(batch, ids.map((id) => ({ store: 'cards', value: store().cards.get(id), logs: store().cardLogs(id) })));
+    }
     for (const id of ids) store().cards.delete(id);
     await FC.db.bulkDel('cards', ids);
     await FC.db.bulkDel('logs', logIds);
     store().removeLogs(logIds);
     invalidateIndex();
     store().emit('cards', { removed: ids });
+    return batch;
   }
 
   async function duplicate(id) {
@@ -263,6 +274,8 @@
       for (const id of filter.deckIds) for (const d of FC.decks.descendantIds(id)) deckSet.add(d);
     }
     let nodeSet = null;
+    // '__none__' = sem classificação (sem área, ou com uma área que não existe mais)
+    const unclassified = !!(filter.nodeIds && filter.nodeIds.includes('__none__'));
     if (filter.nodeIds && filter.nodeIds.length) {
       nodeSet = new Set();
       for (const id of filter.nodeIds) for (const n of FC.areas.descendantIds(id)) nodeSet.add(n);
@@ -276,7 +289,7 @@
     for (const card of store().cards.values()) {
       if (idSet && !idSet.has(card.id)) continue;
       if (deckSet && !deckSet.has(card.deckId)) continue;
-      if (nodeSet && !nodeSet.has(card.nodeId)) continue;
+      if (nodeSet && !nodeSet.has(card.nodeId) && !(unclassified && (!card.nodeId || !store().nodes.has(card.nodeId)))) continue;
       if (blocked && blocked.has(card.deckId)) continue;
       if (suspended === 'exclude' && card.suspended) continue;
       if (suspended === 'only' && !card.suspended) continue;

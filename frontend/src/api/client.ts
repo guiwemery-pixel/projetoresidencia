@@ -1,4 +1,6 @@
 // Cliente HTTP mínimo. A sessão viaja em cookie httpOnly (credentials: include).
+// Sem internet, ver ./offline.ts.
+import { QueuedOffline, enqueue, queueable } from './offline';
 
 export class ApiError extends Error {
   constructor(
@@ -21,12 +23,21 @@ function withQuery(path: string, query?: Query) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
-  const res = await fetch(`/api${withQuery(path, query)}`, {
-    method,
-    credentials: 'include',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const url = withQuery(path, query);
+  let res: Response;
+  try {
+    res = await fetch(`/api${url}`, {
+      method,
+      credentials: 'include',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // Sem internet: o que é do dia a dia fica na fila e vai quando a conexão voltar
+    const label = method !== 'GET' ? queueable(method, url) : null;
+    if (label) throw new QueuedOffline(enqueue(method, url, body, label));
+    throw new ApiError(0, 'Sem internet. Tente de novo quando a conexão voltar.', { offline: true });
+  }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

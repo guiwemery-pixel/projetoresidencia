@@ -511,7 +511,7 @@
       const last = this.answers.pop();
       if (!last) return null;
       if (!last.existed) {
-        await FC.cards.remove(last.cardId);
+        await FC.cards.remove(last.cardId, { trash: false });
         this.added--;
       }
       this.queue.unshift(last.key);

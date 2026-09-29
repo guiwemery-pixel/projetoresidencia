@@ -28,12 +28,23 @@
 
     function renderBar(cards) {
       FC.ui.clear(bar);
-      bar.classList.toggle('hidden', !selected.size);
-      if (!selected.size) return;
+      // "Selecionar todos" sempre à mostra: marca todos os cards da lista (não só os da página)
+      bar.classList.toggle('hidden', !cards.length);
+      if (!cards.length) return;
       const ids = [...selected];
-      FC.ui.add(bar, 
-        h('strong', { text: U.plural(ids.length, 'selecionado', 'selecionados') }),
-        button('Todos (' + cards.length + ')', { size: 'sm', variant: 'ghost', onClick: () => (cards.forEach((c) => selected.add(c.id)), render()) }),
+      bar.style.position = ids.length ? 'sticky' : 'static';
+      const all = h('input', { type: 'checkbox', 'aria-label': 'Selecionar todos os ' + cards.length + ' cards' });
+      all.checked = ids.length > 0 && ids.length >= cards.length;
+      all.indeterminate = ids.length > 0 && ids.length < cards.length;
+      all.addEventListener('change', () => {
+        if (all.checked) cards.forEach((c) => selected.add(c.id));
+        else selected.clear();
+        render();
+      });
+      FC.ui.add(bar, h('label', { class: 'row tight select-all' }, all, ids.length ? h('strong', { text: U.plural(ids.length, 'selecionado', 'selecionados') + (ids.length < cards.length ? ' de ' + U.fmtNum(cards.length) : '') }) : h('span', { text: 'Selecionar todos (' + U.fmtNum(cards.length) + ')' })));
+      if (!ids.length) return;
+      FC.ui.add(bar,
+        ids.length < cards.length ? button('Todos (' + U.fmtNum(cards.length) + ')', { size: 'sm', variant: 'ghost', onClick: () => (cards.forEach((c) => selected.add(c.id)), render()) }) : null,
         button('Limpar', { size: 'sm', variant: 'ghost', onClick: () => (selected.clear(), render()) }),
         h('span', { class: 'grow' }),
         button('Quick Review', { size: 'sm', icon: 'zap', onClick: () => FC.launch.quickIds(ids, (opts.label || 'Seleção') + ' · selecionados') }),
@@ -46,7 +57,7 @@
           { label: 'Reativar', icon: 'play', run: async () => { await FC.cards.setSuspended(ids, false); FC.ui.toast('Cards reativados.'); render(); } },
           { label: 'Exportar selecionados', icon: 'download', run: () => FC.importView.exportDialog({ cardIds: ids, label: 'selecionados' }) },
           '-',
-          { label: 'Excluir', icon: 'trash', danger: true, run: async () => { if (!(await FC.ui.confirm('Excluir ' + U.plural(ids.length, 'card', 'cards') + ' e o histórico deles?', { danger: true, okText: 'Excluir' }))) return; await FC.cards.remove(ids); selected.clear(); FC.ui.toast('Cards excluídos.'); render(); } },
+          { label: 'Excluir', icon: 'trash', danger: true, run: async () => { if (!(await FC.ui.confirm('Excluir ' + U.plural(ids.length, 'card', 'cards') + '? Eles vão para a lixeira (com o histórico) e podem ser restaurados por ' + FC.trash.KEEP_DAYS + ' dias.', { danger: true, okText: 'Excluir' }))) return; const batch = await FC.cards.remove(ids); selected.clear(); FC.trashView.toast(U.plural(ids.length, 'card excluído', 'cards excluídos') + '.', batch); render(); } },
         ]),
       );
     }
@@ -95,7 +106,7 @@
             { label: 'Duplicar', icon: 'copy', run: async () => { await FC.cards.duplicate(card.id); FC.ui.toast('Cópia criada.'); render(); } },
             { label: 'Mover', icon: 'folder', run: () => moveDialog([card.id], render) },
             '-',
-            { label: 'Excluir', icon: 'trash', danger: true, run: async () => { if (!(await FC.ui.confirm('Excluir este card?', { danger: true, okText: 'Excluir' }))) return; await FC.cards.remove(card.id); render(); } },
+            { label: 'Excluir', icon: 'trash', danger: true, run: async () => { const batch = await FC.cards.remove(card.id); FC.trashView.toast('Card excluído.', batch); render(); } },
           ]),
         ),
       );

@@ -245,10 +245,9 @@
               icon: 'trash',
               danger: true,
               run: async () => {
-                if (!(await FC.ui.confirm('Excluir este card e o histórico dele?', { danger: true, okText: 'Excluir' }))) return;
-                await FC.cards.remove(card.id);
+                const batch = await FC.cards.remove(card.id);
                 m.close();
-                FC.ui.toast('Card excluído.');
+                FC.trashView.toast('Card excluído.', batch);
               },
             },
           ]),

@@ -26,15 +26,29 @@
     return { newDone, reviewsDone, start };
   }
 
+  const NONE_HELD = { fresh: () => false, due: () => false };
+
   /**
-   * Cards novos que ficam fora dos novos do dia: baralho ou nó da hierarquia marcado
-   * "Nunca entrar como card novo" (assuntos paralelos). Entram pelo "Estudar tudo".
+   * Baralho ou nó da hierarquia marcado "Fora da revisão geral" (antes: "Nunca entrar
+   * como card novo"; assuntos paralelos):
+   * - fresh: os cards novos nunca entram nos novos do dia (entram pelo "Estudar tudo");
+   * - due: as revisões também não aparecem na revisão geral nem em outras seleções —
+   *   só quando a pessoa abre o próprio baralho/nó (ou algo dentro dele) para revisar.
    */
-  function heldBack() {
+  function heldBack(filter) {
     const decks = FC.decks.noNewIds();
     const nodes = FC.areas.noNewIds();
-    if (!decks.size && !nodes.size) return () => false;
-    return (c) => decks.has(c.deckId) || nodes.has(c.nodeId);
+    if (!decks.size && !nodes.size) return NONE_HELD;
+    const f = filter || {};
+    const directDecks = new Set();
+    for (const id of f.deckIds || []) if (decks.has(id)) for (const d of FC.decks.descendantIds(id)) directDecks.add(d);
+    const directNodes = new Set();
+    for (const id of f.nodeIds || []) if (nodes.has(id)) for (const n of FC.areas.descendantIds(id)) directNodes.add(n);
+    const inHeld = (c) => decks.has(c.deckId) || nodes.has(c.nodeId);
+    return {
+      fresh: inHeld,
+      due: (c) => inHeld(c) && !directDecks.has(c.deckId) && !directNodes.has(c.nodeId),
+    };
   }
 
   function newOrder(cards, now) {
@@ -58,9 +72,10 @@
     const cards = FC.cards.select(filter || {});
     const { newDone, reviewsDone, start } = todayCounts(now);
     const tomorrow = FC.util.addDays(start, 1);
-    const held = heldBack();
+    const held = heldBack(filter);
     let newAvailable = 0;
     let newHeld = 0;
+    let dueHeld = 0;
     let learning = 0;
     let dueToday = 0;
     let overdue = 0;
@@ -68,11 +83,15 @@
     for (const c of cards) {
       const state = c.state || 'new';
       if (state === 'new') {
-        if (held(c)) newHeld++;
+        if (held.fresh(c)) newHeld++;
         else newAvailable++;
         continue;
       }
       if (c.dueDate == null) continue;
+      if (held.due(c)) {
+        if (c.dueDate <= now) dueHeld++;
+        continue;
+      }
       if (state === 'learning' && c.dueDate < tomorrow) learning++;
       if (c.dueDate <= now) dueNow++;
       if (state === 'review' && c.dueDate < start) overdue++;
@@ -80,7 +99,7 @@
     }
     const newToday = Math.max(0, Math.min(newAvailable, newLimit(s, start) - newDone));
     const reviewBudget = Math.max(0, s.reviewsPerDay - reviewsDone);
-    return { newAvailable, newHeld, newToday, newDone, reviewsDone, learning, dueToday, overdue, dueNow, reviewBudget, total: cards.length };
+    return { newAvailable, newHeld, dueHeld, newToday, newDone, reviewsDone, learning, dueToday, overdue, dueNow, reviewBudget, total: cards.length };
   }
 
   class Session {
@@ -119,12 +138,13 @@
       const reviews = [];
       const fresh = [];
       const ahead = []; // modo "tudo": em revisão, mas ainda não venceram
-      const held = this.all ? () => false : heldBack();
+      const held = this.all ? NONE_HELD : heldBack(this.filter);
       for (const c of cards) {
         const state = c.state || 'new';
         if (state === 'new') {
-          if (!held(c)) fresh.push(c);
-        } else if (state === 'learning') learning.push(c);
+          if (!held.fresh(c)) fresh.push(c);
+        } else if (held.due(c)) continue;
+        else if (state === 'learning') learning.push(c);
         else if (c.dueDate != null && c.dueDate <= now) reviews.push(c);
         else if (this.all && !this.answered.has(c.id)) ahead.push(c);
       }

@@ -331,7 +331,7 @@ export default function SubjectsPage() {
         }
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative max-w-md flex-1">
+        <div className="relative min-w-[14rem] max-w-md flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input className="input pl-9" placeholder="Pesquisar assuntos ou tags" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Pesquisar assuntos" />
         </div>
@@ -357,9 +357,12 @@ export default function SubjectsPage() {
               <header className="flex items-center gap-3 px-4 py-3">
                 <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setOpen((o) => ({ ...o, [area.id]: !o[area.id] }))} aria-expanded={!!isOpen}>
                   <AreaDot color={area.color} />
-                  <span className="truncate font-semibold text-ink">{area.name}</span>
-                  <span className="shrink-0 text-xs text-muted">
-                    {count} assunto(s) · {area.children?.length ?? 0} subárea(s)
+                  {/* No celular a contagem vai para baixo do nome (lado a lado, o nome sumia) */}
+                  <span className="flex min-w-0 flex-col sm:flex-row sm:items-center sm:gap-3">
+                    <span className="truncate font-semibold text-ink">{area.name}</span>
+                    <span className="truncate text-xs text-muted sm:shrink-0">
+                      {count} assunto(s) · {area.children?.length ?? 0} subárea(s)
+                    </span>
                   </span>
                   <ChevronDown className={cx('ml-auto h-4 w-4 shrink-0 text-muted transition', isOpen && 'rotate-180')} />
                 </button>

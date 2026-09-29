@@ -97,23 +97,23 @@
     const count = FC.areas.cardsIn(node.id).length;
     const mode = FC.ui.select(
       [
+        { value: 'delete', label: 'Excluir também os ' + U.fmtNum(count) + ' cards' },
         { value: 'parent', label: node.parentId ? 'Manter os cards em "' + FC.areas.get(node.parentId).name + '"' : 'Manter os cards, sem classificação' },
-        { value: 'delete', label: 'Excluir também os ' + count + ' cards' },
       ],
-      'parent',
+      'delete',
     );
     const m = FC.ui.modal({
       title: 'Excluir "' + node.name + '"',
       size: 'narrow',
-      content: h('div', { class: 'stack' }, h('p', { class: 'ink2', text: 'Remove este item e tudo o que está abaixo dele na hierarquia (' + U.plural(count, 'card', 'cards') + ').' }), count ? mode : null),
+      content: h('div', { class: 'stack' }, h('p', { class: 'ink2', text: 'Remove este item e tudo o que está abaixo dele na hierarquia (' + U.plural(count, 'card', 'cards') + ').' }), count ? mode : null, h('p', { class: 'small muted', text: 'Vai para a lixeira: dá para restaurar por ' + FC.trash.KEEP_DAYS + ' dias.' })),
       actions: [
         button('Cancelar', { onClick: () => m.close() }),
         button('Excluir', {
           variant: 'danger',
           onClick: async () => {
-            await FC.areas.remove(node.id, count ? mode.value : 'parent');
+            const batch = await FC.areas.remove(node.id, count ? mode.value : 'parent');
             m.close();
-            FC.ui.toast('Excluído.');
+            FC.trashView.toast('"' + node.name + '" foi para a lixeira.', batch);
             if (after) after();
           },
         }),
@@ -122,17 +122,19 @@
   }
 
   /**
-   * "Nunca entrar como card novo": os novos daqui ficam fora dos novos do dia (assuntos
-   * paralelos, estudados pelo "Estudar tudo"). Quem herda de cima só avisa onde desmarcar.
+   * "Fora da revisão geral" (antes "Nunca entrar como card novo"): os cards daqui não
+   * entram nos novos do dia nem nas revisões da revisão geral — só quando a pessoa abre
+   * este baralho/tema para estudar (assuntos paralelos). Quem herda de cima só avisa
+   * onde desmarcar. Ver heldBack em review.js.
    */
   function noNewItem(own, inheritedFrom, name, save, refresh) {
-    if (!own && inheritedFrom) return { label: 'Sem novos no dia (vem de "' + inheritedFrom + '")', icon: 'pause', run: () => FC.ui.toast('Para liberar, desmarque em "' + inheritedFrom + '".') };
+    if (!own && inheritedFrom) return { label: 'Fora da revisão geral (vem de "' + inheritedFrom + '")', icon: 'pause', run: () => FC.ui.toast('Para voltar, desmarque em "' + inheritedFrom + '".') };
     return {
-      label: own ? 'Liberar cards novos no dia' : 'Nunca entrar como card novo',
+      label: own ? 'Voltar para a revisão geral' : 'Tirar da revisão geral (novos e revisões)',
       icon: own ? 'play' : 'pause',
       run: async () => {
         await save(!own);
-        FC.ui.toast(own ? 'Os cards novos de "' + name + '" voltam a entrar nos novos do dia.' : 'Os cards novos de "' + name + '" não entram mais nos novos do dia. Estude-os pelo "Estudar tudo".', { duration: 5000 });
+        FC.ui.toast(own ? 'Os cards de "' + name + '" voltam para a revisão geral e para os novos do dia.' : 'Os cards de "' + name + '" saíram da revisão geral: nem novos nem revisões aparecem lá. Para estudá-los, abra "' + name + '" e toque em ▶ (revisão normal ou "Estudar tudo").', { duration: 7000 });
         refresh();
       },
     };
@@ -159,6 +161,26 @@
     ];
   }
 
+  // Cards sem área/assunto (ou cuja área foi excluída mantendo os cards)
+  const NONE = '__none__';
+  const noneCards = () => FC.cards.select({ nodeIds: [NONE], suspended: 'include', includeBlockedDecks: true });
+
+  function noneMenu(refresh) {
+    return [
+      { label: 'Ver e classificar os cards', icon: 'list', run: () => FC.app.go('/decks/no/' + NONE) },
+      { label: 'Excluir os cards sem classificação', icon: 'trash', danger: true, run: () => deleteNone(refresh) },
+    ];
+  }
+
+  async function deleteNone(after) {
+    const ids = noneCards().map((c) => c.id);
+    if (!ids.length) return;
+    if (!(await FC.ui.confirm('Excluir os ' + U.plural(ids.length, 'card', 'cards') + ' sem classificação? Eles vão para a lixeira e podem ser restaurados por ' + FC.trash.KEEP_DAYS + ' dias.', { danger: true, okText: 'Excluir' }))) return;
+    const batch = await FC.cards.remove(ids, { trash: 'Sem classificação (' + U.plural(ids.length, 'card', 'cards') + ')' });
+    FC.trashView.toast(U.plural(ids.length, 'card foi', 'cards foram') + ' para a lixeira.', batch);
+    if (after) after();
+  }
+
   // ── Árvore de conteúdo ─────────────────────────────────────────────────────
   function contentTree(refresh) {
     const counts = nodeCounts();
@@ -178,7 +200,7 @@
           h(
             'div',
             { class: 'tree-row' + (agg && agg.isWeak ? ' perf-weak' : '') },
-            h('div', { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } }, twisty, h('div', { class: 'tree-label' }, h('button', { type: 'button', class: 'label-btn', text: node.name, onclick: () => FC.app.go('/decks/no/' + node.id) }), h('span', { class: 'tree-level', text: FC.areas.LEVEL_LABELS[node.level] }), node.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null, agg && agg.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null)),
+            h('div', { class: 'tree-name', style: { paddingLeft: depth * 18 + 'px' } }, twisty, h('div', { class: 'tree-label' }, h('button', { type: 'button', class: 'label-btn', text: node.name, onclick: () => FC.app.go('/decks/no/' + node.id) }), h('span', { class: 'tree-level', text: FC.areas.LEVEL_LABELS[node.level] }), node.noNew ? h('span', { class: 'badge', title: 'Os cards daqui (novos e revisões) só aparecem quando você abre este item para estudar', text: 'fora da revisão geral' }) : null, agg && agg.isWeak ? h('span', { class: 'badge serious', text: 'ponto fraco' }) : null)),
             h(
               'div',
               { class: 'tree-stats' },
@@ -200,8 +222,15 @@
         h(
           'div',
           { class: 'tree-row' },
-          h('div', { class: 'tree-name' }, h('span', { class: 'twisty' }), h('button', { type: 'button', class: 'label-btn muted', text: 'Sem classificação', onclick: () => FC.app.go('/decks/no/__none__') })),
-          h('div', { class: 'tree-stats' }, h('span', { text: U.plural(none.total, 'card', 'cards') })),
+          h('div', { class: 'tree-name' }, h('span', { class: 'twisty' }), h('div', { class: 'tree-label' }, h('button', { type: 'button', class: 'label-btn muted', text: 'Sem classificação', onclick: () => FC.app.go('/decks/no/' + NONE) }))),
+          h(
+            'div',
+            { class: 'tree-stats' },
+            h('span', { class: 'hide-sm', text: U.plural(none.total, 'card', 'cards') }),
+            none.due || none.fresh ? h('span', { class: 'badge accent', title: 'Devidos + novos', text: U.fmtNum(none.due) + ' + ' + U.fmtNum(none.fresh) }) : h('span', { class: 'badge', text: U.plural(none.total, 'card', 'cards') }),
+            button('', { icon: 'play', size: 'sm', variant: 'ghost', title: 'Estudar', onClick: () => FC.launch.choose({ nodeIds: [NONE] }, 'Sem classificação') }),
+            FC.ui.moreButton(() => noneMenu(refresh)),
+          ),
         ),
       );
     }
@@ -231,21 +260,21 @@
   function deleteDeck(deck, refresh) {
     const cards = FC.decks.cardsIn(deck.id);
     const others = FC.decks.all().filter((d) => !FC.decks.descendantIds(deck.id).has(d.id));
-    const mode = FC.ui.select([{ value: 'delete', label: 'Excluir também os ' + cards.length + ' cards' }].concat(others.map((d) => ({ value: d.id, label: 'Mover os cards para "' + d.name + '"' }))), others.length ? others[0].id : 'delete');
+    const mode = FC.ui.select([{ value: 'delete', label: 'Excluir também os ' + U.fmtNum(cards.length) + ' cards' }].concat(others.map((d) => ({ value: d.id, label: 'Mover os cards para "' + d.name + '"' }))), 'delete');
     const m = FC.ui.modal({
       title: 'Excluir baralho "' + deck.name + '"',
       size: 'narrow',
-      content: h('div', { class: 'stack' }, h('p', { class: 'ink2', text: 'Inclui os sub-baralhos. ' + U.plural(cards.length, 'card', 'cards') + '.' }), cards.length ? mode : null),
+      content: h('div', { class: 'stack' }, h('p', { class: 'ink2', text: 'Inclui os sub-baralhos. ' + U.plural(cards.length, 'card', 'cards') + '.' }), cards.length ? mode : null, h('p', { class: 'small muted', text: 'Vai para a lixeira: dá para restaurar por ' + FC.trash.KEEP_DAYS + ' dias.' })),
       actions: [
         button('Cancelar', { onClick: () => m.close() }),
         button('Excluir', {
           variant: 'danger',
           onClick: async () => {
             const v = cards.length ? mode.value : 'delete';
-            await FC.decks.remove(deck.id, v === 'delete' ? 'delete' : 'move', v === 'delete' ? null : v);
+            const batch = await FC.decks.remove(deck.id, v === 'delete' ? 'delete' : 'move', v === 'delete' ? null : v);
             await FC.decks.ensureDefault();
             m.close();
-            FC.ui.toast('Baralho excluído.');
+            FC.trashView.toast('Baralho "' + deck.name + '" foi para a lixeira.', batch);
             refresh();
           },
         }),
@@ -276,7 +305,7 @@
                 h('button', { type: 'button', class: 'label-btn', text: d.name.split('::').pop(), onclick: () => FC.app.go('/decks/baralho/' + d.id) }),
                 d.archived ? h('span', { class: 'badge', text: 'Arquivado' }) : null,
                 d.suspended ? h('span', { class: 'badge warn', text: 'Suspenso' }) : null,
-                d.noNew ? h('span', { class: 'badge', title: 'Os cards novos daqui não entram nos novos do dia', text: 'sem novos no dia' }) : null,
+                d.noNew ? h('span', { class: 'badge', title: 'Os cards daqui (novos e revisões) só aparecem quando você abre este baralho para estudar', text: 'fora da revisão geral' }) : null,
               ),
             ),
             h(
@@ -382,9 +411,19 @@
     title: 'Tema',
     render(ctx) {
       const id = ctx.params.id;
-      if (id === '__none__') {
+      if (id === NONE) {
         ctx.setTitle('Sem classificação');
-        return detail(ctx, { title: 'Sem classificação', subtitle: 'Cards sem área/assunto. Selecione e use "Mover" para classificá-los.', cards: () => FC.cards.all().filter((c) => !c.nodeId || !FC.areas.get(c.nodeId)), actions: [] });
+        return detail(ctx, {
+          title: 'Sem classificação',
+          subtitle: 'Cards sem área/assunto. Estude daqui, ou selecione e use "Mover" para classificá-los.',
+          cards: noneCards,
+          actions: noneCards().length
+            ? [
+                button('Estudar', { variant: 'primary', icon: 'play', onClick: () => FC.launch.choose({ nodeIds: [NONE] }, 'Sem classificação') }),
+                button('Excluir todos', { variant: 'danger', icon: 'trash', onClick: () => deleteNone(() => FC.app.go('/decks')) }),
+              ]
+            : [],
+        });
       }
       const node = FC.areas.get(id);
       if (!node) return FC.app.go('/decks');
@@ -392,7 +431,7 @@
       const kids = FC.areas.children(node.id);
       detail(ctx, {
         title: node.name,
-        subtitle: FC.areas.LEVEL_LABELS[node.level] + (node.noNew ? ' · sem novos no dia' : ''),
+        subtitle: FC.areas.LEVEL_LABELS[node.level] + (node.noNew ? ' · fora da revisão geral' : ''),
         crumb: h('p', { class: 'crumb', style: { marginBottom: '4px' } }, FC.areas.path(node.id).slice(0, -1).map((n, i) => [i ? ' › ' : '', h('a', { href: '#/decks/no/' + n.id, text: n.name })])),
         cards: () => FC.areas.cardsIn(node.id),
         children: kids.length ? h('div', { class: 'row tight', style: { marginBottom: '16px' } }, h('span', { class: 'label', text: FC.areas.LEVEL_LABELS[node.level + 1] + ':' }), kids.map((k) => link(k.name, '#/decks/no/' + k.id, { size: 'sm', variant: 'ghost' }))) : null,
@@ -413,7 +452,7 @@
       ctx.setTitle(deck.name.split('::').pop());
       detail(ctx, {
         title: deck.name.split('::').pop(),
-        subtitle: 'Baralho' + (deck.name.includes('::') ? ' · ' + deck.name.split('::').slice(0, -1).join(' › ') : '') + (deck.archived ? ' · arquivado' : '') + (deck.suspended ? ' · suspenso' : '') + (deck.noNew ? ' · sem novos no dia' : ''),
+        subtitle: 'Baralho' + (deck.name.includes('::') ? ' · ' + deck.name.split('::').slice(0, -1).join(' › ') : '') + (deck.archived ? ' · arquivado' : '') + (deck.suspended ? ' · suspenso' : '') + (deck.noNew ? ' · fora da revisão geral' : ''),
         cards: () => FC.decks.cardsIn(deck.id),
         actions: [button('Estudar', { variant: 'primary', icon: 'play', onClick: () => FC.launch.choose({ deckIds: [deck.id] }, deck.name) }), FC.ui.moreButton(() => deckMenu(deck, () => ctx.rerender()))],
       });

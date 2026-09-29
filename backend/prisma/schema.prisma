@@ -622,3 +622,30 @@ model CalendarFeed {
 
   @@map("calendar_feeds")
 }
+
+enum AccessRole {
+  ADMIN
+  MEMBER
+}
+
+// E-mails cadastrados na Administração do site: administradores (publicam os cards da
+// plataforma e cuidam desta lista) e pessoas com acesso liberado (podem criar conta
+// quando o cadastro está "só para e-mails liberados"). Não precisa existir conta.
+model AccessEmail {
+  email     String     @id @db.VarChar(160)
+  role      AccessRole @default(MEMBER)
+  note      String?    @db.VarChar(120)
+  addedById String?    @map("added_by_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@map("access_emails")
+}
+
+// Configurações gerais do site, uma linha por chave (ex.: "signup": { mode: "open" })
+model SiteSetting {
+  key       String   @id @db.VarChar(64)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}

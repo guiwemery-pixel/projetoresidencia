@@ -19,6 +19,7 @@ import {
   Plus,
   RefreshCcw,
   Search,
+  ShieldCheck,
   Sun,
   Target,
   Trophy,
@@ -35,6 +36,7 @@ import { useTheme, type ThemeChoice } from '../../hooks/useTheme';
 import { fmtRelative } from '../../lib/format';
 import { useStudyDialog } from '../study/StudyDialog';
 import { Avatar, IconButton, cx } from '../ui';
+import { OfflineBar } from './OfflineBar';
 
 const NAV = [
   { to: '/', label: 'Início', icon: Home, end: true },
@@ -218,7 +220,7 @@ export function AppLayout() {
   const openStudy = useStudyDialog();
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   useEffect(() => setDrawer(false), [location.pathname]);
 
@@ -238,6 +240,14 @@ export function AppLayout() {
         </button>
         <NavItems />
         <div className="mt-auto">
+          {user?.isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => cx('flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium', isActive ? 'bg-accent-wash text-ink' : 'text-ink2 hover:bg-subtle')}
+            >
+              <ShieldCheck className="h-4 w-4" /> Administração
+            </NavLink>
+          )}
           <NavLink
             to="/perfil"
             className={({ isActive }) => cx('flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium', isActive ? 'bg-accent-wash text-ink' : 'text-ink2 hover:bg-subtle')}
@@ -267,6 +277,7 @@ export function AppLayout() {
           </div>
         </header>
 
+        <OfflineBar />
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 sm:px-6 lg:pb-10">
           <Outlet />
         </main>
@@ -312,6 +323,11 @@ export function AppLayout() {
             </div>
             <NavItems onNavigate={() => setDrawer(false)} />
             <div className="mt-auto flex flex-col gap-1 border-t border-line pt-3">
+              {user?.isAdmin && (
+                <NavLink to="/admin" onClick={() => setDrawer(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink2 hover:bg-subtle">
+                  <ShieldCheck className="h-4 w-4" /> Administração
+                </NavLink>
+              )}
               <NavLink to="/perfil" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink2 hover:bg-subtle">
                 <UserIcon className="h-4 w-4" /> Perfil e configurações
               </NavLink>

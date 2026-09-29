@@ -3,9 +3,10 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { parse } from '../../lib/validation.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { toPrivateUser } from '../users/users.service.js';
+import { sessionUser } from '../users/users.service.js';
 import { prisma } from '../../lib/prisma.js';
 import { login, register } from './auth.service.js';
+import { signupMode } from '../admin/admin.service.js';
 import { SESSION_COOKIE, createSession, destroySession, sessionCookieOptions } from './session.js';
 import { TEMPLATE_KEYS } from '../taxonomy/templates/index.js';
 
@@ -34,12 +35,18 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+/** Cadastro aberto ou só para e-mails liberados (a tela de criar conta avisa). */
+authRouter.get('/signup', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ mode: await signupMode() });
+});
+
 authRouter.post('/register', authLimiter, async (req, res) => {
   const input = parse(registerSchema, req.body);
   const user = await register(input);
   const token = await createSession(user.id, req.get('user-agent'));
   res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
-  res.status(201).json({ user: toPrivateUser(user) });
+  res.status(201).json({ user: await sessionUser(user) });
 });
 
 authRouter.post('/login', authLimiter, async (req, res) => {
@@ -47,7 +54,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
   const user = await login(email, password);
   const token = await createSession(user.id, req.get('user-agent'));
   res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
-  res.json({ user: toPrivateUser(user) });
+  res.json({ user: await sessionUser(user) });
 });
 
 authRouter.post('/logout', async (req, res) => {
@@ -59,5 +66,5 @@ authRouter.post('/logout', async (req, res) => {
 
 authRouter.get('/me', requireAuth, async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
-  res.json({ user: toPrivateUser(user) });
+  res.json({ user: await sessionUser(user) });
 });

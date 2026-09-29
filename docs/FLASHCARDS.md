@@ -134,8 +134,34 @@ O histórico fica numa tabela própria (`logs`) em vez de dentro do card: as est
 varrem todas as revisões por data, e cada card busca as suas pelo índice `cardId`.
 Outras tabelas: `decks`, `quickSessions`, `sessions`, `sources` (texto dos PDFs),
 `sourceFiles` (PDF original, opcional, só no aparelho), `media` (imagens do Anki), `drafts`
-(cards gerados aguardando revisão), `kv` (configurações), e as de controle do aparelho:
-`outbox` (o que falta enviar) e `meta` (cursor, epoch).
+(cards gerados aguardando revisão), `kv` (configurações), `trash` (lixeira, abaixo), e as de
+controle do aparelho: `outbox` (o que falta enviar) e `meta` (cursor, epoch).
+
+### Lixeira
+
+Excluir cards, um baralho ou uma área/tema (menu ⋯ → Excluir) manda tudo para a **Lixeira**
+(menu ⋯ da barra de abas → Lixeira), onde fica **30 dias** e pode ser restaurado — com o
+histórico de revisões. Depois de excluir aparece o aviso "… foi para a lixeira · Desfazer".
+Cada exclusão é um lote; cada item é um registro do store `trash`, sincronizado com a conta
+(`js/trash.js`):
+
+```js
+{ id: 't:<store>:<id>', batch, label, deletedAt, store: 'cards' | 'decks' | 'nodes',
+  value,        // o registro como era
+  logs,         // card: o histórico, que volta junto
+  cardIds }     // área excluída "mantendo os cards": onde cada card estava
+```
+
+Ao restaurar: área/baralho que voltou a existir com o mesmo nome recebe os cards; o que perdeu
+o "pai" volta para o primeiro nível; card cujo baralho não existe mais vai para um baralho que
+existe. Cards da plataforma vão para a conta sem frente/verso (como no store `cards`) e são
+completados ao restaurar. "Excluir de vez" e "Esvaziar lixeira" não têm volta; lotes com mais
+de 30 dias saem sozinhos na abertura do app.
+
+Ao excluir um baralho ou uma área, o padrão é levar os cards junto (para a lixeira); dá para
+escolher mover os cards para outro baralho ou mantê-los no nível de cima. Cards sem área
+aparecem em **Sem classificação** (aba Decks), com ▶ Estudar, "Excluir todos" e a lista para
+selecionar todos e mover.
 
 ## Dados na conta e sincronização
 
@@ -244,8 +270,8 @@ platform/packages/<pacote>/upload.json                  publicação em andament
 | `POST /platform/publish/:pacote/:versão/finish` `{name, decks}` | admin | Confere que chegaram todos os baralhos, grava a árvore, troca o catálogo e apaga a versão anterior. |
 | `DELETE /platform/packages/:pacote` | admin | Tira o pacote da plataforma (as cópias nas coleções continuam). |
 
-**Publicar** (administradores — e-mails em `PLATFORM_ADMIN_EMAILS`, ver
-[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md#cards-da-plataforma)): na própria aba, **Publicar baralho** →
+**Publicar** (administradores do site — página **Administração** ou `PLATFORM_ADMIN_EMAILS`, ver
+[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md#administração-quem-administra-e-quem-pode-criar-conta)): na própria aba, **Publicar baralho** →
 escolher o `.apkg`. O navegador lê o pacote (o mesmo leitor da importação), monta a árvore de
 baralhos e envia em partes. Publicar de novo com **Atualizar “…”** troca a versão para todos. Os ids
 são estáveis — card = id do card no Anki, baralho = hash do nome completo —, então edições,
@@ -301,11 +327,14 @@ novo número.
 revisão normal sem os cards novos — só os já estudados que venceram (e os que estão
 aprendendo). Os novos do dia continuam disponíveis para depois.
 
-**Nunca entrar como card novo** (menu ⋯ de qualquer nó da hierarquia — grande área, subárea,
-assunto… — ou de um baralho): para assuntos paralelos. Os cards novos dali (e de tudo que está
-dentro) não entram nos novos do dia nem gastam o limite diário; aparecem com a etiqueta "sem
-novos no dia" e são estudados quando você quiser pelo **Estudar tudo**. Depois de estudados, as
-revisões deles entram normalmente na revisão do dia. "Liberar cards novos no dia" desfaz.
+**Tirar da revisão geral** (antes "Nunca entrar como card novo"; menu ⋯ de qualquer nó da
+hierarquia — grande área, subárea, assunto… — ou de um baralho): para assuntos paralelos. Os
+cards dali (e de tudo que está dentro) ficam com a etiqueta "fora da revisão geral":
+- os **novos** não entram nos novos do dia nem gastam o limite diário — são estudados quando
+  você quiser pelo **Estudar tudo**;
+- as **revisões** também não aparecem na revisão geral (Início, aba Revisar, outras seleções):
+  só quando você abre o próprio baralho/tema (ou algo dentro dele) e toca em ▶.
+"Voltar para a revisão geral" desfaz.
 
 **Estudar tudo** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
 todos os cards da seleção numa sessão que **entra no cronograma** — novos sem o limite do dia,

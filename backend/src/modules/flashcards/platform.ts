@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { isAdmin } from '../admin/admin.service.js';
 import { HttpError, forbidden, notFound } from '../../lib/errors.js';
 import { blobStore, eachLimit, type BlobStore } from './media.js';
 
@@ -13,8 +14,9 @@ import { blobStore, eachLimit, type BlobStore } from './media.js';
 //
 // Todos só leem. O que cada usuário muda (editar, ocultar, adicionar à coleção)
 // fica na conta dele, dentro do app de flashcards — nunca no baralho de todos.
-// Publica quem estiver em PLATFORM_ADMIN_EMAILS: o navegador lê o .apkg e envia os
-// baralhos em partes para uma versão nova; o catálogo só aponta para ela no fim.
+// Publica quem administra o site (PLATFORM_ADMIN_EMAILS ou a página Administração): o
+// navegador lê o .apkg e envia os baralhos em partes para uma versão nova; o catálogo
+// só aponta para ela no fim.
 
 const ROOT = 'platform/';
 const CATALOG = `${ROOT}catalog.json`;
@@ -57,13 +59,8 @@ interface Catalog {
 
 const newId = (bytes: number) => randomBytes(bytes).toString('hex');
 
-export function isPlatformAdmin(email: string) {
-  const list = (process.env.PLATFORM_ADMIN_EMAILS || '')
-    .split(/[,;\s]+/)
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return list.includes(email.trim().toLowerCase());
-}
+/** Administradores do site (PLATFORM_ADMIN_EMAILS e os cadastrados em Administração). */
+export const isPlatformAdmin = (email: string) => isAdmin(email);
 
 function requireStore(): BlobStore {
   const store = blobStore();
@@ -71,8 +68,8 @@ function requireStore(): BlobStore {
   return store;
 }
 
-function requireAdmin(email: string) {
-  if (!isPlatformAdmin(email)) throw forbidden('Só os administradores da plataforma podem publicar baralhos.');
+async function requireAdmin(email: string) {
+  if (!(await isAdmin(email))) throw forbidden('Só os administradores do site podem publicar baralhos.');
 }
 
 const encoder = new TextEncoder();
@@ -121,7 +118,7 @@ export function resetPlatformCache() {
 
 /** Pacotes publicados com a árvore de baralhos de cada um. */
 export async function listPlatform(email: string) {
-  const admin = isPlatformAdmin(email);
+  const admin = await isAdmin(email);
   const store = blobStore();
   if (!store) return { enabled: false, admin, packages: [] };
   const { packages } = await catalog(store);
@@ -144,7 +141,7 @@ export async function readDeckCards(pkg: string, version: string, deck: string) 
  * já existe. Uma publicação anterior que ficou pela metade é descartada.
  */
 export async function startPublish(email: string, packageId?: string) {
-  requireAdmin(email);
+  await requireAdmin(email);
   const store = requireStore();
   const current = (await catalog(store, true)).packages;
   if (packageId && !current.some((p) => p.id === packageId)) throw notFound('Pacote não encontrado.');
@@ -164,7 +161,7 @@ async function requireUpload(store: BlobStore, pkg: string, version: string) {
 
 /** Uma parte da publicação: os cards de alguns baralhos. */
 export async function uploadDecks(email: string, pkg: string, version: string, decks: { id: string; cards: PlatformCard[] }[]) {
-  requireAdmin(email);
+  await requireAdmin(email);
   const store = requireStore();
   await requireUpload(store, pkg, version);
   await eachLimit(decks, 6, (d) => writeJson(store, cardsKey(pkg, version, d.id), d.cards));
@@ -176,7 +173,7 @@ export async function uploadDecks(email: string, pkg: string, version: string, d
  * árvore e aponta o catálogo para a versão nova. A versão anterior é apagada.
  */
 export async function finishPublish(email: string, pkg: string, version: string, name: string, decks: PlatformDeck[]) {
-  requireAdmin(email);
+  await requireAdmin(email);
   const store = requireStore();
   await requireUpload(store, pkg, version);
   const ids = new Set(decks.map((d) => d.id));
@@ -201,7 +198,7 @@ export async function finishPublish(email: string, pkg: string, version: string,
 
 /** Tira um pacote da plataforma (os cards que os usuários já adicionaram continuam com eles). */
 export async function removePackage(email: string, pkg: string) {
-  requireAdmin(email);
+  await requireAdmin(email);
   const store = requireStore();
   const cat = await catalog(store, true);
   if (!cat.packages.some((p) => p.id === pkg)) throw notFound('Pacote não encontrado.');

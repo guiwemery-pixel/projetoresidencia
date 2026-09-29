@@ -12,7 +12,7 @@
   const FC = (root.FC = root.FC || {});
 
   const LEGACY_NAME = 'flashcards-medicina'; // versão antiga do app, só neste navegador
-  const DB_VERSION = 1;
+  const DB_VERSION = 2; // 2: lixeira
   const SEP = '\u0001';
 
   const STORES = {
@@ -27,6 +27,7 @@
     media: { keyPath: 'name' },
     drafts: { keyPath: 'id' },
     kv: { keyPath: 'key' },
+    trash: { keyPath: 'id' },
     outbox: { keyPath: 'k' },
     meta: { keyPath: 'key' },
   };

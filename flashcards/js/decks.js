@@ -141,14 +141,18 @@
   async function remove(id, mode = 'delete', targetId = null) {
     const ids = descendantIds(id);
     const cards = [...store().cards.values()].filter((c) => ids.has(c.deckId));
+    // Baralho (e os cards, se forem junto) vai para a lixeira
+    const batch = FC.trash ? FC.trash.batch('Baralho "' + get(id).name + '"') : null;
+    if (batch) await FC.trash.put(batch, [...ids].map((did) => ({ store: 'decks', value: get(did) })));
     if (mode === 'move' && targetId && !ids.has(targetId)) {
       await FC.cards.move(cards.map((c) => c.id), { deckId: targetId });
     } else {
-      await FC.cards.remove(cards.map((c) => c.id));
+      await FC.cards.remove(cards.map((c) => c.id), { trash: batch || false });
     }
     for (const did of ids) store().decks.delete(did);
     await FC.db.bulkDel('decks', [...ids]);
     store().emit('decks');
+    return batch;
   }
 
   /** Árvore para exibição: [{deck, children:[...], depth}] */

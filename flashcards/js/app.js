@@ -37,6 +37,7 @@
     { re: /^\/busca\/?$/, view: 'search', nav: 'search' },
     { re: /^\/favoritos\/?$/, view: 'favorites', nav: 'favorites' },
     { re: /^\/suspensos\/?$/, view: 'suspended', nav: 'suspended' },
+    { re: /^\/lixeira\/?$/, view: 'trash', nav: 'trash' },
     { re: /^\/importar\/?$/, view: 'importExport', nav: 'import' },
     { re: /^\/configuracoes\/?$/, view: 'settings', nav: 'settings' },
   ];
@@ -58,6 +59,7 @@
     { key: 'search', label: 'Buscar cards', icon: 'search', path: '/busca' },
     { key: 'favorites', label: 'Favoritos', icon: 'star', path: '/favoritos' },
     { key: 'suspended', label: 'Cards suspensos', icon: 'pause', path: '/suspensos' },
+    { key: 'trash', label: 'Lixeira', icon: 'trash', path: '/lixeira' },
   ];
 
   const app = {
@@ -126,11 +128,14 @@
     document.body.classList.remove('fc-focus-mode');
     setActiveNav(match.nav);
     const view = FC.views[match.view];
-    clear(els.content);
+    // Cada tela desenha num elemento próprio: um redesenho atrasado (debounce) de uma tela
+    // que já saiu cai num elemento solto e nunca por cima da tela nova
+    const viewEl = h('div', { class: 'fc-view' });
+    clear(els.content).appendChild(viewEl);
     window.scrollTo(0, 0);
     app.current = match.view;
     const ctx = {
-      el: els.content,
+      el: viewEl,
       params,
       query,
       setTitle(t) {
@@ -393,6 +398,7 @@
     await FC.store.load();
     FC.cards.invalidateIndex();
     await FC.decks.ensureDefault();
+    FC.trash.expire().catch((e) => console.error(e));
     FC.sync.start();
     FC.summary.start();
     if (cursor) FC.sync.now();

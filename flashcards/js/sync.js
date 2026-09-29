@@ -92,6 +92,7 @@
   async function serialize(store, value) {
     // Card dos cards da plataforma ainda com o texto original: vai sem frente/verso
     if (store === 'cards') return FC.platform ? FC.platform.slim(value) : value;
+    if (store === 'trash' && value.store === 'cards' && FC.platform) return Object.assign({}, value, { value: FC.platform.slim(value.value) });
     if (store !== 'media') return value;
     if (!value.blob) return null; // ainda não baixada: já está na conta
     const dataUrl = await FC.backup.blobToDataUrl(value.blob);

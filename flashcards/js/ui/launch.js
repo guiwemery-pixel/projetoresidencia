@@ -80,7 +80,7 @@
           'div',
           { class: 'panel flat stack' },
           h('h3', { text: 'Revisão normal' }),
-          h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' + (counts.newHeld ? ' ' + U.plural(counts.newHeld, 'novo fica', 'novos ficam') + ' fora do dia (marcado "Nunca entrar como card novo").' : '') }),
+          h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' + (counts.newHeld ? ' ' + U.plural(counts.newHeld, 'novo fica', 'novos ficam') + ' fora do dia (marcado "Fora da revisão geral").' : '') + (counts.dueHeld ? ' ' + U.plural(counts.dueHeld, 'revisão fica', 'revisões ficam') + ' de fora: são de um baralho/tema "Fora da revisão geral" — abra-o para revisar.' : '') }),
           button(due ? 'Revisar ' + due : 'Nada devido agora', { variant: 'primary', icon: 'play', disabled: !due, onClick: () => (m.close(), review(filter, label)) }),
           counts.dueNow && counts.newToday ? button('Só revisões (' + counts.dueNow + ', sem novos)', { icon: 'undo', onClick: () => (m.close(), onlyReviews(filter, label)) }) : null,
         ),

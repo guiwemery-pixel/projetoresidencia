@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
-import { badRequest, conflict, unauthorized } from '../../lib/errors.js';
+import { badRequest, conflict, forbidden, unauthorized } from '../../lib/errors.js';
+import { canRegister } from '../admin/admin.service.js';
 import { getDummyHash, hashPassword, verifyPassword } from './password.js';
 import { applyTemplate, type TemplateKey } from '../taxonomy/templates/index.js';
 import { joinGroupByCode } from '../groups/groups.service.js';
@@ -17,6 +18,7 @@ export async function register(input: RegisterInput) {
   const email = input.email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw conflict('Já existe uma conta com este e-mail');
+  if (!(await canRegister(email))) throw forbidden('O cadastro está liberado só para e-mails autorizados. Peça acesso ao administrador do site.');
 
   if (input.inviteCode) {
     const group = await prisma.group.findUnique({ where: { inviteCode: input.inviteCode.trim().toUpperCase() } });

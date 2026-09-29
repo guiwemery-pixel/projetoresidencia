@@ -1,5 +1,6 @@
 import type { User } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
+import { isAdmin } from '../admin/admin.service.js';
 import { readExplanation } from '../reviews/explanation-codec.js';
 import { TEMPLATES, applyTemplate, type TemplateKey } from '../taxonomy/templates/index.js';
 
@@ -21,6 +22,11 @@ export function toPrivateUser(user: User) {
     dashboardLayout: user.dashboardLayout,
     createdAt: user.createdAt,
   };
+}
+
+/** Dados do próprio usuário para a sessão do site: inclui se ele administra o site. */
+export async function sessionUser(user: User) {
+  return { ...toPrivateUser(user), isAdmin: await isAdmin(user.email) };
 }
 
 export async function getSettings(userId: string) {

@@ -9,7 +9,7 @@ import { blobStore, eachLimit, mediaKey, parseDataUrl, userPrefix } from './medi
 // gravações. Cada aparelho envia o que mudou (push) e baixa o que os outros
 // gravaram depois do seu cursor (pull). A última gravação de um registro vence.
 
-export const SYNC_STORES = ['cards', 'nodes', 'decks', 'logs', 'quickSessions', 'sessions', 'sources', 'media', 'drafts', 'kv'] as const;
+export const SYNC_STORES = ['cards', 'nodes', 'decks', 'logs', 'quickSessions', 'sessions', 'sources', 'media', 'drafts', 'kv', 'trash'] as const;
 export type SyncStore = (typeof SYNC_STORES)[number];
 
 /** Um registro por gravação: `d` = conteúdo novo, `del` = excluído. */

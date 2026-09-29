@@ -153,6 +153,19 @@ o usuário abre o app e pelo job diário, que também apaga sessões de login ve
 - **Flashcards:** a página `/flashcards/*` monta o motor em JavaScript de [`flashcards/`](../flashcards)
   (carregado só quando a aba abre) dentro do layout do site. O React continua dono da URL, do menu,
   do tema e do login; o CSS do motor fica dentro de `.fc-root`. Detalhes em [`FLASHCARDS.md`](FLASHCARDS.md).
+- **Sem internet** (só no site publicado):
+  - `public/sw.js` (service worker) guarda o app na instalação — a lista de arquivos e a versão
+    vêm do build (`offline-assets.json`, plugin em `vite.config.ts`); cada deploy instala a versão nova.
+  - Leituras da API: sempre da rede; sem internet, a última resposta guardada no aparelho (cache
+    `api-v1`). As telas mostram os dados da última vez que foram abertas, com o aviso "Sem internet"
+    (`components/layout/OfflineBar.tsx`). `/api/flashcards` passa direto: os flashcards têm a
+    própria cópia local e sincronização.
+  - Gravações do dia a dia sem internet (registrar estudo, remarcar revisão, item do cronograma)
+    ficam numa fila no aparelho (`api/offline.ts`, por conta) e são enviadas na ordem quando a
+    conexão volta; o Registrar estudo avisa "Salvo neste aparelho". As outras gravações pedem internet.
+  - Sair da conta envia a fila e apaga a cópia das telas; resposta 401 também apaga.
+  - TanStack Query com `networkMode: 'always'`, para as telas pedirem os dados (e o service worker
+    responder com a cópia) em vez de ficarem esperando a conexão.
 
 ## Preparado para crescer
 

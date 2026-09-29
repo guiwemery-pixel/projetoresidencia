@@ -724,6 +724,24 @@
   border-bottom: 0;
 }
 
+/* Lixeira: sem a caixa de seleção; no celular os botões vão para baixo do nome */
+.fc-root .card-row.trash-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  .fc-root .card-row.trash-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* "Selecionar todos" da lista de cards */
+.fc-root .select-all {
+  cursor: pointer;
+  user-select: none;
+}
+
 .fc-root .card-row .q {
   font-weight: 560;
   overflow-wrap: anywhere;

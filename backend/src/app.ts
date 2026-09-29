@@ -24,6 +24,7 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { searchRouter } from './modules/search/search.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { flashcardsRouter } from './modules/flashcards/flashcards.routes.js';
+import { adminRouter } from './modules/admin/admin.routes.js';
 import { calendarRouter, icalRouter } from './modules/calendar/calendar.routes.js';
 import { invalidateProgressCache } from './modules/progress/public-summary.js';
 import { runNotificationJob } from './modules/notifications/notifications.service.js';
@@ -95,6 +96,7 @@ export function createApp() {
     }
     next();
   });
+  api.use('/admin', adminRouter);
   api.use('/me/calendar', calendarRouter);
   api.use('/me', usersRouter);
   api.use('/groups', groupsRouter);

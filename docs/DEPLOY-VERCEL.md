@@ -92,6 +92,23 @@ Imagens enviadas antes continuam funcionando e são levadas para o R2 aos poucos
 (até 200 por dia). Apagar todos os flashcards, restaurar um backup ou excluir a conta apaga também as
 imagens da pessoa no R2.
 
+## Administração (quem administra e quem pode criar conta)
+
+Menu lateral → **Administração** (aparece só para administradores):
+
+- **Cadastrar e-mails**: cole um ou vários e-mails (vírgula, espaço ou um por linha) como
+  **Administrador** (publica os cards da plataforma e acessa esta página) ou **Acesso liberado**.
+  A pessoa não precisa ter conta ainda.
+- **Quem pode criar conta**: *Qualquer pessoa* (padrão) ou *Só e-mails liberados* — aí só quem
+  está na lista de acesso liberado (e os administradores) cria conta; a tela de cadastro avisa.
+  Quem já tem conta continua entrando normalmente.
+- **Contas no site**: nome e e-mail de quem criou conta (os estudos de cada um continuam privados).
+
+Primeiro acesso: enquanto nenhum administrador foi cadastrado (nem na variável
+`PLATFORM_ADMIN_EMAILS`), a **conta mais antiga do site** é a administradora. O site nunca fica sem
+administrador: não dá para tirar o último, nem tirar a si mesmo. Os e-mails da variável do Vercel
+continuam valendo e só saem de lá.
+
 ## Cards da plataforma
 
 Baralhos prontos que aparecem para todos na aba *Flashcards › Cards da plataforma*. O conteúdo fica
@@ -100,9 +117,12 @@ no **Cloudflare R2** (o mesmo bucket das imagens, prefixo `platform/`), não no 
 cards na coleção, a conta dela guarda só a referência (~0,7 KB por card), sem o texto.
 
 1. Configure o R2 (seção acima). Sem ele, a aba mostra "Ainda não disponível".
-2. No Vercel, *Settings → Environment Variables*: `PLATFORM_ADMIN_EMAILS` = o seu e-mail de login
-   (vários separados por vírgula). Só esses usuários veem **Publicar baralho**. **Redeploy.**
-3. Entre no site com esse e-mail → *Flashcards › Cards da plataforma* → **Publicar baralho** →
+2. Administradores (só eles veem **Publicar baralho**): no site, menu lateral → **Administração**
+   → *Cadastrar e-mails* → cole os e-mails → **Administrador** → **Cadastrar**. Enquanto ninguém
+   foi cadastrado, a **conta mais antiga do site** (a sua, de quem instalou) já é administradora e
+   vê esse menu. Alternativa sem o site: no Vercel, *Settings → Environment Variables*,
+   `PLATFORM_ADMIN_EMAILS` = e-mails separados por vírgula, e **Redeploy**.
+3. Entre no site com um e-mail de administrador → *Flashcards › Cards da plataforma* → **Publicar baralho** →
    escolha o `.apkg` → **Publicar para todos**. O navegador lê o pacote e envia em partes (cerca de
    1 minuto para 45 mil cards).
 4. Para corrigir ou atualizar o baralho: publique o `.apkg` novo escolhendo **Atualizar “…”** no

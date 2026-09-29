@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
 import { setAppTimeZone } from '../lib/format';
 import { closeFlashcards } from '../flashcards/local';
+import { clearOfflineCopy, flushQueue, setOfflineOwner } from '../api/offline';
 
 interface AuthState {
   user: User | null;
@@ -32,6 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Datas do app ("hoje") no fuso do perfil
   setAppTimeZone(data?.timezone);
+  // Fila de gravações sem internet: de cada conta
+  setOfflineOwner(data?.id ?? null);
 
   const value: AuthState = {
     user: data ?? null,
@@ -39,7 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser: (u) => qc.setQueryData(['me'], u),
     logout: async () => {
       if (data) await closeFlashcards(data.id);
+      await flushQueue();
       await api.post('/auth/logout');
+      await clearOfflineCopy();
       // Primeiro o usuário sai (as páginas protegidas desmontam), depois o cache:
       // na ordem inversa o AuthProvider ficava preso ao usuário antigo por um
       // instante e as páginas refaziam chamadas já sem sessão (401).

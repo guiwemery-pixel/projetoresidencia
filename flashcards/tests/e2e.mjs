@@ -104,13 +104,16 @@ for (let i = 0; ; i++) {
 const browser = await playwright.chromium.launch();
 const errors = [];
 
+let offlineNow = false;
 function watch(page, who) {
   page.on('console', (m) => {
     if (m.type() !== 'error') return;
     const text = m.text();
     const url = (m.location() && m.location().url) || '';
-    // Esperados: sem internet de propósito, e /auth/me 401 depois de sair
+    // Esperados: sem internet de propósito (inclusive a página sem cópia guardada, 503 do
+    // service worker), e /auth/me 401 depois de sair
     if (/ERR_INTERNET_DISCONNECTED/.test(text)) return;
+    if (offlineNow && /status of 503/.test(text) && /\/api\//.test(url)) return;
     if (/status of 401/.test(text) && /\/api\/auth\/me/.test(url)) return;
     errors.push(who + ': ' + text + (url ? ' @ ' + url : ''));
   });
@@ -521,7 +524,7 @@ try {
     await go('/');
   }
 
-  step('"Nunca entrar como card novo": assunto paralelo fica fora dos novos do dia');
+  step('"Fora da revisão geral": assunto paralelo fica fora dos novos do dia e das revisões');
   {
     const before = await evalFC(() => FC.review.counts({}));
     const cir = await evalFC(() => {
@@ -532,9 +535,9 @@ try {
     await go('/decks');
     const row = page.locator('.tree-row', { has: page.locator('.label-btn', { hasText: /^Cirurgia$/ }) });
     await row.locator('button[title="Mais ações"]').click();
-    await page.click('.menu [role="menuitem"]:has-text("Nunca entrar como card novo")');
+    await page.click('.menu [role="menuitem"]:has-text("Tirar da revisão geral")');
     await page.waitForTimeout(400);
-    assert.ok(await row.locator('.badge:has-text("sem novos no dia")').count(), 'etiqueta na hierarquia');
+    assert.ok(await row.locator('.badge:has-text("fora da revisão geral")').count(), 'etiqueta na hierarquia');
     const after = await evalFC(() => FC.review.counts({}));
     assert.equal(after.newHeld, cir.fresh, 'os novos de toda a grande área (e de dentro dela) ficam de fora');
     assert.equal(after.newAvailable, before.newAvailable - cir.fresh);
@@ -544,6 +547,24 @@ try {
     }), cir.id);
     assert.equal(q.normal ? (q.normal.remaining || { new: 0 }).new : 0, 0, 'revisão normal sem os novos daqui');
     assert.equal(q.all.remaining.new, cir.fresh, '"Estudar tudo" libera os novos daqui');
+    // Revisões vencidas daqui: fora da revisão geral, dentro quando se abre a grande área
+    const held = await evalFC(async (id) => {
+      const card = FC.areas.cardsIn(id).find((c) => !c.suspended);
+      const snap = { state: card.state, dueDate: card.dueDate };
+      Object.assign(card, { state: 'review', dueDate: Date.now() - 1000 });
+      const general = FC.review.counts({});
+      const direct = FC.review.counts({ nodeIds: [id] });
+      // Só este card: por uma seleção qualquer (tag, busca…) não sai; abrindo a grande área, sai
+      const viaOther = FC.review.createSession({ cardIds: [card.id] }).next();
+      const viaArea = FC.review.createSession({ cardIds: [card.id], nodeIds: [id] }).next();
+      Object.assign(card, snap);
+      return { general, direct, viaOther, viaArea: viaArea && viaArea.card && viaArea.card.id, cardId: card.id };
+    }, cir.id);
+    assert.ok(held.general.dueHeld >= 1, 'revisão vencida daqui fica de fora da revisão geral: ' + JSON.stringify(held.general));
+    assert.equal(held.viaOther, null, 'não aparece fora da grande área');
+    assert.equal(held.direct.dueHeld, 0);
+    assert.ok(held.direct.dueNow >= 1, 'aparece ao abrir a própria grande área');
+    assert.equal(held.viaArea, held.cardId);
     await shot('08e-nunca-novo');
     // Baralho: vale para os sub-baralhos
     const deckHeld = await evalFC(async () => {
@@ -556,7 +577,7 @@ try {
     assert.ok(deckHeld >= after.newHeld, 'baralho marcado também segura os novos (com sub-baralhos)');
     // Desmarcar pelo mesmo menu
     await row.locator('button[title="Mais ações"]').click();
-    await page.click('.menu [role="menuitem"]:has-text("Liberar cards novos no dia")');
+    await page.click('.menu [role="menuitem"]:has-text("Voltar para a revisão geral")');
     await page.waitForTimeout(400);
     const back = await evalFC(() => FC.review.counts({}));
     assert.equal(back.newHeld, 0);
@@ -816,6 +837,7 @@ try {
   assert.equal((await counts(page)).logs, onA.logs + 1);
 
   step('sem internet: responde, fica pendente e envia quando a conexão volta');
+  offlineNow = true;
   await A.context.setOffline(true);
   await answerOne(page, '4');
   await page.waitForTimeout(2500);
@@ -825,6 +847,7 @@ try {
   assert.ok(await page.$('.fc-sync.warn'), 'aviso de offline no cabeçalho');
   await shot('30-offline');
   await A.context.setOffline(false);
+  offlineNow = false;
   await page.waitForFunction(() => FC.sync.status().status === 'ok' && FC.sync.status().pending === 0, null, { timeout: 20000 });
   await pull(B.page);
   assert.equal((await counts(B.page)).logs, onA.logs + 2);
@@ -859,6 +882,58 @@ try {
     assert.equal((await counts(page)).logs, n + 1, 'uma tecla = uma resposta');
     await page.click('button:has-text("Encerrar")');
     await page.waitForSelector('text=Sessão concluída!');
+  }
+
+  step('lixeira: baralho excluído vai com os cards para a lixeira, o outro aparelho acompanha e "Restaurar" devolve tudo');
+  {
+    // O baralho apagado no passo do JSON ficou na lixeira; "Excluir de vez" tira de lá
+    const earlier = await evalFC(async () => (await FC.trash.list()).map((b) => [b.label, b.cards]));
+    assert.deepEqual(earlier.map((b) => b[0]), ['Baralho "Cirurgia::Digestiva::Estômago"']);
+    await evalFC(() => FC.trash.purge());
+    await pull(page);
+    const before = await counts(page);
+    const deck = await evalFC(() => {
+      const roots = FC.decks.all().filter((x) => !x.name.includes('::'));
+      const d = roots.find((x) => FC.decks.cardsIn(x.id).some((c) => FC.store.cardLogs(c.id).length)) || roots.sort((a, b) => FC.decks.cardsIn(b.id).length - FC.decks.cardsIn(a.id).length)[0];
+      const cards = FC.decks.cardsIn(d.id);
+      return { id: d.id, name: d.name, n: cards.length, logs: cards.reduce((s, c) => s + FC.store.cardLogs(c.id).length, 0), subs: FC.decks.descendantIds(d.id).size };
+    });
+    await go('/decks');
+    await page.click('.fc-root [role="tab"]:has-text("Baralhos")');
+    const row = page.locator('.tree-row', { has: page.locator('.label-btn', { hasText: new RegExp('^' + deck.name + '$') }) });
+    await row.locator('button[title="Mais ações"]').click();
+    await page.click('.menu [role="menuitem"]:has-text("Excluir")');
+    // Padrão: os cards vão junto (para a lixeira)
+    assert.match(await page.textContent('.modal'), /Vai para a lixeira/);
+    assert.match(await page.$eval('.modal select', (el) => el.options[el.selectedIndex].text), /^Excluir também os/);
+    await page.click('.modal button:has-text("Excluir")');
+    await page.waitForSelector('.toast:has-text("foi para a lixeira") button:has-text("Desfazer")');
+    const gone = await counts(page);
+    assert.equal(gone.cards, before.cards - deck.n);
+    assert.equal(gone.logs, before.logs - deck.logs, 'o histórico vai junto');
+    assert.equal(await flush(page), 0);
+    await pull(B.page);
+    assert.equal((await counts(B.page)).cards, gone.cards, 'o outro aparelho também excluiu');
+    // O outro aparelho vê o lote na lixeira e restaura de lá
+    await B.page.evaluate(() => FC.app.go('/lixeira'));
+    await B.page.locator('.trash-row', { hasText: 'Baralho "' + deck.name + '"' }).waitFor();
+    assert.match(await B.page.textContent('.trash-row'), new RegExp(deck.n + ' cards'));
+    await shot('30b-lixeira', {}, B.page);
+    await B.page.click('.trash-row button:has-text("Restaurar")');
+    await B.page.waitForSelector('text=A lixeira está vazia');
+    assert.deepEqual(await counts(B.page), before, 'cards, histórico e baralhos de volta');
+    assert.equal(await flush(B.page), 0);
+    await pull(page);
+    assert.deepEqual(await counts(page), before, 'e aqui também');
+    assert.equal(await evalFC(async () => (await FC.trash.list()).length), 0);
+    // "Sem classificação": estudar e selecionar todos
+    const none = await evalFC(() => FC.cards.select({ nodeIds: ['__none__'], suspended: 'include', includeBlockedDecks: true }).length);
+    if (none) {
+      await go('/decks/no/__none__');
+      await page.waitForSelector('.select-all');
+      await page.click('.select-all input');
+      assert.match(await page.textContent('.select-all'), new RegExp(none + ' selecionado'));
+    }
   }
 
   step('restaurar backup substitui a coleção da conta e o outro aparelho acompanha');
@@ -1199,6 +1274,52 @@ try {
     for (let i = 0; i < 3 && (await page.evaluate(() => document.documentElement.getAttribute('data-theme'))) !== 'light'; i++) await toggle.click();
   }
 
+  step('site sem internet: abre com os dados guardados, registra o estudo e envia quando a conexão volta');
+  {
+    const O = await device('Olga (sem internet)', 'olga-' + stamp + '@teste.com', { register: true, viewport: { width: 390, height: 844 } });
+    const areas = await (await O.context.request.get(BASE + '/api/areas')).json();
+    const sub = areas.find((a) => a.name === 'Cirurgia').children[0];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const created = await O.context.request.post(BASE + '/api/studies', { data: { newSubject: { areaId: sub.id, name: 'Colelitíase', size: 'MEDIUM' }, date: today, durationMinutes: 50, methods: ['TEORIA', 'QUESTOES'], questions: { total: 25, correct: 20 } } });
+    assert.equal(created.status(), 201);
+    await O.page.goto(BASE + '/');
+    await O.page.waitForSelector('main h1');
+    // Service worker instalado e controlando a página
+    await O.page.waitForFunction(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.state === 'activated', null, { timeout: 20000 });
+    // Abre as telas uma vez com internet (a cópia fica guardada)
+    for (const p of ['/revisoes', '/flashcards', '/']) {
+      await O.page.goto(BASE + p);
+      await O.page.waitForTimeout(1200);
+    }
+    offlineNow = true;
+    await O.context.setOffline(true);
+    await O.page.reload();
+    await O.page.waitForSelector('text=Sem internet');
+    assert.match(await O.page.textContent('main h1'), /Olga/, 'o site abre sem internet');
+    await O.page.click('nav[aria-label="Navegação rápida"] a[href="/revisoes"]');
+    await O.page.waitForSelector('main :text("Colelitíase")');
+    // Registrar estudo sem internet: fica guardado neste aparelho
+    await O.page.click('button[aria-label="Registrar estudo"]');
+    await O.page.click('button:has-text("Colelitíase")');
+    await O.page.click('button:has-text("Teoria")');
+    await O.page.click('.fixed button:has-text("Registrar")');
+    await O.page.waitForSelector('text=Salvo neste aparelho');
+    await shot('37-sem-internet-salvo', {}, O.page);
+    await O.page.click('button:has-text("Fechar")');
+    await O.page.waitForSelector('text=1 registro(s) aguardando envio');
+    // Os flashcards também abrem sem internet (recarregando a página)
+    await O.page.goto(BASE + '/flashcards');
+    await O.page.waitForSelector('.fc-root .fc-tabs');
+    await O.context.setOffline(false);
+    offlineNow = false;
+    await O.page.waitForSelector('text=Conexão de volta', { timeout: 20000 });
+    const studies = await (await O.context.request.get(BASE + '/api/studies')).json();
+    assert.equal((studies.items || studies).length, 2, 'o estudo feito sem internet chegou');
+    assert.deepEqual(await O.page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('offline-queue'))), []);
+    assert.ok((await O.page.evaluate(() => caches.keys())).includes('api-v1'), 'cópia das telas guardada (apagada ao sair, último passo)');
+    await O.context.close();
+  }
+
   step('celular: revisão em tela cheia e sem rolagem lateral');
   await page.setViewportSize({ width: 390, height: 844 });
   await go('/revisar');
@@ -1223,6 +1344,7 @@ try {
     const dbs = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
     assert.ok(!dbs.includes('fc:' + A.user.id), 'banco local apagado: ' + dbs.join(', '));
     assert.equal(await page.evaluate(() => FC.app.userId()), null);
+    assert.ok(!(await page.evaluate(() => caches.keys())).includes('api-v1'), 'cópia das telas (sem internet) apagada');
   }
 
   assert.deepEqual(errors, [], 'sem erros no console');
