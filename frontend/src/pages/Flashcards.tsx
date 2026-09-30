@@ -69,12 +69,12 @@ export function FlashcardsView({ base, standalone = false }: { base: string; sta
           alternate: standalone ? { base: '/flashcards', label: 'Abrir dentro do Projeto Residente' } : { base: CARDS_BASE, label: 'Abrir só os flashcards (app separado)' },
           navigate: (url, opts) => latest.current.navigate(url, { replace: opts?.replace }),
           onSummary: (summary) => qc.setQueryData(flashcardsSummaryKey, { summary, updatedAt: new Date().toISOString() }),
-          registerStudy: async (info) => {
+          registerStudy: async (info, extra) => {
             const subjects = await qc
               .fetchQuery({ queryKey: keys.subjects(), queryFn: () => api.get<Subject[]>('/subjects', { includeArchived: true }), staleTime: 30_000 })
               .catch(() => [] as Subject[]);
             const subject = matchSubject(subjects, info.subject);
-            latest.current.openStudy({ subjectId: subject?.id, methods: ['FLASHCARDS'], minutes: info.minutes, notes: info.notes });
+            latest.current.openStudy({ subjectId: subject?.id, methods: ['FLASHCARDS'], minutes: info.minutes, notes: info.notes, onSaved: extra?.onSaved });
           },
         });
       })

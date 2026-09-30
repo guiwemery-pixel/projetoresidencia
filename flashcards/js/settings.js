@@ -24,6 +24,10 @@
     weakIncludeQuick: false,
     // Revisão
     showPathInReview: true,
+    // Cronômetro de estudo (opcional): relógio no cabeçalho; o tempo vai para o "Registrar estudo"
+    studyTimer: false,
+    studyTimerAuto: true, // inicia ao começar uma revisão e pausa ao sair dela
+    studyTimerForStudy: true, // o registro do fim da sessão usa o tempo do cronômetro
     // IA
     aiProvider: 'manual', // 'manual' | 'anthropic' | 'backend'
     aiModel: 'claude-opus-5',

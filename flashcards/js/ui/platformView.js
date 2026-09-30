@@ -527,6 +527,7 @@
   }
 
   function reportView(ctx, session) {
+    FC.timerView.sessionEnd();
     document.body.classList.remove('fc-focus-mode');
     const { el } = ctx;
     FC.ui.clear(el);
@@ -602,6 +603,8 @@
       const pkg = pending && P().pkgById(pending.pkgId);
       if (!pkg) return FC.app.go('/plataforma', { replace: true });
       const session = new (P().Session)(pkg, pending.deckId, pending);
+      FC.timerView.sessionStart();
+      ctx.onCleanup(() => FC.timerView.sessionEnd());
       const free = session.mode === 'free';
       ctx.setTitle(pending.label);
       const { el } = ctx;

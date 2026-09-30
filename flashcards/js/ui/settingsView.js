@@ -34,6 +34,17 @@
 
       const showPath = FC.ui.checkbox('Mostrar área, assunto e tema no topo do card durante a revisão', s.showPathInReview, (v) => FC.settings.set({ showPathInReview: v }));
 
+      // Cronômetro de estudo (ver js/timer.js)
+      const timerOn = FC.ui.checkbox('Usar o cronômetro de estudo (relógio no topo dos flashcards)', s.studyTimer, (v) => FC.settings.set({ studyTimer: v }).then(() => ctx.rerender()));
+      const timerAuto = FC.ui.checkbox('Iniciar sozinho ao começar uma revisão (e pausar ao sair dela)', s.studyTimerAuto, (v) => FC.settings.set({ studyTimerAuto: v }));
+      const timerStudy = FC.ui.checkbox('Ao registrar o estudo no fim da sessão, usar o tempo do cronômetro', s.studyTimerForStudy, (v) => FC.settings.set({ studyTimerForStudy: v }));
+      const timerBox = h(
+        'div',
+        { class: 'stack' },
+        timerOn.el,
+        s.studyTimer ? h('div', { class: 'stack', style: { paddingLeft: '26px' } }, timerAuto.el, timerStudy.el, h('div', null, FC.ui.button('Abrir o cronômetro', { icon: 'clock', size: 'sm', onClick: () => FC.timerView.openPanel() }))) : null,
+      );
+
       // Estudo
       const order = FC.ui.select(
         [
@@ -268,6 +279,11 @@
           'div',
           { class: 'stack loose' },
           section('Revisão', 'O tema claro/escuro segue o do Projeto Residente (botão no topo do site).', showPath.el),
+          section(
+            'Cronômetro de estudo',
+            'Opcional. Cronômetro (conta para cima) ou timer (contagem regressiva), com iniciar, pausar, retomar e zerar. O tempo marcado vai para o "Registrar estudo" — e assim entra no seu tempo estudado do Projeto Residente.',
+            timerBox,
+          ),
           section(
             'Estudo diário',
             'Limites da revisão normal. O Quick Review não tem limite.',

@@ -206,6 +206,9 @@
       }
     });
     const syncBtn = h('button', { type: 'button', class: 'fc-sync', onclick: () => FC.sync.now() });
+    // Cronômetro de estudo (aparece quando ligado em Configurações)
+    const timerChip = FC.timerView.chip();
+    detach.push(() => timerChip._cleanup());
     const more = FC.ui.moreButton(() => {
       const items = MORE.map((m) => ({ label: m.label, icon: m.icon, run: () => go(m.path) })).concat(['-', { label: 'Sincronizar agora', icon: 'refresh', run: () => FC.sync.now() }]);
       // Alternar entre a aba do site e a versão só de flashcards, na mesma tela
@@ -231,6 +234,7 @@
         // Na versão só de flashcards o título já está na barra do app
         host.standalone ? h('div', { class: 'fc-spacer' }) : h('div', { class: 'fc-brand' }, h('span', { class: 'fc-brand-mark' }, icon('layers', 16)), h('span', { text: 'Flashcards' })),
         syncBtn,
+        timerChip,
         h('div', { class: 'fc-search' }, icon('search', 15), search),
         FC.ui.button('Novo card', { icon: 'plus', variant: 'primary', size: 'sm', onClick: () => FC.cardEditor.open({}) }),
         h('a', { class: 'btn ghost icon sm fc-settings', href: '#/configuracoes', title: 'Configurações dos flashcards', 'aria-label': 'Configurações dos flashcards', dataset: { nav: 'settings' } }, icon('settings', 17)),
@@ -399,6 +403,8 @@
     FC.cards.invalidateIndex();
     await FC.decks.ensureDefault();
     FC.trash.expire().catch((e) => console.error(e));
+    FC.timer.use(id);
+    FC.timerView.listen();
     FC.sync.start();
     FC.summary.start();
     if (cursor) FC.sync.now();
@@ -503,6 +509,7 @@
     booting = null;
     legacyInfo = null;
     FC.summary.stop();
+    FC.timer.stop();
     if (!id) return false;
     let pending = -1;
     if (!opts.skipFlush) {

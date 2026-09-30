@@ -18,7 +18,8 @@ export interface FlashcardsMountOptions {
   /** Atalho no menu ⋯ para a outra versão (mesma tela) */
   alternate?: { base: string; label: string };
   navigate: (url: string, opts?: { replace?: boolean }) => void;
-  registerStudy?: (info: FlashcardsStudyInfo) => void;
+  /** onSaved: o estudo foi salvo (ou ficou na fila sem internet) — ex.: zerar o cronômetro */
+  registerStudy?: (info: FlashcardsStudyInfo, opts?: { onSaved?: () => void }) => void;
   onSummary?: (summary: FlashcardsSummary) => void;
 }
 

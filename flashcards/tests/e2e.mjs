@@ -386,9 +386,9 @@ try {
   {
     await evalFC(() => {
       const orig = FC.host.registerStudy;
-      FC.host.registerStudy = (x) => {
+      FC.host.registerStudy = (x, o) => {
         window.__studyInfo = x;
-        return orig(x);
+        return orig(x, o);
       };
     });
     await page.click('.fc-register button:has-text("Registrar estudo")');
@@ -411,6 +411,47 @@ try {
     assert.ok(study, 'estudo registrado com o método Flashcards: ' + JSON.stringify(studies).slice(0, 300));
     assert.equal(study.subject.name, sent.subject.name);
     assert.equal(study.durationMinutes, sent.minutes);
+  }
+
+  step('cronômetro opcional: iniciar, pausar, retomar, zerar e registrar o estudo com o tempo dele');
+  {
+    assert.equal(await page.locator('.fc-timer').isHidden(), true, 'desligado por padrão');
+    await evalFC(() => FC.settings.set({ studyTimer: true }));
+    await page.locator('.fc-timer').waitFor();
+    await page.click('.fc-timer');
+    const panel = page.locator('.modal:has(.timer-display)');
+    const display = panel.locator('.timer-display');
+    await panel.locator('button:has-text("Iniciar")').click();
+    // 20 minutos depois (sem esperar de verdade)
+    await evalFC(() => {
+      const real = FC.timer.clock.now;
+      FC.timer.clock.now = () => real() + 20 * 60000;
+    });
+    await panel.locator('button:has-text("Pausar")').click();
+    assert.match(await display.innerText(), /^20:0\d$/);
+    await panel.locator('button:has-text("Retomar")').click();
+    await panel.locator('button:has-text("Pausar")').click();
+    await panel.locator('button:has-text("Zerar")').click();
+    assert.equal(await display.innerText(), '0:00');
+    await page.locator('.toast button:has-text("Desfazer")').last().click();
+    assert.match(await display.innerText(), /^20:0\d$/, 'desfazer devolve o tempo');
+    await shot('09b-cronometro');
+    await panel.locator('button:has-text("Registrar estudo com este tempo")').click();
+    const dialog = page.locator('[role="dialog"]:has-text("Registrar estudo")');
+    await dialog.waitFor({ timeout: 10000 });
+    await page.waitForFunction(() => document.querySelector('[role="dialog"] input[type="number"]')?.value === '20', null, { timeout: 10000 });
+    assert.equal(await evalFC(() => FC.timer.elapsed() > 0), true, 'só zera depois de salvar');
+    await dialog.locator('button:has-text("Registrar")').last().click();
+    await page.waitForFunction(() => FC.timer.elapsed() === 0, null, { timeout: 10000 });
+    await page.keyboard.press('Escape');
+    const studies = await (await A.context.request.get(BASE + '/api/studies')).json();
+    const list = Array.isArray(studies) ? studies : studies.items || studies.studies || [];
+    assert.ok(list.some((s) => s.durationMinutes === 20 && (s.methods || []).includes('FLASHCARDS')), 'estudo de 20 min com o tempo do cronômetro');
+    await evalFC(() => {
+      FC.timer.clock.now = () => Date.now();
+      return FC.settings.set({ studyTimer: false });
+    });
+    assert.equal(await page.locator('.fc-timer').isHidden(), true);
   }
 
   step('"Errei" numa revisão: o card volta em 1 min, na mesma sessão');

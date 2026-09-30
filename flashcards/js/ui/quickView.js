@@ -223,6 +223,7 @@
   }
 
   function reportView(ctx, session) {
+    FC.timerView.sessionEnd();
     const report = session.report();
     const hardest = hardestOf(report);
     saveSession(session, report, hardest);
@@ -278,6 +279,8 @@
       if (!pending || !pending.cardIds || !pending.cardIds.length) return FC.app.go('/quick');
       FC.app.state.pendingQuick = null;
       const session = FC.quickReview.create(pending.cardIds.filter((id) => FC.store.cards.has(id)), { label: pending.label, filter: pending.filter });
+      FC.timerView.sessionStart();
+      ctx.onCleanup(() => FC.timerView.sessionEnd());
       ctx.setTitle(pending.label);
       const { el } = ctx;
       let revealed = false;

@@ -48,13 +48,27 @@
   }
 
   /** "Registrar estudo": só aparece dentro do site (o React fornece host.registerStudy). */
-  function studyPanel(info) {
+  function studyPanel(rawInfo) {
     if (!FC.host || !FC.host.registerStudy) return null;
+    // Cronômetro ligado (Configurações): o tempo dele vai no registro, no lugar da duração da sessão
+    const { info, fromTimer } = FC.timerView.forStudy(rawInfo);
     return h(
       'div',
       { class: 'panel row between fc-register' },
-      h('div', { class: 'grow', style: { minWidth: '220px' } }, h('strong', { text: 'Contar no seu histórico de estudos' }), h('p', { class: 'small ink2', text: 'Registra esta sessão no Projeto Residente (método Flashcards) com o tempo' + (info.subject ? ' e o assunto (' + info.subject.name + ')' : '') + ' já preenchidos.' })),
-      button('Registrar estudo', { icon: 'book', onClick: () => FC.host.registerStudy(info) }),
+      h(
+        'div',
+        { class: 'grow', style: { minWidth: '220px' } },
+        h('strong', { text: 'Contar no seu histórico de estudos' }),
+        h('p', { class: 'small ink2', text: 'Registra esta sessão no Projeto Residente (método Flashcards) com o tempo' + (fromTimer ? ' do cronômetro (' + info.minutes + ' min)' : '') + (info.subject ? ' e o assunto (' + info.subject.name + ')' : '') + ' já preenchidos. O tempo entra no seu tempo estudado.' }),
+      ),
+      button('Registrar estudo', {
+        icon: 'book',
+        onClick: () => {
+          const now = FC.timerView.forStudy(rawInfo);
+          if (now.fromTimer) FC.timerView.registerWithTimer(now.info);
+          else FC.host.registerStudy(now.info);
+        },
+      }),
     );
   }
 
@@ -106,6 +120,9 @@
       const label = query.label || 'Revisão de hoje';
       ctx.setTitle(label);
       const session = FC.review.createSession(filter, label, { all: query.todos === '1', noNew: query.novos === '0' });
+      // Cronômetro de estudo (se ligado para iniciar sozinho): conta enquanto a revisão está aberta
+      FC.timerView.sessionStart();
+      ctx.onCleanup(() => FC.timerView.sessionEnd());
       let current = null;
       let revealed = false;
       let busy = false;
@@ -248,6 +265,7 @@
         clearTimeout(waitTimer);
         if (!session.answers.length) return FC.app.go('/');
         await session.finish();
+        FC.timerView.sessionEnd();
         const sum = session.summary();
         const notes = 'Flashcards · ' + label + ': ' + U.plural(sum.reviewed, 'resposta', 'respostas') + ', ' + U.pct(sum.accuracy) + ' de acerto.';
         summaryView(ctx, sum, label, studyPanel(studyInfo(session.answers.map((a) => a.cardId), sum.durationMs, notes)));

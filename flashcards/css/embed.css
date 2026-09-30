@@ -101,6 +101,105 @@
   background: var(--subtle);
 }
 
+/* Cronômetro de estudo (js/ui/timerView.js) */
+.fc-root .fc-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 4px 11px;
+  min-height: 30px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.fc-root .fc-timer:hover {
+  background: var(--subtle);
+}
+
+.fc-root .fc-timer.running {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.fc-root .fc-timer.running svg {
+  animation: fc-timer-pulse 1.6s ease-in-out infinite;
+}
+
+.fc-root .fc-timer.paused {
+  color: var(--warn-text);
+  background: var(--warn-wash);
+}
+
+.fc-root .fc-timer.done {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+@keyframes fc-timer-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.fc-root .timer-display {
+  font-size: 3.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.fc-root .timer-display.running {
+  color: var(--accent);
+}
+
+.fc-root .timer-display.done {
+  color: var(--good);
+}
+
+.fc-root .timer-sub {
+  text-align: center;
+}
+
+.fc-root .timer-controls {
+  justify-content: center;
+}
+
+.fc-root .timer-presets {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Botão "Registrar estudo com este tempo" cabe no quadro do celular */
+.fc-root .timer-panel .panel .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+.fc-root .chip-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.fc-root .chip-btn.on {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .fc-root .fc-sync.ok svg {
   color: var(--good);
 }

@@ -22,6 +22,8 @@ export interface OpenOptions {
   /** Pré-preenchidos (ex.: ao registrar uma sessão de flashcards) */
   minutes?: number;
   notes?: string;
+  /** Chamado quando o estudo é salvo (ou fica na fila sem internet) */
+  onSaved?: () => void;
 }
 
 const Ctx = createContext<(opts?: OpenOptions) => void>(() => undefined);
@@ -167,10 +169,13 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
         })),
       });
       setResults(res.results);
+      opts.onSaved?.();
       toast.success(`Estudo registrado em ${res.results.length} assuntos!`);
     } catch (err) {
-      if (isQueuedOffline(err)) setQueued(true);
-      else toast.error(err);
+      if (isQueuedOffline(err)) {
+        setQueued(true);
+        opts.onSaved?.();
+      } else toast.error(err);
     }
   }
 
@@ -201,11 +206,14 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
             : null,
       });
       setResult(res);
+      opts.onSaved?.();
       toast.success('Estudo registrado!');
     } catch (err) {
       // Sem internet: ficou na fila deste aparelho e vai quando a conexão voltar
-      if (isQueuedOffline(err)) setQueued(true);
-      else toast.error(err);
+      if (isQueuedOffline(err)) {
+        setQueued(true);
+        opts.onSaved?.();
+      } else toast.error(err);
     }
   }
 

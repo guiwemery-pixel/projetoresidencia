@@ -16,6 +16,7 @@ guarda uma cópia para abrir na hora e funcionar sem internet.
 | `/flashcards/...` | A aba: Início, Revisar, Quick Review, Decks, **Cards da plataforma**, Gerar com IA, Importar, Pontos fracos, Estatísticas, Calendário e ⚙ Configurações. Cada tela tem endereço próprio (`/flashcards/decks`, `/flashcards/revisar`…) e o voltar do navegador funciona. |
 | Início do site | Balão **Flashcards** (para revisar hoje, novos, revisados hoje com % de acerto, sequência, "Revisar agora"). Pode ser movido/ocultado em *Personalizar*. |
 | Registrar estudo | Ao terminar uma revisão ou Quick Review, **Registrar estudo** abre o diálogo do site com o método *Flashcards*, o tempo da sessão, um resumo nas observações e o **assunto** já escolhido quando existe na plataforma um assunto com o mesmo nome do assunto mais frequente da sessão. Assim a sessão entra no histórico, nas métricas, nas metas e no agendamento de revisões do assunto. |
+| Cronômetro de estudo | Opcional (⚙ Configurações → *Cronômetro de estudo*). Relógio no topo da aba, com **cronômetro** (conta para cima) ou **timer** (contagem regressiva), iniciar · pausar · retomar · zerar. O tempo marcado vai para o **Registrar estudo** e entra no tempo estudado do site. Ver [Cronômetro de estudo](#cronômetro-de-estudo). |
 | Pesquisa global | Seção **Flashcards** com os cards que contêm o termo (frente, verso ou tags). |
 | Tema | Claro/escuro do site (botão no topo) vale para os flashcards. |
 
@@ -60,6 +61,7 @@ flashcards/                 motor da aba (JavaScript sem framework; testado à p
 │   ├── legacy.js        leva para a conta os dados da versão anterior (só no navegador)
 │   ├── store.js         estado em memória + eventos
 │   ├── settings.js      configurações (a chave da IA fica à parte, fora do backup)
+│   ├── timer.js         cronômetro/timer de estudo (estado neste aparelho) — sem DOM
 │   ├── scheduler.js     ⭐ quando revisar (FSRS-5 + primeira aprendizagem) — puro
 │   ├── review.js        sessão de revisão normal (fila, limites, desfazer)
 │   ├── quickReview.js   sessão de Quick Review (não toca no scheduler) — puro
@@ -162,6 +164,30 @@ Ao excluir um baralho ou uma área, o padrão é levar os cards junto (para a li
 escolher mover os cards para outro baralho ou mantê-los no nível de cima. Cards sem área
 aparecem em **Sem classificação** (aba Decks), com ▶ Estudar, "Excluir todos" e a lista para
 selecionar todos e mover.
+
+### Cronômetro de estudo
+
+Opcional e desligado por padrão: ⚙ **Configurações → Cronômetro de estudo → "Usar o cronômetro
+de estudo"**. Com ele ligado, aparece um relógio no topo da aba (ao lado de "Salvo na conta");
+tocar nele abre o painel:
+
+| | |
+|---|---|
+| **Cronômetro** | Conta para cima: **Iniciar**, **Pausar**, **Retomar**, **Zerar** (com "Desfazer"). |
+| **Timer** | Contagem regressiva de 5, 10, 15, 25, 30, 45, 60 ou 90 min (ou outro valor, 1 a 360). No fim: som, vibração no celular e o aviso "⏰ Tempo esgotado: N min de estudo · Registrar estudo". Para trocar entre cronômetro e timer, zere antes (os tempos não se misturam). |
+| **Registrar estudo com este tempo** | Abre o **Registrar estudo** do site com o método *Flashcards* e a duração marcada. |
+| Iniciar sozinho | (padrão: ligado) começa a contar ao abrir uma revisão, um Quick Review ou um estudo dos cards da plataforma, e pausa ao sair dela. |
+| Usar no fim da sessão | (padrão: ligado) com pelo menos 1 minuto marcado, o **Registrar estudo** do resumo da sessão usa o tempo do cronômetro no lugar da duração da sessão. |
+
+É assim que o tempo entra na **estatística de tempo estudado** do site: vira um estudo
+(método Flashcards) com essa duração — métricas, metas e histórico passam a contar esse tempo.
+O cronômetro **pausa** ao abrir o registro e só **zera** quando o estudo é salvo (ou fica na fila
+sem internet); se o registro for cancelado, o tempo continua lá.
+
+O estado (`js/timer.js`) fica neste aparelho (`localStorage`, uma chave por usuário) e é
+calculado pelo relógio: trocar de aba, bloquear a tela ou recarregar a página não perde tempo, e
+um timer que terminou com a página fechada avisa na próxima abertura. A tela fica em
+`js/ui/timerView.js`.
 
 ## Dados na conta e sincronização
 
@@ -459,7 +485,8 @@ em Flashcards › Configurações.
 ```bash
 npm run test:flashcards          # unitários (node --test): scheduler, Quick Review,
                                  # pontos fracos, formatos, conversão do Anki, estatísticas,
-                                 # cards da plataforma (árvore, caminho, card sem texto na conta)
+                                 # cards da plataforma (árvore, caminho, card sem texto na conta),
+                                 # cronômetro/timer (pausar, retomar, zerar, fim, recarregar)
 npm run test -w backend          # inclui tests/flashcards.test.ts: envio/recebimento, versões sem
                                  # buracos com gravações simultâneas, isolamento entre usuários,
                                  # epoch/recomeço, faxina, cota, validação, resumo e busca;
@@ -469,7 +496,9 @@ npm run test:flashcards:e2e      # ponta a ponta no Chromium (Playwright) contra
                                  # sobe a API com TEST_DATABASE_URL e o frontend compilado; importa o
                                  # CSV modelo e os .apkg, revisa, desfaz, Quick Review, pontos fracos,
                                  # PDF → IA (API simulada), JSON com revisões; menu do site, abas e
-                                 # voltar; "Registrar estudo"; segundo aparelho baixando tudo;
+                                 # voltar; "Registrar estudo"; cronômetro (iniciar, pausar,
+                                 # retomar, zerar, desfazer, registrar com o tempo dele);
+                                 # segundo aparelho baixando tudo;
                                  # offline; backup substituindo a conta; outro usuário; versão antiga;
                                  # Início e contador; versão só de flashcards (/cards, alternar,
                                  # login voltando ao app); pesquisa global; cards da plataforma
