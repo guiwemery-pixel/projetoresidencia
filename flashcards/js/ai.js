@@ -255,7 +255,7 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
     const p = provider();
     if (p === 'anthropic') return 'O texto selecionado será enviado deste navegador diretamente para a API da Anthropic (Claude), usando a sua chave. Seus outros cards e estatísticas não são enviados.';
     if (p === 'backend') return 'O texto selecionado será enviado para o servidor configurado (' + (FC.settings.get('aiEndpoint') || 'sem endereço') + '), que chama a IA. Seus outros cards e estatísticas não são enviados.';
-    return 'Nada é enviado automaticamente: o app monta o pedido para você copiar e colar no Claude, e depois colar a resposta aqui.';
+    return 'Nada é enviado automaticamente: a plataforma só monta o pedido. Você copia, cola numa IA (Claude, ChatGPT…) e traz a resposta de volta para cá.';
   }
 
   /** Texto único para o modo manual (colar no claude.ai). */
