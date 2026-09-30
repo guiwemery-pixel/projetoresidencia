@@ -14,6 +14,7 @@ export interface QueuedRequest {
 
 const QUEUEABLE: { method: string; re: RegExp; label: string }[] = [
   { method: 'POST', re: /^\/studies$/, label: 'Estudo registrado' },
+  { method: 'POST', re: /^\/studies\/batch$/, label: 'Estudo de vários assuntos' },
   { method: 'PATCH', re: /^\/reviews\/[^/?]+\/reschedule$/, label: 'Revisão remarcada' },
   { method: 'PATCH', re: /^\/plans\/items\/[^/?]+$/, label: 'Item do cronograma' },
 ];

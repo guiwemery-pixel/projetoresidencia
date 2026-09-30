@@ -200,6 +200,11 @@ export interface StudyResult {
   planItem?: { id: string; label: string | null; weekStart: string; late: boolean } | null;
 }
 
+/** Estudo que englobou vários assuntos: um resultado por assunto. */
+export interface StudyBatchResult {
+  results: StudyResult[];
+}
+
 export type PlanItemStatus = 'PENDING' | 'DONE' | 'SKIPPED';
 
 export interface PlanItem {

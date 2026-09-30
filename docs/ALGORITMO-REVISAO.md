@@ -238,6 +238,17 @@ de 84% para 60%”.
 | 2ª revisão | só leitura, 🙂 | **amanhã** — revisão D1 (38–45 questões sugeridas), fase mantida |
 | dia seguinte | 38/45 = 84% | **36 dias** (D90) — 30 × 1,2 pelas 45 questões |
 
+## 5a. Um estudo com vários assuntos
+
+Em *Registrar estudo → + Outro assunto*, um mesmo estudo pode englobar vários assuntos (ex.: 30
+questões de pancreatite aguda, crônica e neoplasias de pâncreas). As questões, os acertos e o tempo
+são divididos igualmente — ou informados por assunto — e **cada assunto vira um estudo próprio**,
+com a sua parte: a revisão de cada um é concluída e reagendada pelo desempenho dele, exatamente como
+se tivesse sido registrado separadamente (`POST /api/studies/batch`, numa transação). Como cada
+assunto conta só com a sua parte das questões, com menos de 25 num assunto a próxima revisão dele
+fica um pouco mais próxima. O item do cronograma de onde veio o registro vale para o primeiro
+assunto; os outros concluem o item pendente deles, se houver.
+
 ## 5b. Limite de revisões por dia e revisões muito atrasadas
 
 **No máximo 5 revisões (assuntos) por dia** por padrão — cada pessoa escolhe o seu limite em

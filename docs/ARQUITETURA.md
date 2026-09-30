@@ -160,7 +160,7 @@ o usuário abre o app e pelo job diário, que também apaga sessões de login ve
     `api-v1`). As telas mostram os dados da última vez que foram abertas, com o aviso "Sem internet"
     (`components/layout/OfflineBar.tsx`). `/api/flashcards` passa direto: os flashcards têm a
     própria cópia local e sincronização.
-  - Gravações do dia a dia sem internet (registrar estudo, remarcar revisão, item do cronograma)
+  - Gravações do dia a dia sem internet (registrar estudo — também com vários assuntos —, remarcar revisão, item do cronograma)
     ficam numa fila no aparelho (`api/offline.ts`, por conta) e são enviadas na ordem quando a
     conexão volta; o Registrar estudo avisa "Salvo neste aparelho". As outras gravações pedem internet.
   - Sair da conta envia a fila e apaga a cópia das telas; resposta 401 também apaga.

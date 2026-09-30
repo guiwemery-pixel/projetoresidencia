@@ -1,5 +1,5 @@
 import type { Prisma, StudyMethod, SubjectSize } from '@prisma/client';
-import { prisma } from '../../lib/prisma.js';
+import { prisma, type Tx } from '../../lib/prisma.js';
 import { badRequest, notFound } from '../../lib/errors.js';
 import { fromDb, toDb } from '../../lib/dates.js';
 import { round } from '../../lib/math.js';
@@ -98,42 +98,52 @@ async function afterContact(userId: string, subjectId: string, subjectName: stri
   await refreshGoals(userId, today);
 }
 
-export async function createStudy(userId: string, input: StudyInput, today: string) {
+/** Um estudo (sessão + questões) e o que ele muda: revisão do assunto e item do cronograma. */
+async function createStudyInTx(tx: Tx, userId: string, subject: { id: string; archived: boolean }, input: StudyInput) {
+  const subjectId = subject.id;
+  const earlier = await tx.studySession.count({ where: { userId, subjectId, studiedOn: { lt: toDb(input.date) } } });
+  const session = await tx.studySession.create({
+    data: {
+      userId,
+      subjectId,
+      studiedOn: toDb(input.date),
+      durationMinutes: input.durationMinutes,
+      methods: input.methods,
+      quality: input.quality ?? null,
+      difficulty: input.difficulty ?? null,
+      notes: input.notes ?? null,
+      isFirstContact: earlier === 0,
+    },
+  });
+  if (input.questions && input.questions.total > 0) {
+    await tx.questionSession.create({
+      data: { ...questionData(userId, subjectId, input.date, input.questions), studySessionId: session.id },
+    });
+  }
+  if (subject.archived) await tx.subject.update({ where: { id: subjectId }, data: { archived: false } });
+  const outcome = await processContact(tx, userId, subjectId, input.date);
+  const planItem = await linkStudy(tx, userId, subjectId, input.date, session.id, input.planItemId);
+  return { session, outcome, isFirstContact: earlier === 0, planItem };
+}
+
+function checkStudy(input: Pick<StudyInput, 'date' | 'methods'>, today: string) {
   if (input.date > today) throw badRequest('A data do estudo não pode estar no futuro');
   if (!input.methods.length) throw badRequest('Escolha pelo menos um tipo de estudo');
+}
 
+async function resolveSubject(userId: string, input: Pick<StudyInput, 'subjectId' | 'newSubject'>) {
   let subjectId = input.subjectId;
   if (!subjectId && input.newSubject) {
     subjectId = (await createSubject(userId, input.newSubject)).id;
   }
   if (!subjectId) throw badRequest('Escolha ou crie um assunto');
-  const subject = await findOwnedSubject(userId, subjectId);
+  return findOwnedSubject(userId, subjectId);
+}
 
-  const { session, outcome, isFirstContact, planItem } = await prisma.$transaction(async (tx) => {
-    const earlier = await tx.studySession.count({ where: { userId, subjectId, studiedOn: { lt: toDb(input.date) } } });
-    const session = await tx.studySession.create({
-      data: {
-        userId,
-        subjectId: subject.id,
-        studiedOn: toDb(input.date),
-        durationMinutes: input.durationMinutes,
-        methods: input.methods,
-        quality: input.quality ?? null,
-        difficulty: input.difficulty ?? null,
-        notes: input.notes ?? null,
-        isFirstContact: earlier === 0,
-      },
-    });
-    if (input.questions && input.questions.total > 0) {
-      await tx.questionSession.create({
-        data: { ...questionData(userId, subject.id, input.date, input.questions), studySessionId: session.id },
-      });
-    }
-    if (subject.archived) await tx.subject.update({ where: { id: subject.id }, data: { archived: false } });
-    const outcome = await processContact(tx, userId, subject.id, input.date);
-    const planItem = await linkStudy(tx, userId, subject.id, input.date, session.id, input.planItemId);
-    return { session, outcome, isFirstContact: earlier === 0, planItem };
-  });
+export async function createStudy(userId: string, input: StudyInput, today: string) {
+  checkStudy(input, today);
+  const subject = await resolveSubject(userId, input);
+  const { session, outcome, isFirstContact, planItem } = await prisma.$transaction((tx) => createStudyInTx(tx, userId, subject, input));
 
   const balance = await balanceAfter(userId, today);
   await afterContact(userId, subject.id, subject.name, input.date, outcome, today);
@@ -144,6 +154,68 @@ export async function createStudy(userId: string, input: StudyInput, today: stri
     schedule: scheduleView(outcome, balance),
     planItem,
   };
+}
+
+/** Um assunto de um estudo com vários assuntos: a parte dele no tempo e nas questões. */
+export interface StudyBatchItem {
+  subjectId?: string;
+  newSubject?: StudyInput['newSubject'];
+  durationMinutes: number;
+  questions?: QuestionInput | null;
+}
+
+export interface StudyBatchInput extends Omit<StudyInput, 'subjectId' | 'newSubject' | 'durationMinutes' | 'questions'> {
+  items: StudyBatchItem[];
+}
+
+/**
+ * Estudo que englobou vários assuntos (ex.: 30 questões de pancreatite aguda, crônica e
+ * neoplasias de pâncreas): cada assunto vira um estudo próprio, com a sua parte das questões
+ * e do tempo, e a revisão de cada um é recalculada separadamente — tudo numa transação.
+ * O item do cronograma escolhido (planItemId) vale para o primeiro assunto; os outros concluem
+ * o item pendente deles, se houver.
+ */
+export async function createStudies(userId: string, input: StudyBatchInput, today: string) {
+  checkStudy(input, today);
+  if (input.items.length < 2) throw badRequest('Escolha pelo menos dois assuntos');
+  const subjects: Awaited<ReturnType<typeof resolveSubject>>[] = [];
+  for (const item of input.items) subjects.push(await resolveSubject(userId, item));
+  if (new Set(subjects.map((s) => s.id)).size !== subjects.length) throw badRequest('O mesmo assunto aparece mais de uma vez');
+
+  const done = await prisma.$transaction(
+    async (tx) => {
+      const out = [];
+      for (const [i, item] of input.items.entries()) {
+        const study: StudyInput = {
+          date: input.date,
+          methods: input.methods,
+          quality: input.quality,
+          difficulty: input.difficulty,
+          notes: input.notes,
+          durationMinutes: item.durationMinutes,
+          questions: item.questions,
+          planItemId: i === 0 ? input.planItemId : null,
+        };
+        out.push(await createStudyInTx(tx, userId, subjects[i], study));
+      }
+      return out;
+    },
+    { timeout: 30_000, maxWait: 10_000 },
+  );
+
+  const balance = await balanceAfter(userId, today);
+  const results = [];
+  for (const [i, r] of done.entries()) {
+    await afterContact(userId, subjects[i].id, subjects[i].name, input.date, r.outcome, today);
+    results.push({
+      session: await getStudy(userId, r.session.id),
+      isFirstContact: r.isFirstContact,
+      completedReviewId: r.outcome.completedReviewId,
+      schedule: scheduleView(r.outcome, balance),
+      planItem: r.planItem,
+    });
+  }
+  return { results };
 }
 
 export async function updateStudy(userId: string, id: string, input: Partial<StudyInput>, today: string) {

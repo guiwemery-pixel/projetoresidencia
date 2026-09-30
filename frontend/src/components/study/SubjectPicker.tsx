@@ -37,7 +37,8 @@ export function AreaOptions({ areas }: { areas: AreaNode[] }) {
   );
 }
 
-export function SubjectPicker({ value, onChange }: { value: SubjectChoice; onChange: (v: SubjectChoice) => void }) {
+/** exclude: ids que não aparecem na lista (ex.: assuntos já escolhidos no mesmo estudo). */
+export function SubjectPicker({ value, onChange, exclude }: { value: SubjectChoice; onChange: (v: SubjectChoice) => void; exclude?: string[] }) {
   const { data: subjects = [] } = useSubjects();
   const { data: areas = [] } = useAreas();
   const [query, setQuery] = useState('');
@@ -46,12 +47,12 @@ export function SubjectPicker({ value, onChange }: { value: SubjectChoice; onCha
 
   const matches = useMemo(() => {
     const q = normalize(query.trim());
-    const active = subjects.filter((s) => !s.archived);
+    const active = subjects.filter((s) => !s.archived && !exclude?.includes(s.id));
     const list = q
       ? active.filter((s) => normalize(s.name).includes(q) || normalize(s.area?.path ?? '').includes(q))
       : [...active].sort((a, b) => (b.learning?.lastContactOn ?? '').localeCompare(a.learning?.lastContactOn ?? ''));
     return list.slice(0, 8);
-  }, [subjects, query]);
+  }, [subjects, query, exclude]);
 
   if (value?.kind === 'existing') {
     const s = value.subject;

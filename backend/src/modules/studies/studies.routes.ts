@@ -54,6 +54,31 @@ const createSchema = z
   })
   .refine((v) => v.subjectId || v.newSubject, { message: 'Escolha ou crie um assunto', path: ['subjectId'] });
 
+const subjectRef = {
+  subjectId: id.optional(),
+  newSubject: z
+    .object({ areaId: id, name: z.string().trim().min(1).max(120), size: z.enum(['SMALL', 'MEDIUM', 'LARGE']).optional() })
+    .optional(),
+};
+
+// Estudo que englobou vários assuntos: cada item é a parte de um assunto (tempo e questões)
+const batchSchema = z.object({
+  date: base.date,
+  methods: base.methods,
+  quality: base.quality,
+  difficulty: base.difficulty,
+  notes: base.notes,
+  planItemId: id.nullish(),
+  items: z
+    .array(
+      z
+        .object({ ...subjectRef, durationMinutes: base.durationMinutes, questions: base.questions })
+        .refine((v) => v.subjectId || v.newSubject, { message: 'Escolha ou crie um assunto', path: ['subjectId'] }),
+    )
+    .min(2, 'Escolha pelo menos dois assuntos')
+    .max(10, 'No máximo 10 assuntos de uma vez'),
+});
+
 const updateSchema = z.object({
   subjectId: id.optional(),
   date: base.date.optional(),
@@ -86,6 +111,11 @@ studiesRouter.get('/suggestion/:subjectId', async (req, res) => {
 studiesRouter.post('/', async (req, res) => {
   const input = parse(createSchema, req.body);
   res.status(201).json(await svc.createStudy(currentUser(req).id, input, today(req)));
+});
+
+studiesRouter.post('/batch', async (req, res) => {
+  const input = parse(batchSchema, req.body);
+  res.status(201).json(await svc.createStudies(currentUser(req).id, input, today(req)));
 });
 
 studiesRouter.get('/:id', async (req, res) => {

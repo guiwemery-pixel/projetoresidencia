@@ -18,6 +18,7 @@ import type {
   Progress,
   Review,
   Study,
+  StudyBatchResult,
   StudyResult,
   Subject,
 } from '../api/types';
@@ -123,6 +124,15 @@ export function useCreateStudy() {
   const invalidate = useInvalidateStudyData();
   return useMutation({
     mutationFn: (body: unknown) => api.post<StudyResult>('/studies', body),
+    onSuccess: invalidate,
+  });
+}
+
+/** Um estudo com vários assuntos: cada assunto vira um estudo com a sua revisão. */
+export function useCreateStudies() {
+  const invalidate = useInvalidateStudyData();
+  return useMutation({
+    mutationFn: (body: unknown) => api.post<StudyBatchResult>('/studies/batch', body),
     onSuccess: invalidate,
   });
 }

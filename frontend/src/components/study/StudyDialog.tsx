@@ -1,15 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarCheck2, ChevronDown, Info, Lightbulb, Sparkles, WifiOff } from 'lucide-react';
+import { CalendarCheck2, ChevronDown, Info, Lightbulb, Plus, Sparkles, WifiOff, X } from 'lucide-react';
 import { api } from '../../api/client';
 import { isQueuedOffline } from '../../api/offline';
 import type { StudyMethod, StudyResult, StudySuggestion } from '../../api/types';
-import { useCreateStudy, useSubjects } from '../../hooks/api';
+import { useCreateStudies, useCreateStudy, useSubjects } from '../../hooks/api';
 import { DIFFICULTY, METHODS, METHOD_LABEL, QUALITY, SIZES } from '../../lib/constants';
 import { duration, fmtLong, pct, relativeDay, todayLocal } from '../../lib/format';
 import { questionCountFactor, type QuestionCountConfig } from '../../lib/questions';
-import { Button, Input, Modal, NumberInput, Textarea, cx, useToast } from '../ui';
-import { SubjectPicker, type SubjectChoice } from './SubjectPicker';
+import { splitCorrect, splitEven } from '../../lib/split';
+import { Button, IconButton, Input, Modal, NumberInput, Textarea, cx, useToast } from '../ui';
+import { SubjectPicker, normalize, type SubjectChoice } from './SubjectPicker';
 import { WhyPanel } from './WhyPanel';
 
 export interface OpenOptions {
@@ -38,6 +39,8 @@ export function StudyDialogProvider({ children }: { children: ReactNode }) {
 }
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
+/** Linha "questões de cada assunto": no celular o nome ocupa a linha de cima. */
+const PART_GRID = 'grid grid-cols-[1fr_1fr_3rem] gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_3.5rem]';
 const QUESTION_METHODS: StudyMethod[] = ['QUESTOES', 'SIMULADO'];
 /** Estudo teórico: sem questões registradas, a data não sai de percentual. */
 const STUDY_ONLY_METHODS: StudyMethod[] = ['TEORIA', 'AULA', 'VIDEO', 'LEITURA', 'RESUMO', 'REVISAO', 'OUTRO'];
@@ -46,6 +49,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
   const toast = useToast();
   const { data: subjects } = useSubjects();
   const create = useCreateStudy();
+  const createMany = useCreateStudies();
 
   const [subject, setSubject] = useState<SubjectChoice>(null);
   const [date, setDate] = useState(todayLocal());
@@ -63,6 +67,11 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [notes, setNotes] = useState(opts.notes ?? '');
   const [result, setResult] = useState<StudyResult | null>(null);
+  // Estudo que englobou vários assuntos: os outros assuntos e, se a pessoa quiser, as questões de cada um
+  const [extras, setExtras] = useState<SubjectChoice[]>([]);
+  const [perSubject, setPerSubject] = useState(false);
+  const [manual, setManual] = useState<Record<string, { total: number | null; correct: number | null }>>({});
+  const [results, setResults] = useState<StudyResult[] | null>(null);
   const [queued, setQueued] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
 
@@ -92,6 +101,26 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
   const accuracy = total && correct !== null && correct <= total ? (correct / total) * 100 : null;
   const questionsError = total !== null && correct !== null && correct > total ? 'Acertos maiores que o total' : undefined;
 
+  // Vários assuntos: cada um recebe a sua parte do tempo e das questões (igual, ou informada por assunto)
+  const chosen = [subject, ...extras].filter((c): c is NonNullable<SubjectChoice> => !!c);
+  const choiceKey = (c: NonNullable<SubjectChoice>) => (c.kind === 'existing' ? c.subject.id : `novo:${normalize(c.data.name.trim())}`);
+  const isBatch = chosen.length >= 2;
+  const duplicated = new Set(chosen.map(choiceKey)).size !== chosen.length;
+  const minuteParts = minutes !== null ? splitEven(minutes, chosen.length) : [];
+  const autoTotals = total ? splitEven(total, chosen.length) : [];
+  const autoCorrect = total && correct !== null && correct <= total ? splitCorrect(correct, autoTotals) : [];
+  const parts = chosen.map((c, i) =>
+    perSubject ? manual[choiceKey(c)] ?? { total: null, correct: null } : { total: autoTotals[i] ?? null, correct: autoCorrect[i] ?? null },
+  );
+  const partsTotal = parts.reduce((a, p) => a + (p.total ?? 0), 0);
+  const partsCorrect = parts.reduce((a, p) => a + (p.correct ?? 0), 0);
+  const partsError = perSubject && parts.some((p) => p.total !== null && p.correct !== null && p.correct > p.total) ? 'Acertos maiores que as questões em algum assunto' : undefined;
+  const startPerSubject = () => {
+    setManual(Object.fromEntries(chosen.map((c, i) => [choiceKey(c), parts[i]])));
+    setPerSubject(true);
+  };
+  const excludeIds = chosen.flatMap((c) => (c.kind === 'existing' ? [c.subject.id] : []));
+
   const newSuggestion = subject?.kind === 'new' ? SIZES.find((x) => x.value === subject.data.size)?.questions ?? null : null;
   const reference = suggestion?.questionCount?.reference ?? 25;
 
@@ -110,12 +139,44 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
           ? 'Revisão só teórica: vale o “Como foi?”, mas com prazo bem menor que com questões, e a etapa não avança.'
           : 'Estudo teórico (aula, vídeo, leitura): a revisão D1 fica para amanhã — com questões, flashcards, recall ou teoria.');
   }
-  const canSubmit = !!subject && methods.length > 0 && minutes !== null && !questionsError && (!hasQuestions || total === null || (total > 0 && correct !== null));
+  const questionsOk = !hasQuestions
+    ? true
+    : isBatch && perSubject
+      ? !partsError && parts.every((p) => !p.total || p.correct !== null)
+      : !questionsError && (total === null || (total > 0 && correct !== null));
+  const canSubmit = !!subject && methods.length > 0 && minutes !== null && questionsOk && !duplicated;
 
   const toggle = (m: StudyMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
 
+  async function submitBatch() {
+    const qExtra = { board: board || null, examName: examName || null, difficulty: qDifficulty, notes: qNotes || null };
+    const qTimes = qTime ? splitEven(qTime, chosen.length) : [];
+    try {
+      const res = await createMany.mutateAsync({
+        date,
+        methods,
+        quality,
+        difficulty,
+        notes: notes || null,
+        // O item do cronograma (ou a revisão) de onde veio o registro é do primeiro assunto
+        planItemId: opts.planItemId ?? null,
+        items: chosen.map((c, i) => ({
+          ...(c.kind === 'existing' ? { subjectId: c.subject.id } : { newSubject: c.data }),
+          durationMinutes: minuteParts[i] ?? 0,
+          questions: hasQuestions && parts[i].total ? { total: parts[i].total, correct: parts[i].correct ?? 0, ...qExtra, timeSpentMinutes: qTimes[i] ?? null } : null,
+        })),
+      });
+      setResults(res.results);
+      toast.success(`Estudo registrado em ${res.results.length} assuntos!`);
+    } catch (err) {
+      if (isQueuedOffline(err)) setQueued(true);
+      else toast.error(err);
+    }
+  }
+
   async function submit() {
     if (!subject) return;
+    if (isBatch) return submitBatch();
     try {
       const res = await create.mutateAsync({
         ...(subject.kind === 'existing' ? { subjectId: subject.subject.id } : { newSubject: subject.data }),
@@ -154,9 +215,23 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
         <div className="flex items-start gap-3 rounded-2xl bg-accent-wash p-4 text-sm text-ink2">
           <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
           <p>
-            Você está sem internet. O estudo de <strong className="text-ink">{subject?.kind === 'existing' ? subject.subject.name : subject?.data.name}</strong> ficou salvo
-            neste aparelho e será enviado quando a conexão voltar — aí a próxima revisão é calculada e aparece no calendário.
+            Você está sem internet. O estudo de{' '}
+            <strong className="text-ink">{chosen.map((c) => (c.kind === 'existing' ? c.subject.name : c.data.name)).join(', ')}</strong> ficou salvo neste aparelho e
+            será enviado quando a conexão voltar — aí a próxima revisão {isBatch ? 'de cada assunto' : ''} é calculada e aparece no calendário.
           </p>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (results) {
+    return (
+      <Modal open onClose={onClose} title={`Estudo registrado · ${results.length} assuntos`} footer={<Button variant="secondary" onClick={onClose}>Fechar</Button>}>
+        <div className="space-y-3">
+          <p className="text-sm text-ink2">Cada assunto ficou com o seu estudo e a sua próxima revisão, calculada pelo desempenho dele.</p>
+          {results.map((r) => (
+            <BatchResultRow key={r.session.id} result={r} />
+          ))}
         </div>
       </Modal>
     );
@@ -247,8 +322,8 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={submit} loading={create.isPending} disabled={!canSubmit}>
-            Registrar
+          <Button onClick={submit} loading={create.isPending || createMany.isPending} disabled={!canSubmit}>
+            {isBatch ? `Registrar ${chosen.length} assuntos` : 'Registrar'}
           </Button>
         </>
       }
@@ -262,8 +337,36 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
       >
         <section>
           <h3 className="label">1. Assunto</h3>
-          <SubjectPicker value={subject} onChange={setSubject} />
-          {suggestion && <SuggestionBox suggestion={suggestion} />}
+          <SubjectPicker value={subject} onChange={setSubject} exclude={excludeIds.filter((x) => subject?.kind !== 'existing' || x !== subject.subject.id)} />
+          {extras.map((x, j) => (
+            <div key={j} className="mt-2 flex items-start gap-1">
+              <div className="min-w-0 flex-1">
+                <SubjectPicker
+                  value={x}
+                  onChange={(v) => setExtras((all) => all.map((y, k) => (k === j ? v : y)))}
+                  exclude={excludeIds.filter((id) => x?.kind !== 'existing' || id !== x.subject.id)}
+                />
+              </div>
+              <IconButton label="Tirar este assunto" onClick={() => setExtras((all) => all.filter((_, k) => k !== j))}>
+                <X className="h-4 w-4" />
+              </IconButton>
+            </div>
+          ))}
+          {subject && extras.length < 9 && extras.every(Boolean) && (
+            <button type="button" onClick={() => setExtras((all) => [...all, null])} className="mt-2 flex items-start gap-1.5 text-left text-sm font-medium text-accent">
+              <Plus className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Outro assunto <span className="font-normal text-ink2">(o estudo englobou mais de um)</span>
+              </span>
+            </button>
+          )}
+          {isBatch && (
+            <p className="mt-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">
+              {chosen.length} assuntos: cada um vira um estudo com a sua parte das questões e do tempo, e a revisão de cada um é calculada separadamente.
+            </p>
+          )}
+          {duplicated && <p className="mt-1 text-xs text-crit-text">O mesmo assunto aparece mais de uma vez.</p>}
+          {suggestion && !isBatch && <SuggestionBox suggestion={suggestion} />}
           {newSuggestion && (
             <p className="mt-2 flex items-start gap-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">
               <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
@@ -275,7 +378,14 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
         <section className="grid gap-3 sm:grid-cols-2">
           <Input label="Data" type="date" value={date} max={todayLocal()} onChange={(e) => setDate(e.target.value)} />
           <div>
-            <NumberInput label="Duração (minutos)" min={0} max={1440} value={minutes} onChange={setMinutes} hint={minutes ? duration(minutes) : undefined} />
+            <NumberInput
+              label="Duração (minutos)"
+              min={0}
+              max={1440}
+              value={minutes}
+              onChange={setMinutes}
+              hint={minutes ? (isBatch ? `${duration(minutes)} · ≈ ${duration(minuteParts[0] ?? 0)} por assunto` : duration(minutes)) : undefined}
+            />
             <div className="mt-1.5 flex flex-wrap gap-1">
               {DURATIONS.map((d) => (
                 <button
@@ -314,15 +424,66 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
         {hasQuestions && (
           <section className="space-y-3 rounded-2xl border border-line p-3">
             <h3 className="text-sm font-medium text-ink">3. Questões</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <NumberInput label="Quantidade" min={1} max={1000} value={total} onChange={setTotal} />
-              <NumberInput label="Acertos" min={0} max={1000} value={correct} onChange={setCorrect} error={questionsError} />
-              <div>
-                <span className="label">Erros</span>
-                <div className="input num bg-subtle text-ink2">{wrong ?? '—'}</div>
+            {!(isBatch && perSubject) && (
+              <div className="grid grid-cols-3 gap-2">
+                <NumberInput label={isBatch ? 'Quantidade (total)' : 'Quantidade'} min={1} max={1000} value={total} onChange={setTotal} />
+                <NumberInput label="Acertos" min={0} max={1000} value={correct} onChange={setCorrect} error={questionsError} />
+                <div>
+                  <span className="label">Erros</span>
+                  <div className="input num bg-subtle text-ink2">{wrong ?? '—'}</div>
+                </div>
               </div>
-            </div>
-            {accuracy !== null && (
+            )}
+            {isBatch && (
+              <div className="space-y-2 rounded-xl bg-subtle p-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-ink">{perSubject ? 'Questões de cada assunto' : 'Divididas igualmente entre os assuntos'}</p>
+                  <button type="button" className="text-xs font-medium text-accent" onClick={() => (perSubject ? setPerSubject(false) : startPerSubject())}>
+                    {perSubject ? 'Dividir igualmente' : 'Informar por assunto'}
+                  </button>
+                </div>
+                {perSubject && (
+                  <div className={cx(PART_GRID, 'text-[11px] text-muted')}>
+                    <span className="hidden sm:block">Assunto</span>
+                    <span>Questões</span>
+                    <span>Acertos</span>
+                    <span className="text-right">%</span>
+                  </div>
+                )}
+                {chosen.map((c, i) => {
+                  const p = parts[i];
+                  const name = c.kind === 'existing' ? c.subject.name : c.data.name;
+                  const acc = p.total && p.correct !== null && p.correct <= p.total ? (p.correct / p.total) * 100 : null;
+                  const setPart = (patch: Partial<{ total: number | null; correct: number | null }>) =>
+                    setManual((m) => ({ ...m, [choiceKey(c)]: { ...(m[choiceKey(c)] ?? { total: null, correct: null }), ...patch } }));
+                  return perSubject ? (
+                    // No celular o nome fica numa linha própria (os nomes parecidos não se confundem)
+                    <div key={choiceKey(c)} className={cx(PART_GRID, 'items-center text-sm')}>
+                      <span className="col-span-3 truncate text-ink sm:col-span-1">{name}</span>
+                      <input className="input num px-2 py-1.5" type="number" min={0} aria-label={`Questões de ${name}`} placeholder="Qtd." value={p.total ?? ''} onChange={(e) => setPart({ total: e.target.value === '' ? null : Number(e.target.value) })} />
+                      <input className="input num px-2 py-1.5" type="number" min={0} aria-label={`Acertos de ${name}`} placeholder="Acertos" value={p.correct ?? ''} onChange={(e) => setPart({ correct: e.target.value === '' ? null : Number(e.target.value) })} />
+                      <span className="num text-right text-xs text-ink2">{acc !== null ? pct(acc) : '—'}</span>
+                    </div>
+                  ) : (
+                    <div key={choiceKey(c)} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="truncate text-ink">{name}</span>
+                      <span className="num shrink-0 text-ink2">{p.total ? `${p.correct ?? '—'}/${p.total}${acc !== null ? ` · ${pct(acc)}` : ''}` : '—'}</span>
+                    </div>
+                  );
+                })}
+                {perSubject && (
+                  <p className="num text-xs text-ink2">
+                    Total: {partsCorrect}/{partsTotal}
+                    {partsTotal ? ` = ${pct((partsCorrect / partsTotal) * 100)}` : ''} de acertos
+                  </p>
+                )}
+                {partsError && <p className="text-xs text-crit-text">{partsError}</p>}
+                <p className="text-xs text-muted">
+                  Cada assunto conta só com a sua parte: com menos de {reference} questões num assunto, a próxima revisão dele fica um pouco mais próxima.
+                </p>
+              </div>
+            )}
+            {accuracy !== null && !(isBatch && perSubject) && (
               <p className="num rounded-xl bg-subtle px-3 py-2 text-sm text-ink">
                 Resultado:{' '}
                 <strong>
@@ -331,7 +492,7 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                 de acertos
               </p>
             )}
-            {total !== null && total > 0 && suggestion?.questionCount && <QuantityHint total={total} config={suggestion.questionCount} />}
+            {!isBatch && total !== null && total > 0 && suggestion?.questionCount && <QuantityHint total={total} config={suggestion.questionCount} />}
             <button type="button" className="flex items-center gap-1 text-xs font-medium text-accent" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore}>
               Banca, prova, dificuldade e tempo <ChevronDown className={cx('h-3.5 w-3.5 transition', showMore && 'rotate-180')} />
             </button>
@@ -385,6 +546,40 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
         <button type="submit" hidden />
       </form>
     </Modal>
+  );
+}
+
+/** Um assunto de um estudo com vários assuntos: resultado e próxima revisão. */
+function BatchResultRow({ result }: { result: StudyResult }) {
+  const s = result.schedule;
+  const q = result.session.questions;
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-good-wash p-3">
+      <CalendarCheck2 className="mt-0.5 h-5 w-5 shrink-0" style={{ color: 'var(--good)' }} />
+      <div className="min-w-0 text-sm">
+        <p className="font-medium text-ink">
+          {result.session.subject.name}
+          {q && (
+            <span className="text-ink2">
+              {' '}
+              · {q.correct}/{q.total} = {pct(q.accuracy)}
+            </span>
+          )}
+        </p>
+        {s && (
+          <p className="mt-0.5 text-ink2">
+            Próxima revisão <strong className="text-ink">{s.stageLabel}</strong> {relativeDay(s.dueOn)} ({fmtLong(s.dueOn)}).
+            {s.shiftedFrom && ` Seria ${fmtLong(s.shiftedFrom)}, mas o dia já estava cheio (limite de ${s.dailyReviewLimit}).`}
+          </p>
+        )}
+        {(result.completedReviewId || result.planItem) && (
+          <p className="mt-0.5 text-xs text-ink2">
+            {result.completedReviewId && '✔ Revisão pendente concluída. '}
+            {result.planItem && `✔ ${result.planItem.label ? `${result.planItem.label} do cronograma` : 'Assunto do cronograma'} concluído.`}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
