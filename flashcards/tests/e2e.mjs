@@ -734,7 +734,7 @@ try {
   await page.fill('textarea.textarea', 'A acalasia é um distúrbio motor primário do esôfago. '.repeat(20) + '\n\nO tratamento inclui miotomia de Heller, POEM e dilatação pneumática. '.repeat(10));
   await page.click('button:has-text("Usar este texto")');
   await page.click('.seg button:has-text("5")');
-  await page.click('button:has-text("Gerar cards")');
+  await page.click('button:has-text("Montar pedido para a IA")');
   await page.waitForSelector('.modal .prompt-box');
   const prompt = await page.textContent('.modal .prompt-box');
   assert.match(prompt, /active recall/);
