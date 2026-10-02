@@ -19,8 +19,24 @@
     if (!res || !res.manual) return res;
     return new Promise((resolve) => {
       let result = null;
+      const csv = res.format === 'csv';
       const promptBox = h('div', { class: 'prompt-box', text: res.prompt });
-      const answer = h('textarea', { class: 'textarea', rows: 8, placeholder: 'Cole aqui a resposta inteira da IA' });
+      const answer = h('textarea', { class: 'textarea', rows: 8, placeholder: csv ? 'Cole aqui o conteúdo do CSV (ou escolha o arquivo acima)' : 'Cole aqui a resposta inteira da IA' });
+      // O arquivo CSV que a IA criou: lido aqui mesmo e colocado no campo de resposta
+      const fileInput = h('input', { type: 'file', accept: '.csv,.txt,text/csv,text/plain', class: 'hidden' });
+      const fileInfo = h('span', { class: 'hint' });
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        answer.value = await file.text();
+        try {
+          const n = FC.ai.normalizeCards(FC.ai.parseResponse(answer.value)).length;
+          fileInfo.textContent = '"' + file.name + '": ' + U.plural(n, 'card', 'cards');
+        } catch (e) {
+          fileInfo.textContent = '"' + file.name + '": ' + e.message;
+        }
+        fileInput.value = '';
+      });
       const copyBtn = button('Copiar pedido', {
         icon: 'copy',
         onClick: async () => {
@@ -40,9 +56,10 @@
         'div',
         { class: 'stack' },
         opts.title ? h('p', { class: 'ink2', text: opts.title }) : null,
-        h('ol', { class: 'small ink2', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Copie o pedido abaixo e cole numa conversa com uma IA (Claude, ChatGPT, Gemini…).' }), h('li', { text: 'Quando ela responder, copie a resposta inteira e cole no campo de baixo.' }), h('li', { text: 'Toque em "Usar resposta": os cards aparecem para você revisar.' })),
+        h('ol', { class: 'small ink2', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Copie o pedido abaixo e cole numa conversa com uma IA (Claude, ChatGPT, Gemini…).' }), h('li', { text: csv ? 'A IA cria um arquivo CSV (separado por ";"). Baixe o arquivo e toque em "Escolher arquivo CSV" — ou copie o conteúdo dele e cole no campo de baixo.' : 'Quando ela responder, copie a resposta inteira e cole no campo de baixo.' }), h('li', { text: 'Toque em "Usar resposta": os cards aparecem para você revisar.' })),
         promptBox,
         h('div', { class: 'row' }, copyBtn, h('span', { class: 'hint', text: U.fmtNum(res.prompt.length) + ' caracteres' })),
+        csv ? h('div', { class: 'row' }, button('Escolher arquivo CSV', { icon: 'upload', onClick: () => fileInput.click() }), fileInfo, fileInput) : null,
         answer,
       );
       const m = FC.ui.modal({
@@ -455,7 +472,7 @@
                   'div',
                   { class: 'stack tight' },
                   h('strong', { text: 'Como funciona' }),
-                  h('ol', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Escolha o PDF ou cole o texto e diga quantos cards quer.' }), h('li', { text: 'Toque em "Montar pedido para a IA" e copie o pedido.' }), h('li', { text: 'Cole numa conversa com uma IA (Claude, ChatGPT, Gemini…).' }), h('li', { text: 'Copie a resposta dela, cole aqui e revise os cards antes de salvar.' })),
+                  h('ol', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Escolha o PDF ou cole o texto e diga quantos cards quer.' }), h('li', { text: 'Toque em "Montar pedido para a IA" e copie o pedido.' }), h('li', { text: 'Cole numa conversa com uma IA (Claude, ChatGPT, Gemini…).' }), h('li', { text: 'A IA devolve um arquivo CSV (separado por ";"): escolha o arquivo aqui (ou cole o conteúdo) e revise os cards antes de salvar.' })),
                 ),
                 '',
                 'info',
