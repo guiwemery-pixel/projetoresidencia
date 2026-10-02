@@ -450,7 +450,7 @@ cards é repartida proporcionalmente.
 
 | Provedor | Como funciona | Chave |
 |---|---|---|
-| **Manual** (padrão) | O app mostra o pedido para copiar no Claude e um campo para colar o JSON de volta. | nenhuma |
+| **Manual** (padrão) | O app monta o pedido para colar numa IA (Claude, ChatGPT, Gemini…). Para criar cards, o pedido manda a IA entregar um **arquivo CSV separado por ";"** com o cabeçalho `Pergunta;Resposta;Grande área;Subárea;Assunto;Tema;Subtema;Tags;Dificuldade;Tipo;Página;Referência` (pedir JSON no chat fazia a IA responder em texto corrido). Na janela do pedido, escolha o arquivo baixado ("Escolher arquivo CSV") ou cole o conteúdo; os cards vão para a revisão antes de entrar na coleção. O mesmo CSV também entra pela aba Importar. Sugestões de temas (pontos fracos) continuam em JSON. | nenhuma |
 | **Minha chave da API** | Chamada direta do navegador com o SDK oficial `@anthropic-ai/sdk` (streaming, `output_config.format`, esforço configurável). Modelo padrão `claude-opus-5` com `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) para o caso de recusa. | guardada só neste navegador; nunca vai para a conta, backup ou exportação |
 | **Servidor** | `POST` para um endpoint seu, que guarda a chave. Recomendado para uso multiusuário. | no servidor |
 

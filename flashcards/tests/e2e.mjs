@@ -739,10 +739,17 @@ try {
   const prompt = await page.textContent('.modal .prompt-box');
   assert.match(prompt, /active recall/);
   assert.match(prompt, /\[\[Página 1\]\]/);
+  assert.match(prompt, /ARQUIVO CSV/, 'pede os cards num arquivo CSV');
+  assert.ok(prompt.includes('Pergunta;Resposta;Grande área;Subárea;Assunto;Tema;Subtema;Tags;Dificuldade;Tipo;Página;Referência'));
   await shot('21-modo-manual');
-  const fake = { cards: [{ front: 'Tratamentos da acalasia?', back: '- Miotomia de Heller<br>- POEM<br>- Dilatação pneumática', area: 'Cirurgia', subarea: 'Cirurgia Digestiva', subject: 'Acalasia', topic: 'Tratamento', subtopic: '', tags: ['acalasia'], difficulty: 'media', cardType: 'conduta', page: 2, reference: '' }] };
-  await page.fill('.modal textarea', '```json\n' + JSON.stringify(fake) + '\n```');
+  // O arquivo que a IA criou, escolhido na própria janela
+  const aiCsv = path.join(FLASH, 'tests/.tmp-ia.csv');
+  await writeFile(aiCsv, 'Pergunta;Resposta;Grande área;Subárea;Assunto;Tema;Subtema;Tags;Dificuldade;Tipo;Página;Referência\nTratamentos da acalasia?;- Miotomia de Heller<br>- POEM<br>- Dilatação pneumática;Cirurgia;Cirurgia Digestiva;Acalasia;Tratamento;;acalasia;media;conduta;2;\n');
+  await page.setInputFiles('.modal input[type="file"]', aiCsv);
+  await page.waitForSelector('.modal .hint:has-text("1 card")');
+  assert.match(await page.inputValue('.modal textarea'), /^Pergunta;Resposta/);
   await page.click('.modal button:has-text("Usar resposta")');
+  await rm(aiCsv, { force: true });
   await page.waitForSelector('.draft', { timeout: 10000 });
   await shot('22-revisar-gerados');
   await page.click('button:has-text("Adicionar selecionados")');
