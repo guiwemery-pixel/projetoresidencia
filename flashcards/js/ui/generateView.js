@@ -20,13 +20,13 @@
     return new Promise((resolve) => {
       let result = null;
       const promptBox = h('div', { class: 'prompt-box', text: res.prompt });
-      const answer = h('textarea', { class: 'textarea', rows: 8, placeholder: 'Cole aqui a resposta (JSON) do Claude' });
+      const answer = h('textarea', { class: 'textarea', rows: 8, placeholder: 'Cole aqui a resposta inteira da IA' });
       const copyBtn = button('Copiar pedido', {
         icon: 'copy',
         onClick: async () => {
           try {
             await navigator.clipboard.writeText(res.prompt);
-            FC.ui.toast('Pedido copiado. Cole no Claude (claude.ai).');
+            FC.ui.toast('Pedido copiado. Cole numa conversa com a IA (Claude, ChatGPT…).');
           } catch (e) {
             const range = document.createRange();
             range.selectNodeContents(promptBox);
@@ -40,13 +40,13 @@
         'div',
         { class: 'stack' },
         opts.title ? h('p', { class: 'ink2', text: opts.title }) : null,
-        h('ol', { class: 'small ink2', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Copie o pedido abaixo e cole numa conversa com o Claude.' }), h('li', { text: 'Copie a resposta inteira (o JSON) e cole no campo de baixo.' })),
+        h('ol', { class: 'small ink2', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Copie o pedido abaixo e cole numa conversa com uma IA (Claude, ChatGPT, Gemini…).' }), h('li', { text: 'Quando ela responder, copie a resposta inteira e cole no campo de baixo.' }), h('li', { text: 'Toque em "Usar resposta": os cards aparecem para você revisar.' })),
         promptBox,
         h('div', { class: 'row' }, copyBtn, h('span', { class: 'hint', text: U.fmtNum(res.prompt.length) + ' caracteres' })),
         answer,
       );
       const m = FC.ui.modal({
-        title: 'Modo manual',
+        title: 'Pedido para a IA',
         size: 'wide',
         sticky: true,
         content,
@@ -251,7 +251,7 @@
 
   function providerLine() {
     const p = FC.ai.provider();
-    const name = { manual: 'Manual (copiar e colar no Claude)', anthropic: 'Claude pela sua chave de API (' + FC.settings.get('aiModel') + ')', backend: 'Servidor configurado' }[p];
+    const name = { manual: 'Manual (você copia o pedido e cola numa IA)', anthropic: 'Claude pela sua chave de API (' + FC.settings.get('aiModel') + ')', backend: 'Servidor configurado' }[p];
     return h('p', { class: 'small ink2' }, 'Modo de IA: ', h('strong', { text: name }), ' · ', h('a', { href: '#/configuracoes', text: 'mudar' }));
   }
 
@@ -277,6 +277,8 @@
     render(ctx) {
       if (ctx.query.weak) return renderWeak(ctx, ctx.query.weak);
       const { el } = ctx;
+      // Sem chave de IA (padrão), a plataforma só monta o pedido para colar numa IA
+      const manual = FC.ai.provider() === 'manual';
       const state = { material: null, file: null, from: 1, to: 1, keepPdf: true, deckId: ctx.query.deck || null, forced: null, focus: '' };
       const materialBox = h('div', { class: 'stack' });
       const settingsBox = h('section', { class: 'panel stack hidden' });
@@ -332,7 +334,7 @@
         const text = h('textarea', { class: 'textarea', rows: 8, placeholder: 'Cole aqui um texto (resumo, capítulo, aula)…' });
         const name = h('input', { class: 'input', placeholder: 'Nome da fonte (ex.: Aula de esôfago)' });
         let mode = 'pdf';
-        const pdfPane = FC.ui.dropzone({ label: 'Arraste um PDF ou clique para escolher', hint: 'O texto é extraído neste navegador. Nada é enviado até você mandar gerar.', accept: 'application/pdf,.pdf', icon: 'file', onFile });
+        const pdfPane = FC.ui.dropzone({ label: 'Arraste um PDF ou clique para escolher', hint: manual ? 'O texto é lido aqui no navegador e vira um pedido para você copiar. Nada é enviado para nenhuma IA automaticamente.' : 'O texto é extraído neste navegador. Nada é enviado até você mandar gerar.', accept: 'application/pdf,.pdf', icon: 'file', onFile });
         const textPane = h(
           'div',
           { class: 'stack hidden' },
@@ -369,7 +371,7 @@
 
       const focus = h('input', { class: 'input', placeholder: 'Opcional. Ex.: foque em tratamento e condutas de prova' });
       focus.addEventListener('input', () => (state.focus = focus.value.trim()));
-      const genBtn = button('Gerar cards', { variant: 'primary', size: 'lg', icon: 'sparkles', onClick: () => generate() });
+      const genBtn = button(manual ? 'Montar pedido para a IA' : 'Gerar cards', { variant: 'primary', size: 'lg', icon: 'sparkles', onClick: () => generate() });
       FC.ui.add(settingsBox, h('h2', { text: '2. Como gerar' }), settingsForm(state), forcedFields(state), FC.ui.field('Foco (opcional)', focus), h('hr', { class: 'divider' }), FC.ui.callout(FC.ai.privacyNotice(), '', 'shield'), providerLine(), h('div', { class: 'row' }, genBtn));
 
       async function generate() {
@@ -384,7 +386,7 @@
         const counts = distribute(state.count, chunks);
         genBtn.disabled = true;
         runBox.classList.remove('hidden');
-        FC.ui.clear(runBox).appendChild(h('h2', { text: '3. Gerando' }));
+        FC.ui.clear(runBox).appendChild(h('h2', { text: manual ? '3. Pedido para a IA' : '3. Gerando' }));
         const status = h('p', { class: 'ink2' });
         const bar = h('div');
         FC.ui.add(runBox, status, bar);
@@ -429,8 +431,40 @@
       }
 
       FC.ui.add(el, 
-        h('div', { class: 'page-head' }, h('div', null, h('h1', { text: 'Gerar com IA' }), h('p', { text: 'Transforme um PDF em perguntas de recordação ativa, já classificadas por área, assunto e tema. Você revisa tudo antes de entrar na coleção.' })), FC.store.drafts.length ? link('Cards aguardando revisão (' + FC.store.drafts.length + ')', '#/gerar/revisao', { icon: 'list' }) : null),
-        h('div', { class: 'stack loose' }, h('section', { class: 'panel stack' }, h('h2', { text: '1. Material' }), materialBox), settingsBox, runBox),
+        h(
+          'div',
+          { class: 'page-head' },
+          h(
+            'div',
+            null,
+            h('h1', { text: 'Gerar com IA' }),
+            h('p', {
+              text: manual
+                ? 'A plataforma não cria os cards sozinha: ela lê o seu PDF (ou texto) e monta um pedido pronto para você colar numa inteligência artificial, como Claude ou ChatGPT. Você traz a resposta de volta, revisa e os cards entram na coleção já classificados por área, assunto e tema.'
+                : 'Transforme um PDF em perguntas de recordação ativa, já classificadas por área, assunto e tema. Você revisa tudo antes de entrar na coleção.',
+            }),
+          ),
+          FC.store.drafts.length ? link('Cards aguardando revisão (' + FC.store.drafts.length + ')', '#/gerar/revisao', { icon: 'list' }) : null,
+        ),
+        h(
+          'div',
+          { class: 'stack loose' },
+          manual
+            ? FC.ui.callout(
+                h(
+                  'div',
+                  { class: 'stack tight' },
+                  h('strong', { text: 'Como funciona' }),
+                  h('ol', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, h('li', { text: 'Escolha o PDF ou cole o texto e diga quantos cards quer.' }), h('li', { text: 'Toque em "Montar pedido para a IA" e copie o pedido.' }), h('li', { text: 'Cole numa conversa com uma IA (Claude, ChatGPT, Gemini…).' }), h('li', { text: 'Copie a resposta dela, cole aqui e revise os cards antes de salvar.' })),
+                ),
+                '',
+                'info',
+              )
+            : null,
+          h('section', { class: 'panel stack' }, h('h2', { text: '1. Material' }), materialBox),
+          settingsBox,
+          runBox,
+        ),
       );
       materialBox.appendChild(pickers());
     },
