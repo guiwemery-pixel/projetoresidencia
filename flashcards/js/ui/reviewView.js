@@ -119,7 +119,7 @@
       const filter = FC.launch.queryToFilter(query);
       const label = query.label || 'Revisão de hoje';
       ctx.setTitle(label);
-      const session = FC.review.createSession(filter, label, { all: query.todos === '1', noNew: query.novos === '0' });
+      const session = FC.review.createSession(filter, label, { all: query.todos === '1', noNew: query.novos === '0', withNew: query.novos === 'todos' });
       // Cronômetro de estudo (se ligado para iniciar sozinho): conta enquanto a revisão está aberta
       FC.timerView.sessionStart();
       ctx.onCleanup(() => FC.timerView.sessionEnd());
