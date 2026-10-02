@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, Flame, Layers, PenLine, RefreshCcw, Target } from 'lucide-react';
 import type { Dashboard } from '../../api/types';
-import { duration, fmtShort, fmtWeekday, pct, plural, relativeDay } from '../../lib/format';
+import { duration, fmtShort, fmtWeekday, pct, plural, relativeDay, todayLocal } from '../../lib/format';
 import { Card, EmptyState, ProgressBar, cx } from '../ui';
 import { ReviewCard } from '../study/ReviewCard';
 import { PlanItemCard } from '../study/PlanItemCard';
@@ -254,10 +254,19 @@ export function DashboardWidget({
     case 'cronograma': {
       if (!data.plan?.hasPlan) return editing ? <Placeholder id={id} text="Importe o cronograma do seu cursinho (aba Cronograma) para ver aqui os assuntos da semana." /> : null;
       const items = [...data.plan.overdue, ...data.plan.thisWeek];
+      const forToday = data.plan.thisWeek.filter((i) => i.plannedOn <= todayLocal()).length;
       return (
         <Card
           title="Cronograma da semana"
-          subtitle={data.plan.overdue.length && !narrow ? `${plural(data.plan.overdue.length, 'assunto atrasado', 'assuntos atrasados')} de semanas anteriores, primeiro.` : undefined}
+          subtitle={
+            narrow
+              ? undefined
+              : data.plan.overdue.length
+                ? `${plural(data.plan.overdue.length, 'assunto atrasado', 'assuntos atrasados')} de semanas anteriores, primeiro.`
+                : forToday
+                  ? `${plural(forToday, 'assunto', 'assuntos')} para hoje.`
+                  : undefined
+          }
           action={
             <Link to="/cronograma" className="text-xs font-medium text-accent">
               Ver cronograma

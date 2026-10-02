@@ -7,7 +7,7 @@ import type { PlanItem, Review } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
 import { usePlanAgenda, usePlanItems } from '../hooks/api';
 import { METHOD_LABEL, QUALITY } from '../lib/constants';
-import { addDaysStr, fmtDay, fmtShort, parseDay, plural, startOfWeekStr, todayLocal } from '../lib/format';
+import { addDaysStr, duration, fmtDay, fmtShort, parseDay, plural, startOfWeekStr, todayLocal } from '../lib/format';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button, Loading, cx } from '../components/ui';
@@ -120,12 +120,34 @@ function ReviewTable({ reviews, today, carried }: { reviews: Review[]; today: st
   );
 }
 
-/** Assuntos novos do cronograma (semana da folha e, na semana atual, os atrasados). */
+/** Assuntos novos do cronograma de um dia (dentro da seção do dia). */
+function DayPlan({ items }: { items: PlanItem[] }) {
+  return (
+    <ul className="mx-2 mb-1 mt-1.5 rounded-lg border border-[#c9dcf5] bg-[#f4f8fe] px-2 py-1">
+      {items.map((i) => (
+        <li key={i.id} className="flex items-start gap-1.5 py-0.5">
+          <Checkbox done={i.status === 'DONE'} />
+          <span aria-hidden className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: i.subject.area?.color ?? '#898781' }} />
+          <span className={cx('min-w-0 flex-1 text-[11.5px] font-semibold leading-tight text-[#0b0b0b]', i.status === 'SKIPPED' && 'line-through')}>
+            <span className="mr-1 text-[9px] font-bold uppercase tracking-wide text-[#1c5cab]">📚 novo</span>
+            {i.subject.name}
+            <span className="ml-1 text-[9.5px] font-normal text-[#52514e]">
+              {i.label}
+              {i.suggestedMinutes ? ` · ~${duration(i.suggestedMinutes)}` : ''}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Assuntos do cronograma sem dia: atrasados de semanas anteriores e os ainda não distribuídos pelos dias. */
 function PlanSection({ items, today }: { items: PlanItem[]; today: string }) {
   return (
     <section className="avoid-break mt-4 overflow-hidden rounded-xl border border-[#c9dcf5]">
       <h2 className="flex items-center justify-between bg-[#e6f0fc] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#1c5cab]">
-        <span>📚 Cronograma — assuntos novos</span>
+        <span>📚 Cronograma — {items.every((i) => i.overdue) ? 'atrasados, fazer primeiro' : 'assuntos novos da semana'}</span>
         <span>{plural(items.length, 'assunto', 'assuntos')}</span>
       </h2>
       <ul className="grid grid-cols-2 gap-x-4 px-3 py-1.5">
@@ -174,10 +196,17 @@ export default function PrintWeekPage() {
 
   const planWeek = usePlanItems(weekStart, weekEnd);
   const planAgenda = usePlanAgenda();
-  const planItems = useMemo(() => {
+  // Cronograma: cada assunto no seu dia; sem dia (atrasados de outras semanas, não distribuídos) numa seção à parte
+  const { planItems, planByDay } = useMemo(() => {
     const list = (planWeek.data ?? []).filter((i) => i.weekStart <= weekEnd && i.weekEnd >= weekStart && (showDone || i.status === 'PENDING'));
     const late = isCurrentWeek ? (planAgenda.data?.overdue ?? []).filter((i) => !list.some((x) => x.id === i.id)) : [];
-    return [...late, ...list];
+    const byDay = new Map<string, PlanItem[]>();
+    const loose: PlanItem[] = [...late];
+    for (const i of list) {
+      if (i.distributed && i.plannedOn >= weekStart && i.plannedOn <= weekEnd) byDay.set(i.plannedOn, [...(byDay.get(i.plannedOn) ?? []), i]);
+      else loose.push(i);
+    }
+    return { planItems: loose, planByDay: byDay };
   }, [planWeek.data, planAgenda.data, weekStart, weekEnd, isCurrentWeek, showDone]);
 
   const byDay = useMemo(() => {
@@ -293,6 +322,7 @@ export default function PrintWeekPage() {
           <div className="mt-4 space-y-3">
             {days.map((d) => {
               const list = byDay.get(d) ?? [];
+              const plan = planByDay.get(d) ?? [];
               const isToday = d === today;
               return (
                 <section key={d} className={cx('avoid-break overflow-hidden rounded-xl border', isToday ? 'border-[#2a78d6]' : 'border-[#e1e0d9]')}>
@@ -303,14 +333,17 @@ export default function PrintWeekPage() {
                       {isToday && <span className="ml-2 rounded bg-white/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide">hoje</span>}
                     </span>
                     <span className={cx('text-[10px] font-semibold', isToday ? 'text-white' : 'text-[#52514e]')}>
-                      {list.length ? plural(list.length, 'revisão', 'revisões') : 'livre'}
+                      {list.length || plan.length
+                        ? [plan.length && plural(plan.length, 'assunto novo', 'assuntos novos'), list.length && plural(list.length, 'revisão', 'revisões')].filter(Boolean).join(' · ')
+                        : 'livre'}
                     </span>
                   </h2>
+                  {plan.length > 0 && <DayPlan items={plan} />}
                   {list.length ? (
                     <div className="px-1 pb-1">
                       <ReviewTable reviews={list} today={today} />
                     </div>
-                  ) : (
+                  ) : plan.length ? null : (
                     <div className="px-3 py-2">
                       <p className="text-[10.5px] text-[#898781]">Nenhuma revisão — dia livre para conteúdo novo ✍️</p>
                       <div className="mt-2 h-4 border-b border-dashed border-[#c3c2b7]" />

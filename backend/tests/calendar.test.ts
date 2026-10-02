@@ -130,10 +130,16 @@ describe('agenda: link para o Google Agenda', () => {
     await agent.put('/api/flashcards/summary').send({ v: 1, dayStart: yesterdayStart, forecast: [2, 3, 0, 5] });
 
     const all = events((await request(app).get(feedPath(on.body.url))).text);
-    const plan = all.find((e) => field(e, 'SUMMARY').startsWith('Cronograma · Módulo 05'))!;
-    expect(field(plan, 'SUMMARY')).toBe('Cronograma · Módulo 05: Asma, Bronquiolite');
-    expect(field(plan, 'DTSTART')).toBe(`VALUE=DATE:${compact(week)}`);
-    expect(field(plan, 'DTEND')).toBe(`VALUE=DATE:${compact(addDays(week, 7))}`);
+    // Um evento em cada dia de estudo (segunda a sexta, por padrão), com o tempo sugerido
+    const plan = all.filter((e) => field(e, 'SUMMARY').startsWith('Cronograma · Módulo 05'));
+    expect(plan.map((e) => field(e, 'SUMMARY'))).toEqual(['Cronograma · Módulo 05: Asma', 'Cronograma · Módulo 05: Bronquiolite']);
+    const days = plan.map((e) => field(e, 'DTSTART').replace('VALUE=DATE:', ''));
+    expect(days.every((d) => d >= compact(week) && d <= compact(addDays(week, 6)))).toBe(true);
+    expect(days[0] < days[1]).toBe(true);
+    // Evento de um dia (não mais a semana inteira)
+    const iso = (d: string) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
+    expect(field(plan[0], 'DTEND')).toBe(`VALUE=DATE:${compact(addDays(iso(days[0]), 1))}`);
+    expect(field(plan[0], 'DESCRIPTION')).toContain('• Asma (Pediatria) · ~4h');
     const late = all.find((e) => field(e, 'SUMMARY').startsWith('Cronograma atrasado'))!;
     expect(field(late, 'SUMMARY')).toBe('Cronograma atrasado · 1 assunto: Hérnias');
     expect(field(late, 'DTSTART')).toBe(`VALUE=DATE:${compact(today)}`);

@@ -31,6 +31,10 @@ export interface User {
   dailyReviewLimit: number;
   /** Revisão atrasada há tantos dias volta ao cronograma; 0 = nunca */
   requeueOverdueDays: number;
+  /** Dias de estudo (1 = segunda … 7 = domingo): o cronograma distribui os assuntos por eles */
+  studyWeekdays: number[];
+  /** Minutos de estudo por dia (viram o tempo sugerido de cada assunto do cronograma) */
+  dailyStudyMinutes: number;
   /** Organização da página inicial (ids dos balões por coluna) */
   dashboardLayout?: { main: string[]; side: string[]; hidden: string[] } | null;
   createdAt: string;
@@ -214,6 +218,14 @@ export interface PlanItem {
   subject: { id: string; name: string; area: { id: string; path: string; color: string | null } | null };
   weekStart: string;
   weekEnd: string;
+  /** Dia previsto dentro da semana (sem distribuição: o início da semana) */
+  plannedOn: string;
+  /** Já distribuído pelos dias de estudo */
+  distributed: boolean;
+  /** Passou o dia previsto e a semana ainda não acabou */
+  behind: boolean;
+  /** Horas do dia divididas entre os assuntos do dia */
+  suggestedMinutes: number | null;
   label: string | null;
   position: number;
   status: PlanItemStatus;
@@ -235,6 +247,8 @@ export interface PlanSummary {
   skipped: number;
   pending: number;
   overdue: number;
+  /** Pendentes ainda sem dia (cronograma de antes da distribuição pelos dias) */
+  undistributed: number;
   firstWeek: string | null;
   lastWeek: string | null;
 }

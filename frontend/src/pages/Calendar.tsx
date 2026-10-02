@@ -42,11 +42,12 @@ export default function CalendarPage() {
 
   const byDate = new Map((data?.days ?? []).map((d) => [d.date, d]));
   const day = selected ? byDate.get(selected) : undefined;
-  // Cronograma: marcador no dia em que a semana começa; o painel mostra a semana do dia escolhido
-  const planByStart = new Map<string, typeof planItems>();
-  for (const i of planItems) planByStart.set(i.weekStart, [...(planByStart.get(i.weekStart) ?? []), i]);
-  const selectedWeek = selected ? planItems.filter((i) => i.weekStart <= selected && selected <= i.weekEnd) : [];
-  const planInMonth = planItems.filter((i) => i.weekStart >= `${month}-01` && i.weekStart <= monthEnd);
+  // Cronograma: cada assunto no seu dia de estudo; hoje mostra também o que ficou para trás nesta semana
+  const planByDay = new Map<string, typeof planItems>();
+  for (const i of planItems) planByDay.set(i.plannedOn, [...(planByDay.get(i.plannedOn) ?? []), i]);
+  const selectedDay = selected ? (planByDay.get(selected) ?? []) : [];
+  const behind = selected === today ? planItems.filter((i) => i.behind) : [];
+  const planInMonth = planItems.filter((i) => i.plannedOn >= `${month}-01` && i.plannedOn <= monthEnd);
 
   return (
     <div>
@@ -54,7 +55,7 @@ export default function CalendarPage() {
         title="Calendário"
         subtitle={
           <>
-            Suas revisões dia a dia e os assuntos do cronograma de cada semana. Apenas você vê este calendário.
+            Suas revisões dia a dia e os assuntos do cronograma em cada dia de estudo. Apenas você vê este calendário.
             <ReviewLimitButton className="mt-1.5 flex" />
           </>
         }
@@ -110,14 +111,14 @@ export default function CalendarPage() {
               const pending = d?.pending.length ?? 0;
               const done = d?.done.length ?? 0;
               const overdue = pending > 0 && date < today;
-              const planned = planByStart.get(date) ?? [];
+              const planned = planByDay.get(date) ?? [];
               const plannedPending = planned.filter((i) => i.status === 'PENDING');
               return (
                 <button
                   key={date}
                   role="gridcell"
                   aria-selected={selected === date}
-                  aria-label={`${fmtLong(date)}: ${pending} pendentes, ${done} feitas${planned.length ? `, começa a semana de ${planned.length} assuntos do cronograma` : ''}`}
+                  aria-label={`${fmtLong(date)}: ${pending} pendentes, ${done} feitas${planned.length ? `, ${planned.length} assuntos do cronograma` : ''}`}
                   onClick={() => setSelected(date)}
                   className={cx(
                     'flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl border p-1 text-sm transition sm:aspect-[4/3]',
@@ -142,7 +143,7 @@ export default function CalendarPage() {
                   {planned.length > 0 && (
                     <span
                       className={cx('num text-[10px] font-medium sm:text-[11px]', plannedPending.some((i) => i.overdue) ? 'text-crit-text' : 'text-ink2')}
-                      title={`${planned.length} assuntos do cronograma nesta semana`}
+                      title={`${planned.length} assuntos do cronograma neste dia`}
                     >
                       📚{plannedPending.length || '✓'}
                     </span>
@@ -161,17 +162,26 @@ export default function CalendarPage() {
             <span className="flex items-center gap-1" style={{ color: 'var(--good-text)' }}>
               ✓4 <span className="text-ink2">feitas</span>
             </span>
-            {planItems.length > 0 && <span>📚3 assuntos do cronograma (no início da semana)</span>}
+            {planItems.length > 0 && <span>📚2 assuntos do cronograma no dia</span>}
           </div>
         </Card>
 
         <Card title={selected ? <span className="inline-block first-letter:uppercase">{fmtLong(selected)}</span> : 'Escolha um dia'}>
-          {selectedWeek.length > 0 && (
+          {selectedDay.length > 0 && (
             <div className="mb-4 space-y-2">
               <p className="text-sm font-medium text-ink">
-                📚 Cronograma da semana · {weekLabel(selectedWeek.find((i) => !/b[oô]nus/i.test(i.label ?? ''))?.label ?? selectedWeek[0].label)}
+                📚 Cronograma do dia · {weekLabel(selectedDay.find((i) => !/b[oô]nus/i.test(i.label ?? ''))?.label ?? selectedDay[0].label)}
+                {!selectedDay[0].distributed && <span className="font-normal text-ink2"> (semana toda — escolha seus dias de estudo no Cronograma)</span>}
               </p>
-              {selectedWeek.map((i) => (
+              {selectedDay.map((i) => (
+                <PlanItemCard key={i.id} item={i} compact showWeek={false} showDay={false} />
+              ))}
+            </div>
+          )}
+          {behind.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <p className="text-sm font-medium text-ink">📚 Ficaram para trás nesta semana</p>
+              {behind.map((i) => (
                 <PlanItemCard key={i.id} item={i} compact showWeek={false} />
               ))}
             </div>

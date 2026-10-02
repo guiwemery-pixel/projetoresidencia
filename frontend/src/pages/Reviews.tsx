@@ -101,7 +101,7 @@ export default function ReviewsPage() {
           {planWeek.length > 0 && (
             <Card
               title={`📚 Cronograma desta semana (${planWeek.length})`}
-              subtitle="Assuntos novos previstos para esta semana. Ao estudar, as revisões são agendadas."
+              subtitle="Assuntos novos da semana, cada um no seu dia de estudo (hoje primeiro). Ao estudar, as revisões são agendadas."
               action={
                 <Link to="/cronograma" className="text-xs font-medium text-accent">
                   Ver cronograma

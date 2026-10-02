@@ -110,6 +110,8 @@ export function clientName(userAgent: string | undefined) {
 const fmtDate = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const shortList = (names: string[], max = 3) => names.slice(0, max).join(', ') + (names.length > max ? ` (+${names.length - max})` : '');
+/** 90 → "1h30", 45 → "45 min" */
+const duration = (min: number) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${min % 60 ? String(min % 60).padStart(2, '0') : ''}`);
 
 /** O arquivo .ics da agenda, ou null se o link não existe (mais). */
 export async function renderFeed(token: string, baseUrl: string, userAgent?: string, now = new Date()) {
@@ -177,7 +179,8 @@ export async function renderFeed(token: string, baseUrl: string, userAgent?: str
     }
   }
 
-  // ── Cronograma: um evento por semana (a semana inteira); o que ficou para trás, hoje ──
+  // ── Cronograma: um evento por dia de estudo (o que passou do dia, ainda nesta semana, vai para hoje);
+  //    sem distribuição pelos dias, a semana inteira; o que ficou de semanas passadas, hoje ──
   if (options.plan) {
     const pending = planItems.filter((i) => i.status === 'PENDING');
     const late = pending.filter((i) => i.overdue);
@@ -191,19 +194,27 @@ export async function renderFeed(token: string, baseUrl: string, userAgent?: str
         date: today,
       });
     }
-    const weeks = new Map<string, typeof pending>();
-    for (const i of pending.filter((x) => !x.overdue)) weeks.set(`${i.planId}|${i.weekStart}`, [...(weeks.get(`${i.planId}|${i.weekStart}`) ?? []), i]);
-    for (const [key, items] of weeks) {
+    const groups = new Map<string, typeof pending>();
+    for (const i of pending.filter((x) => !x.overdue)) {
+      const key = i.distributed ? `${i.planId}|day|${i.plannedOn < today ? today : i.plannedOn}` : `${i.planId}|week|${i.weekStart}`;
+      groups.set(key, [...(groups.get(key) ?? []), i]);
+    }
+    for (const [key, items] of groups) {
+      const [, kind, date] = key.split('|');
       const first = items[0];
       const label = first.label ?? `Semana de ${fmtDate(first.weekStart)}`;
+      const time = (i: (typeof items)[number]) => (i.suggestedMinutes ? ` · ~${duration(i.suggestedMinutes)}` : '');
       events.push({
-        uid: `plan-${key.replace('|', '-')}@projeto-residente`,
+        uid: `plan-${first.planId}-${kind === 'day' ? date : `w${date}`}@projeto-residente`,
         summary: `Cronograma · ${label}: ${shortList(items.map((i) => i.subject.name))}`,
-        description: `${first.planName}\n\n` + items.map((i) => `• ${i.subject.name}${i.subject.area ? ` (${i.subject.area.path})` : ''}`).join('\n') + `\n\nAbrir: ${baseUrl}/cronograma`,
+        description:
+          `${first.planName}\n\n` +
+          items.map((i) => `• ${i.subject.name}${i.subject.area ? ` (${i.subject.area.path})` : ''}${time(i)}${i.behind ? ` — era para ${fmtDate(i.plannedOn)}` : ''}`).join('\n') +
+          `\n\nAbrir: ${baseUrl}/cronograma`,
         url: `${baseUrl}/cronograma`,
         categories: ['Cronograma'],
-        date: first.weekStart,
-        endDate: addDays(first.weekStart, 7),
+        date,
+        ...(kind === 'week' ? { endDate: addDays(date, 7) } : {}),
       });
     }
   }

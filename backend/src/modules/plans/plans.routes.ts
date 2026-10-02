@@ -7,6 +7,12 @@ import { dailyUpkeep } from '../maintenance/maintenance.service.js';
 
 export const plansRouter = Router();
 
+// Dias de estudo (1 = segunda … 7 = domingo) e minutos por dia (30 min a 16 h)
+const scheduleSchema = z.object({
+  weekdays: z.array(z.number().int().min(1).max(7)).min(1, 'Escolha pelo menos um dia de estudo').max(7),
+  dailyMinutes: z.number().int().min(30, 'Pelo menos 30 minutos por dia').max(960),
+});
+
 const planSchema = z.object({
   name: z.string().trim().min(1, 'Dê um nome ao cronograma').max(120),
   source: z.string().trim().max(200).nullish(),
@@ -22,6 +28,7 @@ const planSchema = z.object({
     )
     .min(1, 'O cronograma não tem nenhum assunto')
     .max(1000),
+  schedule: scheduleSchema.nullish(),
 });
 
 plansRouter.get('/', async (req, res) => {
@@ -43,16 +50,25 @@ plansRouter.get('/items', async (req, res) => {
 });
 
 plansRouter.post('/preview', async (req, res) => {
-  res.json(await svc.previewPlan(currentUser(req).id, parse(planSchema, req.body)));
+  res.json(await svc.previewPlan(currentUser(req).id, parse(planSchema, req.body), today(req)));
 });
 
 plansRouter.post('/', async (req, res) => {
-  res.status(201).json(await svc.createPlan(currentUser(req).id, parse(planSchema, req.body)));
+  res.status(201).json(await svc.createPlan(currentUser(req).id, parse(planSchema, req.body), today(req)));
 });
 
-/** Adiar, pular, voltar a pendente ou marcar como feito. */
+/** Dias e horas de estudo: salva e distribui os assuntos de cada semana por esses dias. */
+plansRouter.post('/distribute', async (req, res) => {
+  const { planId, ...schedule } = parse(scheduleSchema.extend({ planId: z.string().min(1).max(40).optional() }), req.body);
+  res.json(await svc.setStudySchedule(currentUser(req).id, schedule, today(req), planId));
+});
+
+/** Mudar o dia (ou a semana), pular, voltar a pendente ou marcar como feito. */
 plansRouter.patch('/items/:itemId', async (req, res) => {
-  const input = parse(z.object({ weekStart: dateString.optional(), status: z.enum(['PENDING', 'DONE', 'SKIPPED']).optional() }), req.body);
+  const input = parse(
+    z.object({ weekStart: dateString.optional(), plannedOn: dateString.optional(), status: z.enum(['PENDING', 'DONE', 'SKIPPED']).optional() }),
+    req.body,
+  );
   res.json(await svc.updateItem(currentUser(req).id, req.params.itemId, input, today(req)));
 });
 

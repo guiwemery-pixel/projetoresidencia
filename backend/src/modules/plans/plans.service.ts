@@ -5,8 +5,11 @@ import { fromDb, fromDbOrNull, toDb } from '../../lib/dates.js';
 import { addDays, diffDays } from '../scheduler/dates.js';
 import { getAreaMap } from '../taxonomy/taxonomy.service.js';
 import { DEFAULT_AREA, areaKey, cleanName, normName } from '../import/import.service.js';
+import { SIZE_WEIGHT, planWeek, type WeekItem } from './distribute.js';
 
 // Cronograma: assuntos previstos por semana (ex.: o cronograma do cursinho).
+// Dentro da semana, cada assunto tem um dia previsto, distribuído pelos dias de
+// estudo da pessoa (ver distribute.ts); as horas por dia viram o tempo sugerido.
 // Um item fica "atrasado" quando a semana termina sem estudo, como uma revisão.
 // Registrar um estudo do assunto (pelo botão do cronograma ou normalmente)
 // conclui o item; excluir esse estudo o devolve para pendente.
@@ -23,21 +26,49 @@ export interface PlanInput {
   name: string;
   source?: string | null;
   items: PlanItemInput[];
+  /** Dias de estudo (1 = segunda … 7 = domingo) e minutos por dia; ficam salvos para a pessoa */
+  schedule?: StudySchedule | null;
+}
+
+export interface StudySchedule {
+  weekdays: number[];
+  dailyMinutes: number;
+}
+
+const cleanSchedule = (s: StudySchedule): StudySchedule => ({ weekdays: [...new Set(s.weekdays)].sort((a, b) => a - b), dailyMinutes: s.dailyMinutes });
+
+async function userSchedule(tx: Tx | typeof prisma, userId: string): Promise<StudySchedule> {
+  const u = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { studyWeekdays: true, dailyStudyMinutes: true } });
+  return { weekdays: u.studyWeekdays.length ? u.studyWeekdays : [1, 2, 3, 4, 5], dailyMinutes: u.dailyStudyMinutes };
+}
+
+async function saveSchedule(tx: Tx | typeof prisma, userId: string, schedule: StudySchedule) {
+  const s = cleanSchedule(schedule);
+  await tx.user.update({ where: { id: userId }, data: { studyWeekdays: s.weekdays, dailyStudyMinutes: s.dailyMinutes } });
+  return s;
 }
 
 /** Última data da semana do item (7 dias a partir do início). */
 export const weekEnd = (weekStart: string) => addDays(weekStart, 6);
 
 const itemInclude = {
-  subject: { select: { id: true, name: true, areaId: true } },
+  subject: { select: { id: true, name: true, areaId: true, size: true } },
   plan: { select: { id: true, name: true } },
 } satisfies Prisma.PlanItemInclude;
 type ItemRow = Prisma.PlanItemGetPayload<{ include: typeof itemInclude }>;
 
-function serializeItem(i: ItemRow, areaMap: Awaited<ReturnType<typeof getAreaMap>>, today: string) {
+/** Tempo sugerido para o assunto: as horas do dia divididas entre os assuntos do dia (pelo tamanho). */
+function suggested(dailyMinutes: number, weight: number, dayLoad: number | undefined) {
+  if (!dayLoad) return null;
+  return Math.max(10, Math.round((dailyMinutes * weight) / dayLoad / 5) * 5);
+}
+
+function serializeItem(i: ItemRow, areaMap: Awaited<ReturnType<typeof getAreaMap>>, today: string, ctx: { dailyMinutes: number; loads: Map<string, number> }) {
   const start = fromDb(i.weekStart);
   const end = weekEnd(start);
   const area = areaMap.get(i.subject.areaId);
+  const day = i.plannedOn ? fromDb(i.plannedOn) : null;
+  const overdue = i.status === 'PENDING' && end < today;
   return {
     id: i.id,
     planId: i.planId,
@@ -45,23 +76,48 @@ function serializeItem(i: ItemRow, areaMap: Awaited<ReturnType<typeof getAreaMap
     subject: { id: i.subject.id, name: i.subject.name, area: area ? { id: area.id, path: area.path, color: area.color } : null },
     weekStart: start,
     weekEnd: end,
+    // Dia previsto (sem distribuição: o início da semana)
+    plannedOn: day ?? start,
+    distributed: !!day,
+    // Passou o dia previsto e a semana ainda não acabou (ainda dá tempo)
+    behind: i.status === 'PENDING' && !overdue && !!day && day < today,
+    suggestedMinutes: day && i.status !== 'SKIPPED' ? suggested(ctx.dailyMinutes, SIZE_WEIGHT[i.subject.size], ctx.loads.get(day)) : null,
     label: i.label,
     position: i.position,
     status: i.status,
     doneOn: fromDbOrNull(i.doneOn),
     studySessionId: i.studySessionId,
-    overdue: i.status === 'PENDING' && end < today,
+    overdue,
     current: start <= today && today <= end,
   };
 }
 export type PlanItemView = ReturnType<typeof serializeItem>;
 
 async function serializeItems(userId: string, rows: ItemRow[], today: string) {
-  const areaMap = await getAreaMap(userId);
-  return rows.map((r) => serializeItem(r, areaMap, today));
+  const days = [...new Set(rows.filter((r) => r.plannedOn).map((r) => fromDb(r.plannedOn!)))];
+  const [areaMap, user, sameDay] = await Promise.all([
+    getAreaMap(userId),
+    prisma.user.findUnique({ where: { id: userId }, select: { dailyStudyMinutes: true } }),
+    days.length
+      ? prisma.planItem.findMany({
+          where: { userId, plannedOn: { in: days.map(toDb) }, status: { not: 'SKIPPED' } },
+          select: { plannedOn: true, subject: { select: { size: true } } },
+        })
+      : Promise.resolve([]),
+  ]);
+  // Carga de cada dia (todos os cronogramas): base do tempo sugerido por assunto
+  const loads = new Map<string, number>();
+  for (const s of sameDay) {
+    const d = fromDb(s.plannedOn!);
+    loads.set(d, (loads.get(d) ?? 0) + SIZE_WEIGHT[s.subject.size]);
+  }
+  const ctx = { dailyMinutes: user?.dailyStudyMinutes ?? 240, loads };
+  return rows.map((r) => serializeItem(r, areaMap, today, ctx));
 }
 
 const order = [{ weekStart: 'asc' }, { position: 'asc' }] satisfies Prisma.PlanItemOrderByWithRelationInput[];
+/** Na mesma semana: pelo dia previsto, depois pela ordem do cronograma. */
+const byDay = (a: PlanItemView, b: PlanItemView) => a.weekStart.localeCompare(b.weekStart) || a.plannedOn.localeCompare(b.plannedOn) || a.position - b.position;
 
 // ── Leitura ──────────────────────────────────────────────────────────────
 
@@ -69,7 +125,7 @@ export async function listPlans(userId: string, today: string) {
   const plans = await prisma.studyPlan.findMany({
     where: { userId },
     orderBy: { createdAt: 'desc' },
-    include: { items: { select: { status: true, weekStart: true } } },
+    include: { items: { select: { status: true, weekStart: true, plannedOn: true } } },
   });
   return plans.map((p) => {
     const starts = p.items.map((i) => fromDb(i.weekStart)).sort();
@@ -84,6 +140,8 @@ export async function listPlans(userId: string, today: string) {
       skipped: count('SKIPPED'),
       pending: count('PENDING'),
       overdue: p.items.filter((i) => i.status === 'PENDING' && weekEnd(fromDb(i.weekStart)) < today).length,
+      // Pendentes ainda sem dia (cronograma de antes da distribuição pelos dias de estudo)
+      undistributed: p.items.filter((i) => i.status === 'PENDING' && !i.plannedOn && weekEnd(fromDb(i.weekStart)) >= today).length,
       firstWeek: starts[0] ?? null,
       lastWeek: starts[starts.length - 1] ?? null,
     };
@@ -95,7 +153,7 @@ export async function getPlan(userId: string, planId: string, today: string) {
   if (!plan) throw notFound('Cronograma não encontrado');
   const rows = await prisma.planItem.findMany({ where: { userId, planId }, include: itemInclude, orderBy: order });
   const summary = (await listPlans(userId, today)).find((p) => p.id === planId)!;
-  return { ...summary, items: await serializeItems(userId, rows, today) };
+  return { ...summary, items: (await serializeItems(userId, rows, today)).sort(byDay) };
 }
 
 /** Pendências de todos os cronogramas: atrasadas, desta semana e da próxima. */
@@ -105,7 +163,7 @@ export async function planAgenda(userId: string, today: string) {
     include: itemInclude,
     orderBy: order,
   });
-  const items = await serializeItems(userId, rows, today);
+  const items = (await serializeItems(userId, rows, today)).sort(byDay);
   return {
     overdue: items.filter((i) => i.overdue),
     thisWeek: items.filter((i) => i.current),
@@ -121,7 +179,7 @@ export async function planItemsBetween(userId: string, from: string, to: string,
     include: itemInclude,
     orderBy: order,
   });
-  return serializeItems(userId, rows, today);
+  return (await serializeItems(userId, rows, today)).sort(byDay);
 }
 
 // ── Criação ──────────────────────────────────────────────────────────────
@@ -188,12 +246,111 @@ function validateItems(items: PlanItemInput[]) {
   for (const i of items) if (!cleanName(i.subject)) throw badRequest('Assunto sem nome no cronograma');
 }
 
-export async function previewPlan(userId: string, input: PlanInput) {
+// ── Distribuição pelos dias de estudo ────────────────────────────────────
+
+const MEDIUM = SIZE_WEIGHT.MEDIUM;
+
+/** Como fica o cronograma com estes dias e horas (antes de criar): uma semana de exemplo e o tempo por assunto. */
+function previewDistribution(items: PlanItemInput[], schedule: StudySchedule, today: string) {
+  const weeks = new Map<string, PlanItemInput[]>();
+  for (const i of items) weeks.set(i.weekStart, [...(weeks.get(i.weekStart) ?? []), i]);
+  const views = [...weeks.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([start, list]) => {
+      const days = planWeek(
+        start,
+        list.map((_, n) => ({ id: String(n), weight: MEDIUM, status: 'PENDING', plannedOn: null, doneOn: null })),
+        schedule.weekdays,
+        today,
+      );
+      const byDate = new Map<string, string[]>();
+      list.forEach((it, n) => {
+        const d = days.get(String(n))!;
+        byDate.set(d, [...(byDate.get(d) ?? []), cleanName(it.subject)]);
+      });
+      // Horas dos dias usados divididas pelos assuntos da semana
+      const minutesEach = Math.round((schedule.dailyMinutes * byDate.size) / list.length / 5) * 5;
+      return { weekStart: start, label: list.find((i) => !i.bonus)?.label ?? list[0].label ?? null, subjects: list.length, minutesEach, days: [...byDate.entries()].sort().map(([date, subjects]) => ({ date, subjects })) };
+    });
+  const upcoming = views.filter((w) => weekEnd(w.weekStart) >= today);
+  const sample = upcoming[0] ?? views[0];
+  const busiest = [...(upcoming.length ? upcoming : views)].sort((a, b) => a.minutesEach - b.minutesEach || b.subjects - a.subjects)[0];
+  const total = items.length;
+  const usedMinutes = views.reduce((s, w) => s + w.minutesEach * w.subjects, 0);
+  return {
+    weekdays: schedule.weekdays,
+    dailyMinutes: schedule.dailyMinutes,
+    sample,
+    busiest: busiest && busiest.weekStart !== sample.weekStart ? { weekStart: busiest.weekStart, label: busiest.label, subjects: busiest.subjects, minutesEach: busiest.minutesEach } : null,
+    averageMinutes: total ? Math.round(usedMinutes / total / 5) * 5 : 0,
+  };
+}
+
+/**
+ * Distribui os assuntos pelos dias de estudo (todos os cronogramas, ou um). Semanas que
+ * já passaram só recebem dia se ainda não tinham: mudar os dias não reescreve o passado.
+ * Devolve quantos assuntos mudaram de dia.
+ */
+export async function distributeItems(tx: Tx | typeof prisma, userId: string, today: string, weekdays: number[], planId?: string) {
+  const rows = await tx.planItem.findMany({
+    where: { userId, ...(planId ? { planId } : {}) },
+    select: { id: true, planId: true, weekStart: true, status: true, plannedOn: true, doneOn: true, subject: { select: { size: true } } },
+    orderBy: order,
+  });
+  const weeks = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = `${r.planId}|${fromDb(r.weekStart)}`;
+    weeks.set(key, [...(weeks.get(key) ?? []), r]);
+  }
+  const changes: { id: string; day: string }[] = [];
+  for (const [key, list] of weeks) {
+    const start = key.split('|')[1];
+    const past = weekEnd(start) < today;
+    if (past && list.every((i) => i.plannedOn)) continue;
+    const items: WeekItem[] = list.map((i) => ({
+      id: i.id,
+      weight: SIZE_WEIGHT[i.subject.size],
+      status: i.status,
+      plannedOn: fromDbOrNull(i.plannedOn),
+      doneOn: fromDbOrNull(i.doneOn),
+    }));
+    const days = planWeek(start, items, weekdays, today);
+    for (const i of items) {
+      if (past && i.plannedOn) continue;
+      const d = days.get(i.id)!;
+      if (d !== i.plannedOn) changes.push({ id: i.id, day: d });
+    }
+  }
+  for (let n = 0; n < changes.length; n += 500) {
+    const chunk = changes.slice(n, n + 500);
+    await tx.$executeRaw`
+      UPDATE plan_items AS p SET planned_on = v.d::date
+      FROM (VALUES ${Prisma.join(chunk.map((c) => Prisma.sql`(${c.id}, ${c.day})`))}) AS v(id, d)
+      WHERE p.id = v.id AND p.user_id = ${userId}`;
+  }
+  return changes.length;
+}
+
+/** Salva os dias e horas de estudo e redistribui o cronograma (todos, ou um). */
+export async function setStudySchedule(userId: string, schedule: StudySchedule, today: string, planId?: string) {
+  if (planId && !(await prisma.studyPlan.findFirst({ where: { id: planId, userId }, select: { id: true } }))) throw notFound('Cronograma não encontrado');
+  return prisma.$transaction(
+    async (tx) => {
+      const s = await saveSchedule(tx, userId, schedule);
+      const moved = await distributeItems(tx, userId, today, s.weekdays, planId);
+      return { ...s, moved };
+    },
+    { timeout: 60_000, maxWait: 10_000 },
+  );
+}
+
+export async function previewPlan(userId: string, input: PlanInput, today: string) {
   validateItems(input.items);
   const r = await resolveSubjects(prisma, userId, input.items, false);
   const weeks = new Set(input.items.map((i) => i.weekStart));
   const starts = [...weeks].sort();
   const sameName = await prisma.studyPlan.count({ where: { userId, name: { equals: cleanName(input.name), mode: 'insensitive' } } });
+  const schedule = input.schedule ? cleanSchedule(input.schedule) : await userSchedule(prisma, userId);
   return {
     items: input.items.length,
     weeks: weeks.size,
@@ -203,13 +360,15 @@ export async function previewPlan(userId: string, input: PlanInput) {
     existingSubjects: r.target.filter((t) => !t.created).length,
     newAreas: [...new Set(r.newAreas)],
     sameName: sameName > 0,
+    distribution: previewDistribution(input.items, schedule, today),
   };
 }
 
-export async function createPlan(userId: string, input: PlanInput) {
+export async function createPlan(userId: string, input: PlanInput, today: string) {
   validateItems(input.items);
   return prisma.$transaction(
     async (tx) => {
+      const schedule = input.schedule ? await saveSchedule(tx, userId, input.schedule) : await userSchedule(tx, userId);
       const r = await resolveSubjects(tx, userId, input.items, true);
       const plan = await tx.studyPlan.create({ data: { userId, name: cleanName(input.name) || 'Cronograma', source: input.source ? cleanName(input.source) : null } });
       await tx.planItem.createMany({
@@ -223,6 +382,7 @@ export async function createPlan(userId: string, input: PlanInput) {
           createdSubject: r.target[i].created,
         })),
       });
+      await distributeItems(tx, userId, today, schedule.weekdays, plan.id);
       return { id: plan.id, items: input.items.length, newSubjects: r.newSubjects, newAreas: [...new Set(r.newAreas)] };
     },
     { timeout: 60_000, maxWait: 10_000 },
@@ -237,11 +397,22 @@ async function ownedItem(userId: string, id: string) {
   return item;
 }
 
-/** Adiar (nova semana), pular, voltar a pendente ou marcar como feito sem registrar estudo. */
-export async function updateItem(userId: string, id: string, input: { weekStart?: string; status?: PlanItemStatus }, today: string) {
+/**
+ * Mudar o dia (ou a semana), pular, voltar a pendente ou marcar como feito sem registrar
+ * estudo. Num dia de outra semana, o item vai para a semana do cronograma que contém o dia.
+ */
+export async function updateItem(userId: string, id: string, input: { weekStart?: string; plannedOn?: string; status?: PlanItemStatus }, today: string) {
   const item = await ownedItem(userId, id);
   const data: Prisma.PlanItemUpdateInput = {};
-  if (input.weekStart) data.weekStart = toDb(input.weekStart);
+  const start = fromDb(item.weekStart);
+  if (input.plannedOn) {
+    data.plannedOn = toDb(input.plannedOn);
+    data.weekStart = toDb(addDays(start, Math.floor(diffDays(start, input.plannedOn) / 7) * 7));
+  } else if (input.weekStart) {
+    data.weekStart = toDb(input.weekStart);
+    // O dia previsto acompanha a semana
+    if (item.plannedOn) data.plannedOn = toDb(addDays(fromDb(item.plannedOn), diffDays(start, input.weekStart)));
+  }
   if (input.status === 'DONE') Object.assign(data, { status: 'DONE', doneOn: toDb(today) });
   if (input.status === 'SKIPPED') Object.assign(data, { status: 'SKIPPED', doneOn: null, studySession: { disconnect: true } });
   if (input.status === 'PENDING') Object.assign(data, { status: 'PENDING', doneOn: null, studySession: { disconnect: true } });
@@ -255,7 +426,7 @@ export async function shiftPlan(userId: string, planId: string, days: number, fr
   if (!plan) throw notFound('Cronograma não encontrado');
   if (!Number.isInteger(days) || days === 0 || Math.abs(days) > 366) throw badRequest('Deslocamento inválido');
   const shifted = await prisma.$executeRaw`
-    UPDATE plan_items SET week_start = week_start + ${days}::int
+    UPDATE plan_items SET week_start = week_start + ${days}::int, planned_on = planned_on + ${days}::int
     WHERE plan_id = ${planId} AND user_id = ${userId} AND status = 'PENDING'
       ${fromWeek ? Prisma.sql`AND week_start >= ${toDb(fromWeek)}` : Prisma.empty}`;
   return { shifted };

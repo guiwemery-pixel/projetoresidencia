@@ -20,6 +20,7 @@ import type {
   Study,
   StudyBatchResult,
   StudyResult,
+  User,
   Subject,
 } from '../api/types';
 
@@ -74,8 +75,22 @@ export const usePlanItems = (from: string, to: string) =>
 export function useUpdatePlanItem() {
   const invalidate = useInvalidateStudyData();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; weekStart?: string; status?: PlanItem['status'] }) => api.patch<PlanItem>(`/plans/items/${id}`, body),
+    mutationFn: ({ id, ...body }: { id: string; weekStart?: string; plannedOn?: string; status?: PlanItem['status'] }) => api.patch<PlanItem>(`/plans/items/${id}`, body),
     onSuccess: invalidate,
+  });
+}
+
+/** Dias e horas de estudo: salva e distribui o cronograma (todos, ou só `planId`) por esses dias. */
+export function useDistributePlan() {
+  const invalidate = useInvalidateStudyData();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { weekdays: number[]; dailyMinutes: number; planId?: string }) =>
+      api.post<{ weekdays: number[]; dailyMinutes: number; moved: number }>('/plans/distribute', body),
+    onSuccess: async (r) => {
+      qc.setQueryData<User | null>(['me'], (u) => (u ? { ...u, studyWeekdays: r.weekdays, dailyStudyMinutes: r.dailyMinutes } : u));
+      await invalidate();
+    },
   });
 }
 

@@ -99,6 +99,10 @@ model User {
   dailyReviewLimit       Int      @default(5) @map("daily_review_limit")
   // Revisão atrasada há tantos dias volta para o cronograma ("Assuntos para repetir"). 0 = nunca
   requeueOverdueDays     Int      @default(20) @map("requeue_overdue_days")
+  // Dias em que a pessoa estuda (1 = segunda … 7 = domingo) e horas por dia: o cronograma
+  // distribui os assuntos de cada semana por esses dias
+  studyWeekdays          Int[]    @default([1, 2, 3, 4, 5]) @map("study_weekdays")
+  dailyStudyMinutes      Int      @default(240) @map("daily_study_minutes")
   // Organização da página inicial: { main: [...], side: [...], hidden: [...] }
   dashboardLayout        Json?    @map("dashboard_layout")
   createdAt              DateTime @default(now()) @map("created_at")
@@ -416,6 +420,8 @@ model PlanItem {
   subjectId      String         @map("subject_id")
   // Início da semana prevista; atrasado quando a semana termina sem estudo
   weekStart      DateTime       @map("week_start") @db.Date
+  // Dia previsto dentro da semana (distribuído pelos dias de estudo); vazio = ainda não distribuído
+  plannedOn      DateTime?      @map("planned_on") @db.Date
   // Ex.: "Módulo 01", "Módulo 02 · bônus"
   label          String?
   position       Int            @default(0)

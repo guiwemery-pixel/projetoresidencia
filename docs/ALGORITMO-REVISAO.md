@@ -269,7 +269,8 @@ Ex.: 7 revisões calculadas para 18/10 → 5 ficam no dia 18, uma vai para 17/10
 
 **Revisão atrasada há 20 dias ou mais volta para o cronograma** (*Perfil*, 0 = nunca): o assunto
 precisa ser estudado de novo. Ele entra no cronograma automático **“Assuntos para repetir”**, na
-semana atual (“Revisão atrasada desde 03/09”), com uma notificação. Estudar o assunto conclui o item
+semana atual (“Revisão atrasada desde 03/09”) — hoje, se for dia de estudo, ou no próximo dia de
+estudo da semana —, com uma notificação. Estudar o assunto conclui o item
 do cronograma e a revisão, e o algoritmo agenda a próxima pelo desempenho. Uma vez por atraso: se o
 item for pulado, não volta de novo até outra revisão atrasar (`plans/requeue.service.ts`; roda ao
 abrir o Início, as Revisões e o Cronograma, uma vez por dia, e no job diário).

@@ -82,3 +82,20 @@ export const initials = (name: string) =>
     .slice(0, 2)
     .map((p) => p[0]!.toUpperCase())
     .join('');
+
+const WEEKDAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const WEEKDAY_LONG = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+const weekdayIndex = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
+/** "seg", "ter"… */
+export const weekdayShort = (d: string) => WEEKDAY_SHORT[weekdayIndex(d)];
+/** "segunda", "terça"… */
+export const weekdayLong = (d: string) => WEEKDAY_LONG[weekdayIndex(d)];
+
+/** Dia do cronograma: "hoje", "amanhã", "ontem" ou "qua 14/10". */
+export function dayLabel(d: string, today = todayLocal()): string {
+  const n = diffDaysStr(today, d);
+  if (n === 0) return 'hoje';
+  if (n === 1) return 'amanhã';
+  if (n === -1) return 'ontem';
+  return `${weekdayShort(d)} ${fmtShort(d)}`;
+}

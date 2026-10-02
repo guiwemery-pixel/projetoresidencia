@@ -19,6 +19,9 @@ export function toPrivateUser(user: User) {
     dailyQuestionsTarget: user.dailyQuestionsTarget,
     dailyReviewLimit: user.dailyReviewLimit,
     requeueOverdueDays: user.requeueOverdueDays,
+    // Dias de estudo (1 = segunda … 7 = domingo) e minutos por dia: usados pelo cronograma
+    studyWeekdays: user.studyWeekdays,
+    dailyStudyMinutes: user.dailyStudyMinutes,
     dashboardLayout: user.dashboardLayout,
     createdAt: user.createdAt,
   };
