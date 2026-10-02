@@ -35,10 +35,12 @@
     let qs = filterToQuery(filter || {}, label);
     if (opts && opts.all) qs += (qs ? '&' : '') + 'todos=1';
     else if (opts && opts.noNew) qs += (qs ? '&' : '') + 'novos=0';
+    else if (opts && opts.withNew) qs += (qs ? '&' : '') + 'novos=todos';
     FC.app.go('/revisar' + (qs ? '?' + qs : ''));
   }
 
   const studyAll = (filter, label) => review(filter, 'Estudar tudo · ' + label, { all: true });
+  const newAndReviews = (filter, label) => review(filter, 'Novos e revisões · ' + label, { withNew: true });
   const onlyReviews = (filter, label) => review(filter, label ? 'Só revisões · ' + label : 'Só revisões', { noNew: true });
 
   function order(cards, mode) {
@@ -69,13 +71,16 @@
     const all = FC.cards.select(Object.assign({ includeBlockedDecks: true }, filter)).length;
     const studyable = FC.cards.select(filter).length;
     const due = counts.dueNow + counts.newToday;
+    // "Novos e revisões": o que venceu (inclusive o "Fora da revisão geral") + todos os novos
+    const wnDue = counts.dueNow + counts.dueHeld;
+    const wnNew = counts.newAvailable + counts.newHeld;
     const content = h(
       'div',
       { class: 'stack' },
       h('p', { class: 'ink2', text: label }),
       h(
         'div',
-        { class: 'grid three' },
+        { class: 'grid two' },
         h(
           'div',
           { class: 'panel flat stack' },
@@ -83,6 +88,13 @@
           h('p', { class: 'small ink2', text: U.plural(counts.dueNow, 'card devido', 'cards devidos') + ' e ' + U.plural(counts.newToday, 'novo', 'novos') + ' hoje. Segue o agendamento.' + (counts.newHeld ? ' ' + U.plural(counts.newHeld, 'novo fica', 'novos ficam') + ' fora do dia (marcado "Fora da revisão geral").' : '') + (counts.dueHeld ? ' ' + U.plural(counts.dueHeld, 'revisão fica', 'revisões ficam') + ' de fora: são de um baralho/tema "Fora da revisão geral" — abra-o para revisar.' : '') }),
           button(due ? 'Revisar ' + due : 'Nada devido agora', { variant: 'primary', icon: 'play', disabled: !due, onClick: () => (m.close(), review(filter, label)) }),
           counts.dueNow && counts.newToday ? button('Só revisões (' + counts.dueNow + ', sem novos)', { icon: 'undo', onClick: () => (m.close(), onlyReviews(filter, label)) }) : null,
+        ),
+        h(
+          'div',
+          { class: 'panel flat stack' },
+          h('h3', { text: 'Novos e revisões' }),
+          h('p', { class: 'small ink2', text: U.plural(wnDue, 'revisão vencida', 'revisões vencidas') + ' e todos os ' + U.plural(wnNew, 'novo', 'novos') + ' daqui, sem o limite do dia. Fica de fora o que ainda não venceu. As respostas entram no cronograma.' }),
+          button(wnDue && wnNew ? 'Revisar ' + wnDue + ' + ' + U.plural(wnNew, 'novo', 'novos') : wnNew ? 'Estudar ' + U.plural(wnNew, 'novo', 'novos') : wnDue ? 'Revisar ' + wnDue : 'Nada para estudar', { variant: due ? null : 'primary', icon: 'play', disabled: !(wnDue + wnNew), onClick: () => (m.close(), newAndReviews(filter, label)) }),
         ),
         h(
           'div',
@@ -103,5 +115,5 @@
     const m = FC.ui.modal({ title: 'Como quer estudar?', content });
   }
 
-  FC.launch = { filterToQuery, queryToFilter, review, studyAll, onlyReviews, quick, quickIds, choose, order };
+  FC.launch = { filterToQuery, queryToFilter, review, studyAll, newAndReviews, onlyReviews, quick, quickIds, choose, order };
 })(typeof self !== 'undefined' ? self : globalThis);

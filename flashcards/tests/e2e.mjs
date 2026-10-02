@@ -588,6 +588,26 @@ try {
     }), cir.id);
     assert.equal(q.normal ? (q.normal.remaining || { new: 0 }).new : 0, 0, 'revisão normal sem os novos daqui');
     assert.equal(q.all.remaining.new, cir.fresh, '"Estudar tudo" libera os novos daqui');
+    // "Novos e revisões": os novos daqui + o que venceu, sem o que ainda não venceu
+    const wn = await evalFC((id) => {
+      const now = Date.now();
+      const cards = FC.areas.cardsIn(id).filter((c) => !c.suspended);
+      const notDue = cards.filter((c) => c.state === 'review' && c.dueDate > now).length;
+      const r = FC.review.createSession({ nodeIds: [id] }, 'x', { withNew: true }).next(now);
+      const dueReviews = cards.filter((c) => c.state === 'review' && c.dueDate <= now).length;
+      return { remaining: r && r.remaining, notDue, dueReviews };
+    }, cir.id);
+    assert.equal(wn.remaining.new, cir.fresh, '"Novos e revisões" libera todos os novos daqui');
+    assert.equal(wn.remaining.review, wn.dueReviews, 'e só as revisões vencidas (' + wn.notDue + ' ainda não venceram)');
+    await evalFC((id) => FC.launch.choose({ nodeIds: [id] }, 'Cirurgia'), cir.id);
+    await page.waitForSelector('.modal h3:has-text("Novos e revisões")');
+    await page.waitForTimeout(400);
+    await shot('08f-novos-e-revisoes');
+    await page.click('.modal button:has-text("' + cir.fresh + ' novos")');
+    await page.waitForSelector('.show-answer .btn');
+    assert.match(await page.textContent('.study-top .title'), /Novos e revisões · Cirurgia/);
+    assert.equal(Number((await page.$$eval('.queue-counts > span', (els) => els.map((e) => e.textContent)))[0].replace(/\D/g, '')), cir.fresh);
+    await go('/decks');
     // Revisões vencidas daqui: fora da revisão geral, dentro quando se abre a grande área
     const held = await evalFC(async (id) => {
       const card = FC.areas.cardsIn(id).find((c) => !c.suspended);

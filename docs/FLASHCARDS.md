@@ -362,6 +362,11 @@ cards dali (e de tudo que está dentro) ficam com a etiqueta "fora da revisão g
   só quando você abre o próprio baralho/tema (ou algo dentro dele) e toca em ▶.
 "Voltar para a revisão geral" desfaz.
 
+**Novos e revisões** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
+as revisões vencidas e **todos os novos** da seleção, sem o limite do dia e inclusive o que está
+"Fora da revisão geral" — mas sem os cards que ainda não venceram (diferente do "Estudar tudo").
+As respostas entram no cronograma.
+
 **Estudar tudo** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
 todos os cards da seleção numa sessão que **entra no cronograma** — novos sem o limite do dia,
 revisões vencidas sem o limite diário e, por fim, as que ainda não venceram (cada uma uma vez,
