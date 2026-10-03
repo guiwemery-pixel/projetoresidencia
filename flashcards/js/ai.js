@@ -17,7 +17,7 @@
 (function (root) {
   'use strict';
   const FC = (root.FC = root.FC || {});
-  const { stripHtml, truncate } = FC.util;
+  const { stripHtml, truncate, parseCsv, normalizeText } = FC.util;
 
   const MODELS = [
     { id: 'claude-opus-5', label: 'Claude Opus 5 (padrão)' },
@@ -258,15 +258,71 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
     return 'Nada é enviado automaticamente: a plataforma só monta o pedido. Você copia, cola numa IA (Claude, ChatGPT…) e traz a resposta de volta para cá.';
   }
 
-  /** Texto único para o modo manual (colar no claude.ai). */
+  // ── Modo manual: cards voltam num arquivo CSV separado por ";" ─────────────
+  // (no chat, pedir JSON fazia a IA escrever os cards em texto corrido)
+  const CSV_COLUMNS = [
+    ['front', 'Pergunta'],
+    ['back', 'Resposta'],
+    ['area', 'Grande área'],
+    ['subarea', 'Subárea'],
+    ['subject', 'Assunto'],
+    ['topic', 'Tema'],
+    ['subtopic', 'Subtema'],
+    ['tags', 'Tags'],
+    ['difficulty', 'Dificuldade'],
+    ['cardType', 'Tipo'],
+    ['page', 'Página'],
+    ['reference', 'Referência'],
+  ];
+  const CSV_HEADER = CSV_COLUMNS.map((c) => c[1]).join(';');
+
+  /** Formato de volta no modo manual: CSV para pedidos de cards, JSON para as sugestões. */
+  const manualFormat = (req) => (req.schema === CARDS_SCHEMA ? 'csv' : 'json');
+
+  function csvInstructions() {
+    return [
+      'Formato da resposta: crie um ARQUIVO CSV para download (ex.: flashcards.csv), em UTF-8, com ponto e vírgula (;) como separador. Não escreva os cards em texto corrido.',
+      '- Primeira linha (cabeçalho), exatamente: ' + CSV_HEADER,
+      '- Depois, uma linha por card, sempre com as ' + CSV_COLUMNS.length + ' colunas nessa ordem (deixe vazio o que não houver).',
+      '- As colunas são os campos descritos acima: Pergunta = frente; Resposta = verso; Grande área = area; Subárea = subarea; Assunto = subject; Tema = topic; Subtema = subtopic; Tags = tags, separadas por espaço; Dificuldade = facil, media ou dificil; Tipo = um de: ' + CARD_TYPE_KEYS.join(', ') + '; Página = page (número ou vazio); Referência = reference.',
+      '- Nenhuma quebra de linha dentro de um campo: separe os tópicos da resposta com <br>.',
+      '- Campo que tiver ponto e vírgula ou aspas vai entre aspas duplas, com as aspas internas duplicadas ("").',
+      '- Se você não puder criar arquivos, mostre o CSV inteiro num único bloco de código ```csv, sem texto antes ou depois.',
+      'Exemplo:\n' + CSV_HEADER + '\nTratamentos da acalasia?;- Miotomia de Heller<br>- POEM<br>- Dilatação pneumática;Cirurgia;Cirurgia Digestiva;Acalasia;Tratamento;;acalasia esofago;media;conduta;12;',
+    ].join('\n');
+  }
+
+  /** Texto único para o modo manual (colar numa IA: Claude, ChatGPT…). */
   function manualPrompt(req) {
-    return (
-      req.system +
-      '\n\n---\n\n' +
-      req.user +
-      '\n\n---\n\nResponda SOMENTE com um JSON válido neste formato (sem texto antes ou depois):\n' +
-      JSON.stringify(exampleFor(req.schema), null, 1)
-    );
+    const format =
+      manualFormat(req) === 'csv'
+        ? csvInstructions()
+        : 'Responda SOMENTE com um JSON válido neste formato (sem texto antes ou depois):\n' + JSON.stringify(exampleFor(req.schema), null, 1);
+    return req.system + '\n\n---\n\n' + req.user + '\n\n---\n\n' + format;
+  }
+
+  /** Lê o CSV de cards (cabeçalho com Pergunta e Resposta); null se o texto não for esse CSV. */
+  function parseCardsCsv(text) {
+    const lines = text.split(/\r?\n/);
+    const start = lines.findIndex((l) => l.includes(';') && /pergunta|frente/.test(normalizeText(l)) && /resposta|verso/.test(normalizeText(l)));
+    if (start < 0) return null;
+    const rows = parseCsv(lines.slice(start).join('\n'), ';');
+    const byLabel = new Map(CSV_COLUMNS.map(([key, label]) => [normalizeText(label), key]));
+    byLabel.set('frente', 'front');
+    byLabel.set('verso', 'back');
+    const keys = rows[0].map((h) => byLabel.get(normalizeText(h)) || null);
+    const cards = rows.slice(1).map((row) => {
+      const c = {};
+      keys.forEach((k, i) => {
+        if (k) c[k] = String(row[i] == null ? '' : row[i]).trim();
+      });
+      c.tags = String(c.tags || '')
+        .split(/[\s,]+/)
+        .filter(Boolean);
+      c.page = parseInt(c.page, 10) || null;
+      return c;
+    });
+    return { cards: cards.filter((c) => c.front && c.back) };
   }
 
   function exampleFor(schema) {
@@ -278,16 +334,26 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
     };
   }
 
-  /** Extrai o JSON de uma resposta colada (aceita ```json ...``` e texto em volta). */
+  /**
+   * Lê a resposta colada (ou o arquivo da IA): CSV de cards separado por ";" ou JSON.
+   * Aceita bloco ```csv/```json e texto em volta.
+   */
   function parseResponse(text) {
-    let s = String(text || '').trim();
-    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    let s = String(text || '')
+      .replace(/^\uFEFF/, '')
+      .trim();
+    const fence = s.match(/```[a-z]*[ \t]*\r?\n?([\s\S]*?)```/i);
     if (fence) s = fence[1].trim();
+    const csv = parseCardsCsv(s);
+    if (csv) {
+      if (!csv.cards.length) throw new Error('O CSV não tem nenhum card com pergunta e resposta.');
+      return csv;
+    }
     const first = s.search(/[[{]/);
     const lastObj = s.lastIndexOf('}');
     const lastArr = s.lastIndexOf(']');
     const last = Math.max(lastObj, lastArr);
-    if (first < 0 || last < first) throw new Error('Não encontrei um JSON na resposta.');
+    if (first < 0 || last < first) throw new Error('Não encontrei os cards na resposta. Cole o CSV inteiro, começando pela linha "Pergunta;Resposta;…".');
     let data;
     try {
       data = JSON.parse(s.slice(first, last + 1));
@@ -386,7 +452,7 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
     const p = provider();
     if (p === 'anthropic') return callAnthropic(req, onProgress);
     if (p === 'backend') return callBackend(req, onProgress);
-    return { manual: true, prompt: manualPrompt(req) };
+    return { manual: true, prompt: manualPrompt(req), format: manualFormat(req) };
   }
 
   // ── Normalização das respostas ─────────────────────────────────────────────
@@ -432,6 +498,7 @@ Reutilize exatamente os nomes que já existem na coleção quando o conteúdo fo
     buildCardAction,
     buildSuggest,
     buildTargeted,
+    CSV_HEADER,
     manualPrompt,
     parseResponse,
     run,

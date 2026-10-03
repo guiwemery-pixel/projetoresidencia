@@ -362,6 +362,11 @@ cards dali (e de tudo que está dentro) ficam com a etiqueta "fora da revisão g
   só quando você abre o próprio baralho/tema (ou algo dentro dele) e toca em ▶.
 "Voltar para a revisão geral" desfaz.
 
+**Novos e revisões** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
+as revisões vencidas e **todos os novos** da seleção, sem o limite do dia e inclusive o que está
+"Fora da revisão geral" — mas sem os cards que ainda não venceram (diferente do "Estudar tudo").
+As respostas entram no cronograma.
+
 **Estudar tudo** (no ▶ "Como quer estudar?" e no menu ⋯ de cada nó da hierarquia ou baralho):
 todos os cards da seleção numa sessão que **entra no cronograma** — novos sem o limite do dia,
 revisões vencidas sem o limite diário e, por fim, as que ainda não venceram (cada uma uma vez,
@@ -450,7 +455,7 @@ cards é repartida proporcionalmente.
 
 | Provedor | Como funciona | Chave |
 |---|---|---|
-| **Manual** (padrão) | O app mostra o pedido para copiar no Claude e um campo para colar o JSON de volta. | nenhuma |
+| **Manual** (padrão) | O app monta o pedido para colar numa IA (Claude, ChatGPT, Gemini…). Para criar cards, o pedido manda a IA entregar um **arquivo CSV separado por ";"** com o cabeçalho `Pergunta;Resposta;Grande área;Subárea;Assunto;Tema;Subtema;Tags;Dificuldade;Tipo;Página;Referência` (pedir JSON no chat fazia a IA responder em texto corrido). Na janela do pedido, escolha o arquivo baixado ("Escolher arquivo CSV") ou cole o conteúdo; os cards vão para a revisão antes de entrar na coleção. O mesmo CSV também entra pela aba Importar. Sugestões de temas (pontos fracos) continuam em JSON. | nenhuma |
 | **Minha chave da API** | Chamada direta do navegador com o SDK oficial `@anthropic-ai/sdk` (streaming, `output_config.format`, esforço configurável). Modelo padrão `claude-opus-5` com `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) para o caso de recusa. | guardada só neste navegador; nunca vai para a conta, backup ou exportação |
 | **Servidor** | `POST` para um endpoint seu, que guarda a chave. Recomendado para uso multiusuário. | no servidor |
 

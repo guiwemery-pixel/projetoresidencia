@@ -106,6 +106,8 @@
     /**
      * opts.all: estudar tudo da seleção — novos sem limite diário e também os que ainda não venceram.
      * opts.noNew: só revisões — cards já estudados que venceram, sem novos.
+     * opts.withNew: novos e revisões — as revisões vencidas e todos os novos da seleção (sem o
+     *   limite do dia, inclusive os "Fora da revisão geral"), mas não os que ainda não venceram.
      */
     constructor(filter, label, opts) {
       this.id = uid('s');
@@ -122,8 +124,10 @@
       const today = todayCounts(this.startedAt);
       this.all = !!(opts && opts.all);
       this.noNew = !this.all && !!(opts && opts.noNew);
-      this.newLimit = this.all ? Infinity : this.noNew ? 0 : Math.max(0, newLimit(s, today.start) - today.newDone);
-      this.reviewLimit = this.all ? Infinity : Math.max(0, s.reviewsPerDay - today.reviewsDone);
+      this.withNew = !this.all && !this.noNew && !!(opts && opts.withNew);
+      const free = this.all || this.withNew; // seleção escolhida: sem os limites do dia
+      this.newLimit = free ? Infinity : this.noNew ? 0 : Math.max(0, newLimit(s, today.start) - today.newDone);
+      this.reviewLimit = free ? Infinity : Math.max(0, s.reviewsPerDay - today.reviewsDone);
       this.answered = new Set(); // no modo "tudo", cada card em revisão aparece uma vez
     }
 
@@ -138,7 +142,7 @@
       const reviews = [];
       const fresh = [];
       const ahead = []; // modo "tudo": em revisão, mas ainda não venceram
-      const held = this.all ? NONE_HELD : heldBack(this.filter);
+      const held = this.all || this.withNew ? NONE_HELD : heldBack(this.filter);
       for (const c of cards) {
         const state = c.state || 'new';
         if (state === 'new') {
