@@ -1,20 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, ChevronDown, FolderPlus, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { Archive, ChevronDown, FolderPlus, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import type { AreaNode, Subject, SubjectSize } from '../api/types';
+import type { AreaNode, Subject } from '../api/types';
 import { useAreas, useSubjects } from '../hooks/api';
-import { SIZES } from '../lib/constants';
 import { CATEGORICAL } from '../lib/palette';
 import { fmtShort, pct, relativeDay } from '../lib/format';
-import { AreaDot, Button, ConfirmDialog, EmptyState, ErrorState, IconButton, Input, Loading, Modal, PageHeader, Segmented, Select, Textarea, cx, useToast } from '../components/ui';
+import { ActionMenu, AreaDot, Button, EmptyState, ErrorState, IconButton, Input, Loading, Modal, PageHeader, Select, cx, useToast } from '../components/ui';
 import { AreaOptions, normalize } from '../components/study/SubjectPicker';
-
-function useInvalidateTaxonomy() {
-  const qc = useQueryClient();
-  return () => Promise.all(['areas', 'subjects', 'subject', 'reviews', 'dashboard', 'metrics'].map((k) => qc.invalidateQueries({ queryKey: [k] })));
-}
+import { DeleteSubjectDialog, SubjectDialog, useInvalidateTaxonomy } from '../components/study/SubjectDialog';
 
 function AreaDialog({ area, parentId, areas, onClose }: { area?: AreaNode; parentId?: string | null; areas: AreaNode[]; onClose: () => void }) {
   const invalidate = useInvalidateTaxonomy();
@@ -87,70 +82,6 @@ function AreaDialog({ area, parentId, areas, onClose }: { area?: AreaNode; paren
   );
 }
 
-function SubjectDialog({ subject, areaId, areas, onClose }: { subject?: Subject; areaId?: string; areas: AreaNode[]; onClose: () => void }) {
-  const invalidate = useInvalidateTaxonomy();
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: subject?.name ?? '',
-    areaId: subject?.areaId ?? areaId ?? '',
-    size: (subject?.size ?? 'MEDIUM') as SubjectSize,
-    notes: subject?.notes ?? '',
-    tags: subject?.tags.join(', ') ?? '',
-  });
-  const save = useMutation({
-    mutationFn: () => {
-      const body = {
-        name: form.name,
-        areaId: form.areaId,
-        size: form.size,
-        notes: form.notes || null,
-        tags: form.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean),
-      };
-      return subject ? api.patch(`/subjects/${subject.id}`, body) : api.post('/subjects', body);
-    },
-    onSuccess: async () => {
-      await invalidate();
-      toast.success(subject ? 'Assunto atualizado.' : 'Assunto criado.');
-      onClose();
-    },
-    onError: toast.error,
-  });
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={subject ? 'Editar assunto' : 'Novo assunto'}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button loading={save.isPending} disabled={!form.name.trim() || !form.areaId} onClick={() => save.mutate()}>
-            Salvar
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <Input label="Assunto" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} placeholder="Ex.: Pancreatite aguda" />
-        <Select label="Área / subárea" value={form.areaId} onChange={(e) => setForm({ ...form, areaId: e.target.value })} hint={subject ? 'Mudar a área move o assunto com todo o histórico.' : undefined}>
-          <option value="">Escolha…</option>
-          <AreaOptions areas={areas} />
-        </Select>
-        <div>
-          <span className="label">Tamanho</span>
-          <Segmented size="sm" value={form.size} onChange={(size) => setForm({ ...form, size })} options={SIZES.map((s) => ({ value: s.value, label: `${s.label} (${s.hint})` }))} />
-        </div>
-        <Input label="Tags (separadas por vírgula)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="alta incidência, urgência" />
-        <Textarea label="Anotações" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-      </div>
-    </Modal>
-  );
-}
-
 function DeleteAreaDialog({ area, areas, onClose }: { area: AreaNode; areas: AreaNode[]; onClose: () => void }) {
   const invalidate = useInvalidateTaxonomy();
   const toast = useToast();
@@ -216,7 +147,6 @@ function DeleteAreaDialog({ area, areas, onClose }: { area: AreaNode; areas: Are
 }
 
 function SubjectRow({ s, onEdit, onDelete, onArchive }: { s: Subject; onEdit: () => void; onDelete: () => void; onArchive: () => void }) {
-  const [menu, setMenu] = useState(false);
   return (
     <li className={cx('flex items-center gap-3 px-3 py-2', s.archived && 'opacity-60')}>
       <Link to={`/assuntos/${s.id}`} className="min-w-0 flex-1 hover:underline">
@@ -229,31 +159,14 @@ function SubjectRow({ s, onEdit, onDelete, onArchive }: { s: Subject; onEdit: ()
         </span>
       </Link>
       {s.questions.total > 0 && <span className="num shrink-0 text-xs text-ink2">{pct(s.questions.accuracy)}</span>}
-      <div className="relative">
-        <IconButton label={`Ações de ${s.name}`} onClick={() => setMenu((v) => !v)}>
-          <MoreHorizontal className="h-4 w-4" />
-        </IconButton>
-        {menu && (
-          <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-line bg-surface p-1 shadow-pop" onMouseLeave={() => setMenu(false)}>
-            {[
-              { label: 'Editar / mover', icon: Pencil, fn: onEdit },
-              { label: s.archived ? 'Reativar' : 'Arquivar', icon: Archive, fn: onArchive },
-              { label: 'Excluir', icon: Trash2, fn: onDelete },
-            ].map(({ label, icon: Icon, fn }) => (
-              <button
-                key={label}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink hover:bg-subtle"
-                onClick={() => {
-                  setMenu(false);
-                  fn();
-                }}
-              >
-                <Icon className="h-3.5 w-3.5" /> {label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <ActionMenu
+        label={`Ações de ${s.name}`}
+        items={[
+          { label: 'Editar / mover', icon: Pencil, onClick: onEdit },
+          { label: s.archived ? 'Reativar' : 'Arquivar', icon: Archive, onClick: onArchive },
+          { label: 'Excluir', icon: Trash2, onClick: onDelete, danger: true },
+        ]}
+      />
     </li>
   );
 }
@@ -274,15 +187,6 @@ export default function SubjectsPage() {
   const archive = useMutation({
     mutationFn: (s: Subject) => api.patch(`/subjects/${s.id}`, { archived: !s.archived }),
     onSuccess: invalidate,
-    onError: toast.error,
-  });
-  const removeSubject = useMutation({
-    mutationFn: (id: string) => api.del(`/subjects/${id}`),
-    onSuccess: async () => {
-      await invalidate();
-      setDeleteSubject(null);
-      toast.success('Assunto excluído.');
-    },
     onError: toast.error,
   });
 
@@ -416,16 +320,7 @@ export default function SubjectsPage() {
       {areaDialog && <AreaDialog area={areaDialog.area} parentId={areaDialog.parentId} areas={tree} onClose={() => setAreaDialog(null)} />}
       {subjectDialog && <SubjectDialog subject={subjectDialog.subject} areaId={subjectDialog.areaId} areas={tree} onClose={() => setSubjectDialog(null)} />}
       {deleteArea && <DeleteAreaDialog area={deleteArea} areas={tree} onClose={() => setDeleteArea(null)} />}
-      <ConfirmDialog
-        open={!!deleteSubject}
-        title={`Excluir "${deleteSubject?.name}"?`}
-        message="Todo o histórico de estudos, questões e revisões deste assunto será apagado. Se quiser apenas tirá-lo do calendário, use Arquivar."
-        confirmLabel="Excluir"
-        danger
-        loading={removeSubject.isPending}
-        onConfirm={() => deleteSubject && removeSubject.mutate(deleteSubject.id)}
-        onClose={() => setDeleteSubject(null)}
-      />
+      {deleteSubject && <DeleteSubjectDialog subject={deleteSubject} onClose={() => setDeleteSubject(null)} />}
     </div>
   );
 }

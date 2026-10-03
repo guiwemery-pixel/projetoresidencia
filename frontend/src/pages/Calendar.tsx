@@ -152,17 +152,25 @@ export default function CalendarPage() {
               );
             })}
           </div>
+          {/* Legenda (só as cores; os números de cada dia estão no próprio calendário) */}
           <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink2">
-            <span className="flex items-center gap-1">
-              <span className="num rounded-full bg-accent px-1.5 text-[10px] font-semibold text-white">3</span> pendentes
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-accent" /> revisões pendentes
             </span>
-            <span className="flex items-center gap-1">
-              <span className="num rounded-full bg-crit-wash px-1.5 text-[10px] font-semibold text-crit-text">2</span> atrasadas
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-crit-wash ring-1 ring-crit" /> revisões atrasadas
             </span>
-            <span className="flex items-center gap-1" style={{ color: 'var(--good-text)' }}>
-              ✓4 <span className="text-ink2">feitas</span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden style={{ color: 'var(--good-text)' }}>
+                ✓
+              </span>{' '}
+              revisões feitas
             </span>
-            {planItems.length > 0 && <span>📚2 assuntos do cronograma no dia</span>}
+            {planItems.length > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span aria-hidden>📚</span> assuntos do cronograma
+              </span>
+            )}
           </div>
         </Card>
 

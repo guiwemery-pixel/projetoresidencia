@@ -72,6 +72,12 @@ plansRouter.patch('/items/:itemId', async (req, res) => {
   res.json(await svc.updateItem(currentUser(req).id, req.params.itemId, input, today(req)));
 });
 
+/** Tira o assunto do cronograma (sem apagar o assunto). */
+plansRouter.delete('/items/:itemId', async (req, res) => {
+  await svc.removeItem(currentUser(req).id, req.params.itemId);
+  res.status(204).end();
+});
+
 plansRouter.get('/:id', async (req, res) => {
   res.json(await svc.getPlan(currentUser(req).id, req.params.id, today(req)));
 });

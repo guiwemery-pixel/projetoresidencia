@@ -420,6 +420,12 @@ export async function updateItem(userId: string, id: string, input: { weekStart?
   return (await serializeItems(userId, [updated], today))[0];
 }
 
+/** Tira o assunto do cronograma (o assunto, os estudos e as revisões continuam). */
+export async function removeItem(userId: string, id: string) {
+  const item = await ownedItem(userId, id);
+  await prisma.planItem.delete({ where: { id: item.id } });
+}
+
 /** Empurra os pendentes do cronograma (ex.: +7 dias quando a semana atrasou). */
 export async function shiftPlan(userId: string, planId: string, days: number, fromWeek?: string) {
   const plan = await prisma.studyPlan.findFirst({ where: { id: planId, userId } });

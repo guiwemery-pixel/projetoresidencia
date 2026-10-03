@@ -126,9 +126,17 @@ describe('cronograma pelos dias de estudo', () => {
     plan = (await agent.get(`/api/plans/${planId}`)).body;
     expect(plan.items[0]).toMatchObject({ weekStart: day(7), plannedOn: day(7) });
 
-    // Outra pessoa não redistribui o cronograma de ninguém
+    // Outra pessoa não redistribui o cronograma de ninguém (nem tira assuntos dele)
     const other = await signup('Outro');
     expect((await other.agent.post('/api/plans/distribute').send({ weekdays: [1], dailyMinutes: 60, planId })).status).toBe(404);
+    expect((await other.agent.delete(`/api/plans/items/${last.id}`)).status).toBe(404);
+
+    // Tirar do cronograma: o item sai, o assunto fica
+    expect((await agent.delete(`/api/plans/items/${last.id}`)).status).toBe(204);
+    plan = (await agent.get(`/api/plans/${planId}`)).body;
+    expect(plan.total).toBe(6);
+    const names = ((await agent.get('/api/subjects')).body as { name: string }[]).map((s) => s.name);
+    expect(names).toContain(last.subject.name);
   });
 
   it('cronograma de antes: sem dia até a pessoa escolher; semanas passadas não mudam', async () => {

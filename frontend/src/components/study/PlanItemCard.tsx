@@ -1,11 +1,28 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CalendarClock, Check, Clock, Play, SkipForward, Undo2 } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CalendarMinus, Check, Clock, Pencil, Play, SkipForward, Trash2, Undo2 } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { api } from '../../api/client';
 import type { PlanItem } from '../../api/types';
-import { useUpdatePlanItem } from '../../hooks/api';
+import { useAreas, useInvalidateStudyData, useSubjects, useUpdatePlanItem } from '../../hooks/api';
 import { useAuth } from '../../hooks/useAuth';
 import { addDaysStr, dayLabel, duration, fmtShort, relativeDay, todayLocal, weekdayLong } from '../../lib/format';
-import { AreaDot, Button, Input, Modal, cx, useToast } from '../ui';
+import { ActionMenu, AreaDot, Button, Input, Loading, Modal, cx, useToast } from '../ui';
 import { useStudyDialog } from './StudyDialog';
+import { DeleteSubjectDialog, SubjectDialog } from './SubjectDialog';
+
+/** "Editar assunto" a partir do cronograma: carrega o assunto completo e as áreas. */
+function EditSubject({ subjectId, onClose }: { subjectId: string; onClose: () => void }) {
+  const subjects = useSubjects();
+  const areas = useAreas();
+  const subject = subjects.data?.find((s) => s.id === subjectId);
+  if (!subject || !areas.data)
+    return (
+      <Modal open onClose={onClose} title="Editar assunto">
+        {subjects.isLoading || areas.isLoading ? <Loading /> : <p className="text-sm text-ink2">Assunto não encontrado.</p>}
+      </Modal>
+    );
+  return <SubjectDialog subject={subject} areas={areas.data} onClose={onClose} />;
+}
 
 /** "13/10 a 19/10" */
 export const weekRange = (item: Pick<PlanItem, 'weekStart' | 'weekEnd'>) => `${fmtShort(item.weekStart)} a ${fmtShort(item.weekEnd)}`;
@@ -93,8 +110,18 @@ export function PlanItemCard({
   const update = useUpdatePlanItem();
   const toast = useToast();
   const [move, setMove] = useState(false);
+  const [dialog, setDialog] = useState<'edit' | 'delete' | null>(null);
+  const invalidate = useInvalidateStudyData();
   const today = todayLocal();
   const pending = item.status === 'PENDING';
+  const unplan = useMutation({
+    mutationFn: () => api.del(`/plans/items/${item.id}`),
+    onSuccess: async () => {
+      toast.success(`${item.subject.name} saiu do cronograma. O assunto e o histórico continuam em Áreas e assuntos.`);
+      await invalidate();
+    },
+    onError: toast.error,
+  });
   const set = async (status: PlanItem['status'], message: string) => {
     try {
       await update.mutateAsync({ id: item.id, status });
@@ -171,8 +198,18 @@ export function PlanItemCard({
             Desfazer
           </Button>
         )}
+        <ActionMenu
+          label={`Mais ações de ${item.subject.name}`}
+          items={[
+            { label: 'Editar assunto', icon: Pencil, onClick: () => setDialog('edit') },
+            { label: 'Tirar do cronograma', icon: CalendarMinus, onClick: () => unplan.mutate() },
+            { label: 'Excluir assunto', icon: Trash2, onClick: () => setDialog('delete'), danger: true },
+          ]}
+        />
       </div>
       {move && <PlanRescheduleDialog item={item} onClose={() => setMove(false)} />}
+      {dialog === 'edit' && <EditSubject subjectId={item.subject.id} onClose={() => setDialog(null)} />}
+      {dialog === 'delete' && <DeleteSubjectDialog subject={item.subject} onClose={() => setDialog(null)} />}
     </div>
   );
 }

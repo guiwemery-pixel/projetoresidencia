@@ -7,13 +7,14 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type ComponentType,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Loader2, CheckCircle2, AlertCircle, MoreHorizontal } from 'lucide-react';
 import type { Level } from '../../api/types';
 import { LEVELS } from '../../lib/constants';
 import { initials } from '../../lib/format';
@@ -76,6 +77,119 @@ export function IconButton({ label, className, children, ...props }: ButtonHTMLA
     >
       {children}
     </button>
+  );
+}
+
+export interface ActionMenuItem {
+  label: string;
+  icon?: ComponentType<{ className?: string }>;
+  onClick: () => void;
+  danger?: boolean;
+}
+
+/**
+ * Botão "⋯" com um menu de ações. O menu é desenhado por cima da página (fora do
+ * quadro onde o botão está), então não é cortado por cartões com `overflow-hidden`;
+ * abre para cima quando não cabe embaixo e acompanha o botão ao rolar. Fecha ao tocar fora ou com Esc.
+ */
+export function ActionMenu({ label, items }: { label: string; items: ActionMenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number }>({ right: 8 });
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  // Posição pelo botão: embaixo dele, ou em cima se não couber
+  const place = useCallback(() => {
+    if (!btn.current) return;
+    const r = btn.current.getBoundingClientRect();
+    const height = menu.current?.offsetHeight || items.length * 38 + 12;
+    const below = window.innerHeight - r.bottom;
+    const right = Math.max(8, window.innerWidth - r.right);
+    setPos(below < height + 8 && r.top > below ? { bottom: window.innerHeight - r.top + 4, right } : { top: r.bottom + 4, right });
+  }, [items.length]);
+
+  const toggle = () => {
+    if (open) return close();
+    place();
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!menu.current?.contains(t) && !btn.current?.contains(t)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      close();
+      btn.current?.focus();
+    };
+    // Rolar a página (ou a barra do navegador do celular aparecer/sumir) não fecha: o menu acompanha o botão
+    let frame = 0;
+    const follow = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', follow);
+    window.addEventListener('scroll', follow, true);
+    menu.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', follow);
+      window.removeEventListener('scroll', follow, true);
+    };
+  }, [open, close, place]);
+
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-label={label}
+        title={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={toggle}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-ink2 transition hover:bg-subtle hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={menu}
+            role="menu"
+            aria-label={label}
+            className="fixed z-50 w-48 rounded-xl border border-line bg-surface p-1 shadow-pop"
+            style={{ top: pos.top, bottom: pos.bottom, right: pos.right }}
+          >
+            {items.map(({ label: text, icon: Icon, onClick, danger }) => (
+              <button
+                key={text}
+                type="button"
+                role="menuitem"
+                className={cx(
+                  'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-none',
+                  danger ? 'text-crit-text' : 'text-ink',
+                )}
+                onClick={() => {
+                  close();
+                  onClick();
+                }}
+              >
+                {Icon && <Icon className="h-3.5 w-3.5" />} {text}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
