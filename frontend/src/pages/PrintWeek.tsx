@@ -40,7 +40,9 @@ function StageChip({ review }: { review: Review }) {
 function ReviewRow({ review, today, carried }: { review: Review; today: string; carried?: boolean }) {
   const done = review.status === 'DONE';
   const late = !done && review.scheduledFor < today;
-  const methods = review.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ');
+  const methods = (review.advice?.methods ?? review.suggestedMethods).map((m) => METHOD_LABEL[m]).join(', ');
+  // Como estudar, pelos últimos estudos do assunto (só quando muda o plano)
+  const advice = review.advice && review.advice.focus !== 'EQUILIBRIO' ? review.advice : null;
   return (
     <tr className="border-t border-[#e1e0d9] align-top">
       <td className="py-1.5 pl-2 pr-2">
@@ -70,7 +72,11 @@ function ReviewRow({ review, today, carried }: { review: Review; today: string; 
           </span>
         ) : (
           <>
-            {review.suggestTheory && <span className="font-semibold text-[#0b0b0b]">Rever teoria · </span>}
+            {advice ? (
+              <span className="block font-semibold text-[#1c5cab]">💡 {advice.title}</span>
+            ) : (
+              review.suggestTheory && <span className="font-semibold text-[#0b0b0b]">Rever teoria · </span>
+            )}
             {review.suggestedQuestions ? <span className="font-semibold text-[#0b0b0b]">~{review.suggestedQuestions} questões</span> : null}
             <span className="block">{methods}</span>
           </>

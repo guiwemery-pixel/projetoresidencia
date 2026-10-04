@@ -6,6 +6,7 @@ import { getAreaMap } from '../taxonomy/taxonomy.service.js';
 import { reviewPlan } from '../scheduler/index.js';
 import { getSchedulerConfig } from './algorithm-config.js';
 import { serializeReview } from './learning.service.js';
+import { ADVICE_WINDOW, THEORY_METHODS, studyAdvice, type PastSession, type StudyAdvice } from './study-advice.js';
 
 export type ReviewView = Awaited<ReturnType<typeof listReviews>>[number];
 
@@ -16,6 +17,66 @@ function labels(
 ) {
   const plan = reviewPlan(r.stage, r.subject.size, { checkup: r.checkup, theory: r.suggestTheory }, config);
   return { stageLabel: plan.label, phase: plan.phase };
+}
+
+/**
+ * Como estudar em cada revisão pendente, pelos últimos estudos do assunto (study-advice.ts).
+ * Uma consulta para todos os assuntos: os últimos estudos de cada um e a data da última teoria.
+ */
+async function adviceFor(
+  userId: string,
+  reviews: { id: string; subjectId: string; status: string; suggestedMethods: import('@prisma/client').StudyMethod[]; suggestTheory: boolean }[],
+) {
+  const out = new Map<string, StudyAdvice | null>();
+  const pending = reviews.filter((r) => r.status === 'PENDING');
+  const ids = [...new Set(pending.map((r) => r.subjectId))];
+  if (!ids.length) return out;
+  const [rows, theory] = await Promise.all([
+    prisma.$queryRaw<{ subject_id: string; studied_on: Date; methods: string[]; questions: number; correct: number }[]>`
+      SELECT s.subject_id, s.studied_on, s.methods::text[] AS methods,
+             COALESCE(SUM(q.total), 0)::int AS questions, COALESCE(SUM(q.correct), 0)::int AS correct
+      FROM (
+        SELECT id, subject_id, studied_on, created_at, methods,
+               ROW_NUMBER() OVER (PARTITION BY subject_id ORDER BY studied_on DESC, created_at DESC) AS rn
+        FROM study_sessions
+        WHERE user_id = ${userId} AND subject_id = ANY(${ids})
+      ) s
+      LEFT JOIN question_sessions q ON q.study_session_id = s.id
+      WHERE s.rn <= ${ADVICE_WINDOW}
+      GROUP BY s.id, s.subject_id, s.studied_on, s.created_at, s.methods
+      ORDER BY s.subject_id, s.studied_on DESC, s.created_at DESC`,
+    prisma.$queryRaw<{ subject_id: string; last: Date }[]>`
+      SELECT subject_id, MAX(studied_on) AS last
+      FROM study_sessions
+      WHERE user_id = ${userId} AND subject_id = ANY(${ids}) AND methods && ${THEORY_METHODS}::"StudyMethod"[]
+      GROUP BY subject_id`,
+  ]);
+  const history = new Map<string, PastSession[]>();
+  for (const r of rows) {
+    const list = history.get(r.subject_id) ?? [];
+    list.push({
+      date: fromDb(r.studied_on),
+      methods: r.methods as PastSession['methods'],
+      questions: r.questions,
+      accuracy: r.questions > 0 ? (r.correct / r.questions) * 100 : null,
+    });
+    history.set(r.subject_id, list);
+  }
+  const lastTheory = new Map(theory.map((t) => [t.subject_id, fromDb(t.last)]));
+  for (const r of pending) {
+    out.set(r.id, studyAdvice(history.get(r.subjectId) ?? [], r.suggestedMethods, { lowScore: r.suggestTheory, lastTheory: lastTheory.get(r.subjectId) ?? null }));
+  }
+  return out;
+}
+
+/** Sugestão de como estudar das revisões indicadas (ex.: a próxima revisão logo depois de registrar um estudo). */
+export async function adviceForReviewIds(userId: string, ids: string[]) {
+  if (!ids.length) return new Map<string, StudyAdvice | null>();
+  const reviews = await prisma.review.findMany({
+    where: { userId, id: { in: ids } },
+    select: { id: true, subjectId: true, status: true, suggestedMethods: true, suggestTheory: true },
+  });
+  return adviceFor(userId, reviews);
 }
 
 export async function listReviews(
@@ -42,9 +103,12 @@ export async function listReviews(
     getAreaMap(userId),
     getSchedulerConfig(),
   ]);
+  const advice = await adviceFor(userId, reviews);
   return reviews.map((r) => ({
     ...serializeReview(r),
     ...labels(r, config),
+    // Como estudar nesta revisão (só nas pendentes)
+    advice: advice.get(r.id) ?? null,
     subject: { id: r.subject.id, name: r.subject.name, size: r.subject.size, area: areaMap.get(r.subject.areaId) ?? null },
   }));
 }
@@ -99,9 +163,11 @@ async function listReviewsByIds(userId: string, ids: string[]) {
     getAreaMap(userId),
     getSchedulerConfig(),
   ]);
+  const advice = await adviceFor(userId, reviews);
   return reviews.map((r) => ({
     ...serializeReview(r),
     ...labels(r, config),
+    advice: advice.get(r.id) ?? null,
     subject: { id: r.subject.id, name: r.subject.name, size: r.subject.size, area: areaMap.get(r.subject.areaId) ?? null },
   }));
 }

@@ -12,6 +12,7 @@ import { splitCorrect, splitEven } from '../../lib/split';
 import { Button, IconButton, Input, Modal, NumberInput, Textarea, cx, useToast } from '../ui';
 import { SubjectPicker, normalize, type SubjectChoice } from './SubjectPicker';
 import { WhyPanel } from './WhyPanel';
+import { AdviceNote } from './AdviceNote';
 
 export interface OpenOptions {
   subjectId?: string;
@@ -304,9 +305,10 @@ function StudyDialog({ opts, onClose }: { opts: OpenOptions; onClose: () => void
                 <p className="mt-1 text-ink2">
                   {s.checkup && 'Como foi só estudo/leitura, amanhã faça a revisão D1: questões, flashcards, recall ou teoria. '}
                   {s.suggestTheory && 'Volte ao conteúdo teórico e depois faça questões. '}
-                  Sugerido: {s.suggestedMethods.map((m) => METHOD_LABEL[m]).join(', ')} · {s.suggestedQuestions.min}–{s.suggestedQuestions.max} questões.
+                  Sugerido: {(s.advice?.methods ?? s.suggestedMethods).map((m) => METHOD_LABEL[m]).join(', ')} · {s.suggestedQuestions.min}–{s.suggestedQuestions.max} questões.
                   {' '}Com bom desempenho, menos de {reference} questões aproximam a próxima revisão e mais de {reference} a afastam, aos poucos.
                 </p>
+                {s.advice && s.advice.focus !== 'EQUILIBRIO' && <AdviceNote advice={s.advice} />}
               </div>
               <button type="button" onClick={() => setShowWhy((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-accent" aria-expanded={showWhy}>
                 Por que {s.intervalDays} {s.intervalDays === 1 ? 'dia' : 'dias'}?
@@ -641,10 +643,14 @@ function SuggestionBox({ suggestion: s }: { suggestion: StudySuggestion }) {
     return `Revisão ${s.stageLabel}${when} — ${s.phase.toLowerCase()}. Sugerido: ${methods} · ${s.questions.min}–${s.questions.max} questões. ${ref} questões é a referência: indo bem, menos que isso aproxima a próxima revisão e mais que isso a afasta.`;
   }, [s]);
   return (
-    <p className="mt-2 flex items-start gap-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">
-      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-      {text}
-    </p>
+    <>
+      <p className="mt-2 flex items-start gap-2 rounded-xl bg-accent-wash px-3 py-2 text-xs text-ink">
+        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+        {text}
+      </p>
+      {/* Como estudar, pelos últimos estudos do assunto (só quando muda o plano: questões ou teoria) */}
+      {s.advice && s.advice.focus !== 'EQUILIBRIO' && <AdviceNote advice={s.advice} />}
+    </>
   );
 }
 

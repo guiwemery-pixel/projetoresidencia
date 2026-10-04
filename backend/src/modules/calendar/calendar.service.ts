@@ -141,12 +141,15 @@ export async function renderFeed(token: string, baseUrl: string, userAgent?: str
   const reviewItems = reviews.map((r) => {
     const plan = reviewPlan(r.stage, r.subject.size, { checkup: r.checkup, theory: r.suggestTheory }, config);
     const overdue = r.scheduledFor < today;
-    const methods = (r.suggestedMethods.length ? r.suggestedMethods : plan.methods).map((m) => METHOD_LABEL[m]).join(', ');
+    const planned = r.advice?.methods.length ? r.advice.methods : r.suggestedMethods.length ? r.suggestedMethods : plan.methods;
+    const methods = planned.map((m) => METHOD_LABEL[m]).join(', ');
     const detail = [
       r.subject.area?.path,
       `Fase: ${r.phase}`,
       `Sugerido: ${methods} · ${plan.questions.min}–${plan.questions.max} questões`,
-      r.suggestTheory ? 'Volte ao conteúdo teórico antes das questões.' : null,
+      // Como estudar, pelos últimos estudos do assunto (ex.: só teoria até aqui → questões)
+      r.advice && r.advice.focus !== 'EQUILIBRIO' ? `Como estudar: ${r.advice.title}. ${r.advice.reason}` : null,
+      r.suggestTheory && r.advice?.focus !== 'TEORIA' ? 'Volte ao conteúdo teórico antes das questões.' : null,
       overdue ? `Atrasada: prevista para ${fmtDate(r.scheduledFor)}.` : null,
     ].filter(Boolean) as string[];
     return { r, date: overdue ? today : r.scheduledFor, overdue, detail };

@@ -147,7 +147,18 @@ export interface Review {
   /** Verificação com questões após um contato só de estudo/leitura */
   checkup: boolean;
   explanation: Explanation | null;
+  /** Como estudar nesta revisão, pelos últimos estudos do assunto (só nas pendentes) */
+  advice?: StudyAdvice | null;
   subject: { id: string; name: string; size: SubjectSize; area: AreaInfo | null };
+}
+
+/** Sugestão de como estudar: questões (só teoria/flashcards até aqui), teoria (muitas questões, pouca teoria) ou o plano da etapa. */
+export interface StudyAdvice {
+  focus: 'QUESTOES' | 'TEORIA' | 'EQUILIBRIO';
+  methods: StudyMethod[];
+  title: string;
+  reason: string;
+  mix: { sessions: number; theory: number; questions: number; recall: number; lastTheory: string | null; lastQuestions: string | null };
 }
 
 export interface QuestionData {
@@ -193,6 +204,8 @@ export interface ScheduleView {
   suggestedMethods: StudyMethod[];
   suggestedQuestions: { min: number; max: number };
   explanation: Explanation;
+  /** Como estudar na próxima revisão, já contando este estudo */
+  advice?: StudyAdvice | null;
 }
 
 export interface StudyResult {
@@ -272,6 +285,8 @@ export interface StudySuggestion {
   methods: StudyMethod[];
   questions: { min: number; max: number };
   pendingReview: { id: string; scheduledFor: string } | null;
+  /** Como estudar na revisão pendente, pelos últimos estudos do assunto */
+  advice?: StudyAdvice | null;
   /** Referência de questões (×1) e pontos do ajuste gradual do intervalo */
   questionCount?: { reference: number; points: { questions: number; factor: number }[] };
 }

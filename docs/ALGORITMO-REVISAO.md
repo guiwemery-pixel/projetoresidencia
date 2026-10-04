@@ -275,6 +275,24 @@ do cronograma e a revisão, e o algoritmo agenda a próxima pelo desempenho. Uma
 item for pulado, não volta de novo até outra revisão atrasar (`plans/requeue.service.ts`; roda ao
 abrir o Início, as Revisões e o Cronograma, uma vez por dia, e no job diário).
 
+## 5c. Como estudar na revisão
+
+Cada revisão pendente traz uma sugestão de **como estudar**, calculada na hora a partir dos
+últimos estudos do assunto (`reviews/study-advice.ts`; janela de 4 estudos). Aparece no cartão da
+revisão (Calendário, Revisões, Início), no “Por quê?”, no Registrar estudo, na folha impressa e no
+Google Agenda; o botão **Revisar** já abre com o método sugerido marcado.
+
+| Situação nos últimos estudos | Sugestão |
+|---|---|
+| Nenhuma questão (só teoria, aula, leitura, vídeo, resumo, flashcards ou recall) | **Faça questões** — elas mostram o que ficou e o percentual ajusta as próximas revisões |
+| Último estudo com questões abaixo de 60% (ou revisão de reforço), sem teoria nele | **Reveja a teoria e depois faça questões** |
+| Os 3 últimos estudos sem teoria, com questões em pelo menos 2 | **Reveja a teoria e depois faça questões** (resumo, mapa mental ou aula) |
+| Teoria e questões em equilíbrio | **Siga o plano** da etapa (ex.: questões e flashcards) |
+
+Contam como teoria: Teoria, Aula, Vídeo, Leitura, Resumo e Revisão do material; como questões:
+Questões, Simulado ou qualquer estudo com questões registradas; Flashcards e Recall ativo contam
+à parte. A sugestão não muda as datas das revisões — só o que fazer nelas.
+
 ## 6. Transparência (“Por quê?”)
 
 Cada revisão agendada guarda (comprimido em `reviews.explanation_packed`, ver `reviews/explanation-codec.ts`) as entradas e cada passo do cálculo:

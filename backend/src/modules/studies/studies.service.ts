@@ -11,6 +11,7 @@ import { notify } from '../notifications/notifications.service.js';
 import { refreshGoals } from '../goals/goals.service.js';
 import { linkStudy, unlinkStudy } from '../plans/plans.service.js';
 import { balanceReviews, reviewLimitOf, type ReviewMove } from '../reviews/balance.service.js';
+import { adviceForReviewIds } from '../reviews/reviews.service.js';
 
 export interface QuestionInput {
   total: number;
@@ -59,6 +60,13 @@ function questionData(userId: string, subjectId: string, date: string, q: Questi
 async function balanceAfter(userId: string, today: string) {
   const limit = await reviewLimitOf(prisma, userId);
   return { limit, moves: await balanceReviews(prisma, userId, today, limit) };
+}
+
+/** Junta à próxima revisão a sugestão de como estudar (pelos estudos do assunto, já com este). */
+async function withAdvice<T extends { reviewId: string | null } | null>(userId: string, schedules: T[]) {
+  const ids = schedules.map((s) => s?.reviewId).filter((x): x is string => !!x);
+  const advice = await adviceForReviewIds(userId, ids);
+  return schedules.map((s) => (s ? { ...s, advice: (s.reviewId && advice.get(s.reviewId)) || null } : s));
 }
 
 function scheduleView(outcome: ContactOutcome, balance?: { limit: number; moves: ReviewMove[] }) {
@@ -147,11 +155,12 @@ export async function createStudy(userId: string, input: StudyInput, today: stri
 
   const balance = await balanceAfter(userId, today);
   await afterContact(userId, subject.id, subject.name, input.date, outcome, today);
+  const [schedule] = await withAdvice(userId, [scheduleView(outcome, balance)]);
   return {
     session: await getStudy(userId, session.id),
     isFirstContact,
     completedReviewId: outcome.completedReviewId,
-    schedule: scheduleView(outcome, balance),
+    schedule,
     planItem,
   };
 }
@@ -204,6 +213,10 @@ export async function createStudies(userId: string, input: StudyBatchInput, toda
   );
 
   const balance = await balanceAfter(userId, today);
+  const schedules = await withAdvice(
+    userId,
+    done.map((r) => scheduleView(r.outcome, balance)),
+  );
   const results = [];
   for (const [i, r] of done.entries()) {
     await afterContact(userId, subjects[i].id, subjects[i].name, input.date, r.outcome, today);
@@ -211,7 +224,7 @@ export async function createStudies(userId: string, input: StudyBatchInput, toda
       session: await getStudy(userId, r.session.id),
       isFirstContact: r.isFirstContact,
       completedReviewId: r.outcome.completedReviewId,
-      schedule: scheduleView(r.outcome, balance),
+      schedule: schedules[i],
       planItem: r.planItem,
     });
   }
@@ -260,7 +273,8 @@ export async function updateStudy(userId: string, id: string, input: Partial<Stu
   });
   const balance = await balanceAfter(userId, today);
   await refreshGoals(userId, today);
-  return { session: await getStudy(userId, id), schedule: scheduleView(outcome, balance) };
+  const [schedule] = await withAdvice(userId, [scheduleView(outcome, balance)]);
+  return { session: await getStudy(userId, id), schedule };
 }
 
 export async function deleteStudy(userId: string, id: string, today: string) {
@@ -369,14 +383,17 @@ export async function studySuggestion(userId: string, subjectId: string) {
     { theory: pending?.suggestTheory ?? false, checkup: pending?.checkup ?? false, firstMeasure: state.lastScore === null },
     config,
   );
+  // Como estudar, pelos últimos estudos do assunto (ex.: só teoria até aqui → questões)
+  const advice = pending ? ((await adviceForReviewIds(userId, [pending.id])).get(pending.id) ?? null) : null;
   return {
     isNew: false,
     checkup: pending?.checkup ?? false,
     stageLabel: plan.label,
     phase: plan.phase,
-    methods: plan.methods,
+    methods: advice && advice.focus !== 'EQUILIBRIO' ? advice.methods : plan.methods,
     questions: plan.questions,
     pendingReview: pending ? { id: pending.id, scheduledFor: fromDb(pending.scheduledFor) } : null,
+    advice,
     questionCount,
   };
 }
