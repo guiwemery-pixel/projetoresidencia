@@ -21,6 +21,7 @@ const planSchema = z.object({
       z.object({
         subjectId: z.string().min(1).max(40).nullish(),
         subject: z.string().trim().min(1).max(160),
+        areaId: z.string().min(1).max(40).nullish(),
         area: z.string().trim().max(120).nullish(),
         weekStart: dateString,
         label: z.string().trim().max(60).nullish(),

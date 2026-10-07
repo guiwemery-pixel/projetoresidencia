@@ -1,15 +1,18 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarRange, ClipboardPaste, FileText, Lock, Upload } from 'lucide-react';
+import { CalendarRange, ClipboardPaste, FileText, Lock, Plus, Upload } from 'lucide-react';
 import { api } from '../api/client';
+import type { AreaNode } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
+import { useAreas } from '../hooks/api';
 import { fmtShort, plural, todayLocal } from '../lib/format';
 import type { PlanLine } from '../lib/plan/pdf-lines';
 import { BIG_AREAS, addDays, parsePlan, schedulePlan, suggestedStart, textToLines, type DraftItem, type PlanDraft } from '../lib/plan/parse';
 import { Button, Card, Input, PageHeader, Textarea, cx, useToast } from '../components/ui';
 import { DEFAULT_DAYS, DEFAULT_MINUTES, StudyDaysFields, weekdaysText } from '../components/study/StudyDays';
 import { DistributionPreview, type PlanDistribution } from '../components/study/DistributionPreview';
+import { normalize } from '../components/study/SubjectPicker';
 
 // Importar cronograma: o PDF (ou o texto colado) é lido no navegador; só a
 // lista de assuntos com a semana de cada um vai para a conta da pessoa.
@@ -28,6 +31,58 @@ interface Preview {
 }
 
 const FALLBACK_AREA = 'Importados';
+// Destino de um assunto no seletor: uma área/subárea da conta (`id:<id>`), uma grande área a
+// criar (`new:<nome>`) ou "Importados" (procura o assunto pelo nome; senão, área Importados)
+const AUTO = 'auto';
+const isId = (v: string) => v.startsWith('id:');
+const isNew = (v: string) => v.startsWith('new:');
+
+/** Seletor de destino: as áreas e subáreas da pessoa (inclusive as que ela criou), áreas novas e "Importados". */
+function AreaSelect({
+  tree,
+  newNames,
+  value,
+  onChange,
+  placeholder,
+  className,
+  ariaLabel,
+}: {
+  tree: AreaNode[];
+  newNames: string[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+  ariaLabel: string;
+}) {
+  return (
+    <select className={cx('input', className)} value={value} onChange={(e) => e.target.value && onChange(e.target.value)} aria-label={ariaLabel}>
+      {placeholder && <option value="">{placeholder}</option>}
+      {tree.map((a) => (
+        <optgroup key={a.id} label={a.name}>
+          <option value={`id:${a.id}`}>{a.name} (geral)</option>
+          {[...(a.children ?? [])]
+            .sort((x, y) => x.position - y.position)
+            .map((c) => (
+              <option key={c.id} value={`id:${c.id}`}>
+                {a.name} › {c.name}
+              </option>
+            ))}
+        </optgroup>
+      ))}
+      {newNames.length > 0 && (
+        <optgroup label="Criar área nova">
+          {newNames.map((n) => (
+            <option key={n} value={`new:${n}`}>
+              {n} (nova)
+            </option>
+          ))}
+        </optgroup>
+      )}
+      <option value={AUTO}>{FALLBACK_AREA} (ou onde o assunto já existir)</option>
+    </select>
+  );
+}
 const fmtFull = (d: string) => d.split('-').reverse().join('/');
 
 /** "CRONOGRAMA_EXTENSIVO_2025_ACESSO_DIRETO_1_202506_260927.pdf" → "Cronograma extensivo 2025 acesso direto 1" */
@@ -58,10 +113,16 @@ export default function PlanImportPage() {
   const [name, setName] = useState('');
   const [useFileDates, setUseFileDates] = useState(false);
   const [start, setStart] = useState(today);
+  // Áreas da conta (as padrão e as que a pessoa criou) para escolher o destino de cada assunto
+  const areas = useAreas();
+  const tree = useMemo(() => [...(areas.data ?? [])].sort((a, b) => a.position - b.position), [areas.data]);
+  // Valores: um destino do seletor (id:/new:/auto) ou, vindo do arquivo, o nome de uma grande área
   const [colorArea, setColorArea] = useState<Record<string, string>>({});
   // Sem cor nem palavra-chave de Pediatria/GO/Cirurgia/Preventiva: quase sempre é Clínica Médica
   const [defaultArea, setDefaultArea] = useState<string>(BIG_AREAS[0]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [customAreas, setCustomAreas] = useState<string[]>([]);
+  const [newAreaName, setNewAreaName] = useState('');
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [bonus, setBonus] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -116,9 +177,37 @@ export default function PlanImportPage() {
     return map;
   }, [draft]);
 
+  /** Nome de grande área (legenda, palavra-chave, padrão) → destino: a área da conta com esse nome, ou criar. */
+  const toValue = useCallback(
+    (v: string | null | undefined) => {
+      if (!v) return '';
+      if (v === AUTO || isId(v) || isNew(v)) return v;
+      if (v === FALLBACK_AREA) return AUTO;
+      const top = tree.find((a) => normalize(a.name) === normalize(v));
+      return top ? `id:${top.id}` : `new:${v}`;
+    },
+    [tree],
+  );
   const areaOf = (item: DraftItem) => {
     const key = keyOf.get(item)!;
-    return overrides[key] || (item.marker && colorArea[item.marker]) || item.area || defaultArea;
+    return toValue(overrides[key] || (item.marker && colorArea[item.marker]) || item.area || defaultArea);
+  };
+  /** Rótulo de um destino ("Oftalmologia", "Clínica Médica › Cardiologia", "Neurologia (nova)"). */
+  const labelOf = (v: string) => {
+    if (v === AUTO) return FALLBACK_AREA;
+    if (isNew(v)) return `${v.slice(4)} (nova)`;
+    const id = v.slice(3);
+    for (const a of tree) {
+      if (a.id === id) return a.name;
+      const c = a.children?.find((x) => x.id === id);
+      if (c) return `${a.name} › ${c.name}`;
+    }
+    return '—';
+  };
+  /** Mandar vários assuntos (todos, ou uma semana) para um destino. */
+  const sendTo = (keys: string[], v: string) => {
+    setOverrides((cur) => ({ ...cur, ...Object.fromEntries(keys.map((k) => [k, v])) }));
+    touch();
   };
 
   const chosen = useMemo(() => {
@@ -130,10 +219,23 @@ export default function PlanImportPage() {
   const planned = useMemo(
     () => (chosen ? schedulePlan(chosen, startDate, areaOf) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chosen, startDate, colorArea, overrides, defaultArea],
+    [chosen, startDate, colorArea, overrides, defaultArea, toValue],
   );
   const lastWeek = planned.length ? planned[planned.length - 1].weekStart : null;
-  const areaOptions = useMemo(() => [...new Set([...BIG_AREAS, ...Object.values(draft?.legend ?? {}), FALLBACK_AREA])], [draft]);
+  // Grandes áreas que ainda não existem na conta e podem ser criadas (padrão, legenda do arquivo, digitadas)
+  const newNames = useMemo(() => {
+    const names = [...BIG_AREAS, ...Object.values(draft?.legend ?? {}), ...customAreas].filter(Boolean);
+    const out: string[] = [];
+    for (const n of names) if (!tree.some((a) => normalize(a.name) === normalize(n)) && !out.some((o) => normalize(o) === normalize(n))) out.push(n);
+    return out;
+  }, [draft, customAreas, tree]);
+  // Quantos assuntos vão para cada destino (para conferir antes de criar)
+  const destinations = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const p of planned) count.set(p.area ?? AUTO, (count.get(p.area ?? AUTO) ?? 0) + 1);
+    return [...count.entries()].sort((a, b) => b[1] - a[1]);
+  }, [planned]);
+  const allKeys = useMemo(() => [...keyOf.values()], [keyOf]);
   const bonusCount = draft?.weeks.reduce((n, w) => n + w.items.filter((i) => i.bonus).length, 0) ?? 0;
   const noArea = draft?.weeks.reduce((n, w) => n + w.items.filter((i) => !i.marker && !i.area).length, 0) ?? 0;
   const touch = () => setPreview(null);
@@ -141,7 +243,11 @@ export default function PlanImportPage() {
   const payload = () => ({
     name: name.trim() || 'Cronograma',
     source: fileName,
-    items: planned.map((p) => ({ subject: p.subject, area: p.area === FALLBACK_AREA ? null : p.area, weekStart: p.weekStart, label: p.label, bonus: p.bonus })),
+    items: planned.map((p) => {
+      const v = p.area ?? AUTO;
+      const where = isId(v) ? { areaId: v.slice(3), area: null } : isNew(v) ? { area: v.slice(4) } : { area: null };
+      return { subject: p.subject, ...where, weekStart: p.weekStart, label: p.label, bonus: p.bonus };
+    }),
     schedule: { weekdays: schedule.weekdays, dailyMinutes: schedule.minutes },
   });
 
@@ -285,55 +391,85 @@ export default function PlanImportPage() {
             </div>
           </div>
 
-          {draft.colors.length > 0 && (
-            <div className="mt-5">
-              <h3 className="mb-1 text-sm font-semibold text-ink">Áreas pela cor</h3>
-              <p className="mb-2 text-xs text-ink2">
-                {Object.keys(draft.legend).length ? 'Li a legenda de cores do arquivo. Ajuste se algo não bater.' : 'Diga a que grande área corresponde cada cor.'}
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {draft.colors.map((c) => {
-                  const count = draft.weeks.reduce((n, w) => n + w.items.filter((i) => i.marker === c).length, 0);
-                  return (
-                    <label key={c} className="flex items-center gap-2 text-sm">
-                      <span className="h-4 w-4 shrink-0 rounded" style={{ background: c }} aria-hidden />
-                      <select
-                        className="input min-w-0 flex-1 py-1.5"
-                        value={colorArea[c] ?? ''}
-                        onChange={(e) => {
-                          setColorArea({ ...colorArea, [c]: e.target.value });
-                          touch();
-                        }}
-                        aria-label={`Área da cor ${c}`}
-                      >
-                        <option value="">Escolha a área…</option>
-                        {areaOptions.map((a) => (
-                          <option key={a} value={a}>
-                            {a}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="num w-8 shrink-0 text-right text-xs text-muted">{count}</span>
-                    </label>
-                  );
-                })}
-              </div>
+          <section className="mt-5 rounded-2xl border border-line p-3">
+            <h3 className="text-sm font-semibold text-ink">Para onde vão os assuntos</h3>
+            <p className="mb-3 mt-0.5 text-xs text-ink2">
+              Escolha a grande área ou a subárea de cada assunto — inclusive as que você criou em Áreas e assuntos. Dá para mandar todos de uma vez, uma semana inteira ou
+              assunto por assunto (na lista de semanas abaixo).
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block">
+                <span className="label">Mandar todos os assuntos para</span>
+                <AreaSelect tree={tree} newNames={newNames} value="" placeholder="Escolha a área…" onChange={(v) => (sendTo(allKeys, v), setDefaultArea(v))} ariaLabel="Mandar todos os assuntos para" />
+              </label>
+              <label className="block">
+                <span className="label">{noArea > 0 ? plural(noArea, 'assunto sem área definida vai', 'assuntos sem área definida vão') : 'Assuntos sem área definida vão'} para</span>
+                <AreaSelect tree={tree} newNames={newNames} value={toValue(defaultArea)} onChange={(v) => (setDefaultArea(v), touch())} ariaLabel="Área dos assuntos sem área definida" />
+              </label>
             </div>
-          )}
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <Input
+                label="Área que ainda não existe"
+                placeholder="Ex.: Oftalmologia"
+                value={newAreaName}
+                maxLength={120}
+                onChange={(e) => setNewAreaName(e.target.value)}
+                className="sm:w-64"
+              />
+              <Button
+                variant="secondary"
+                icon={<Plus className="h-4 w-4" />}
+                disabled={!newAreaName.trim()}
+                onClick={() => {
+                  const n = newAreaName.trim();
+                  setCustomAreas((cur) => (cur.includes(n) ? cur : [...cur, n]));
+                  setNewAreaName('');
+                }}
+              >
+                Pôr na lista
+              </Button>
+            </div>
+
+            {draft.colors.length > 0 && (
+              <div className="mt-4">
+                <h4 className="mb-1 text-sm font-medium text-ink">Pela cor do arquivo</h4>
+                <p className="mb-2 text-xs text-ink2">
+                  {Object.keys(draft.legend).length ? 'Li a legenda de cores do arquivo. Ajuste se algo não bater.' : 'Diga a que área corresponde cada cor.'}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {draft.colors.map((c) => {
+                    const count = draft.weeks.reduce((n, w) => n + w.items.filter((i) => i.marker === c).length, 0);
+                    return (
+                      <label key={c} className="flex items-center gap-2 text-sm">
+                        <span className="h-4 w-4 shrink-0 rounded" style={{ background: c }} aria-hidden />
+                        <AreaSelect
+                          tree={tree}
+                          newNames={newNames}
+                          value={toValue(colorArea[c])}
+                          placeholder="Escolha a área…"
+                          onChange={(v) => {
+                            setColorArea({ ...colorArea, [c]: v });
+                            touch();
+                          }}
+                          className="min-w-0 flex-1 py-1.5"
+                          ariaLabel={`Área da cor ${c}`}
+                        />
+                        <span className="num w-8 shrink-0 text-right text-xs text-muted">{count}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {destinations.length > 0 && (
+              <p className="mt-3 text-xs text-ink2">
+                <span className="font-medium text-ink">Vão para:</span> {destinations.map(([v, n]) => `${labelOf(v)} (${n})`).join(' · ')}
+              </p>
+            )}
+          </section>
 
           <div className="mt-4 flex flex-wrap items-end gap-4">
-            {noArea > 0 && (
-              <label className="block">
-                <span className="label">{plural(noArea, 'assunto sem área definida vai', 'assuntos sem área definida vão')} para</span>
-                <select className="input" value={defaultArea} onChange={(e) => (setDefaultArea(e.target.value), touch())}>
-                  {areaOptions.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
             {bonusCount > 0 && (
               <label className="flex items-center gap-2 pb-2 text-sm text-ink">
                 <input type="checkbox" checked={bonus} onChange={(e) => (setBonus(e.target.checked), touch())} className="h-4 w-4 accent-[var(--accent)]" />
@@ -348,11 +484,22 @@ export default function PlanImportPage() {
               const weekPlanned = planned.find((p) => p.label === w.label && !p.bonus)?.weekStart;
               return (
                 <section key={wi} className="rounded-2xl border border-line p-3">
-                  <p className="mb-2 text-sm font-medium text-ink">
-                    {w.label}
-                    {weekPlanned && <span className="num font-normal text-ink2"> · {`${fmtShort(weekPlanned)} a ${fmtShort(addDays(weekPlanned, 6))}`}</span>}
-                    {w.date && !useFileDates && <span className="num text-xs font-normal text-muted"> (no arquivo: {fmtFull(w.date)})</span>}
-                  </p>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-ink">
+                      {w.label}
+                      {weekPlanned && <span className="num font-normal text-ink2"> · {`${fmtShort(weekPlanned)} a ${fmtShort(addDays(weekPlanned, 6))}`}</span>}
+                      {w.date && !useFileDates && <span className="num text-xs font-normal text-muted"> (no arquivo: {fmtFull(w.date)})</span>}
+                    </p>
+                    <AreaSelect
+                      tree={tree}
+                      newNames={newNames}
+                      value=""
+                      placeholder="Mandar a semana para…"
+                      onChange={(v) => sendTo(w.items.map((_, ii) => `${wi}:${ii}`), v)}
+                      className="w-44 py-1 text-xs sm:w-56"
+                      ariaLabel={`Mandar todos de ${w.label} para`}
+                    />
+                  </div>
                   <ul className="space-y-1">
                     {w.items.map((it, ii) => {
                       const key = `${wi}:${ii}`;
@@ -378,21 +525,17 @@ export default function PlanImportPage() {
                             {it.subject}
                             {it.bonus && <span className="text-xs text-muted"> · bônus{it.date ? ` ${fmtShort(it.date)}` : ''}</span>}
                           </span>
-                          <select
-                            className="input w-36 shrink-0 py-1 text-xs sm:w-48"
+                          <AreaSelect
+                            tree={tree}
+                            newNames={newNames}
                             value={areaOf(it)}
-                            onChange={(e) => {
-                              setOverrides({ ...overrides, [key]: e.target.value });
+                            onChange={(v) => {
+                              setOverrides({ ...overrides, [key]: v });
                               touch();
                             }}
-                            aria-label={`Área de ${it.subject}`}
-                          >
-                            {areaOptions.map((a) => (
-                              <option key={a} value={a}>
-                                {a}
-                              </option>
-                            ))}
-                          </select>
+                            className="w-36 shrink-0 py-1 text-xs sm:w-56"
+                            ariaLabel={`Área de ${it.subject}`}
+                          />
                         </li>
                       );
                     })}

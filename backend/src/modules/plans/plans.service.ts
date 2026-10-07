@@ -19,6 +19,9 @@ export interface PlanItemInput {
   /** Assunto que já existe na conta (cronograma montado na plataforma); sem ele, procura pelo nome */
   subjectId?: string | null;
   subject: string;
+  /** Área ou subárea da conta escolhida para o assunto (tem prioridade sobre `area`) */
+  areaId?: string | null;
+  /** Nome da grande área (criada se não existir); sem área: procura o assunto pelo nome */
   area?: string | null;
   weekStart: string;
   label?: string | null;
@@ -209,6 +212,7 @@ async function resolveSubjects(tx: Tx | typeof prisma, userId: string, items: Pl
   const toCreate = new Map<string, { areaId: string; name: string }>();
   const target: { subjectId: string | null; key: string; created: boolean }[] = [];
   const owned = new Set(subjects.map((s) => s.id));
+  const ownedAreas = new Set(areas.map((a) => a.id));
   for (const item of items) {
     // Escolhido na lista de assuntos da pessoa: usa esse mesmo
     if (item.subjectId) {
@@ -218,6 +222,18 @@ async function resolveSubjects(tx: Tx | typeof prisma, userId: string, items: Pl
     }
     const name = cleanName(item.subject).slice(0, 160);
     const key = normName(name);
+    // Área ou subárea escolhida: o assunto de mesmo nome na grande área é aproveitado; senão é criado ali
+    if (item.areaId) {
+      if (!ownedAreas.has(item.areaId)) throw badRequest('Área não encontrada');
+      const found = inTop.get(`${topOf.get(item.areaId)}|${key}`);
+      if (found) {
+        target.push({ subjectId: found, key, created: false });
+        continue;
+      }
+      toCreate.set(`${item.areaId}|${key}`, { areaId: item.areaId, name });
+      target.push({ subjectId: null, key: `${item.areaId}|${key}`, created: true });
+      continue;
+    }
     // Sem área: aproveita um assunto de mesmo nome em qualquer área, se for único
     if (!item.area && anywhere.get(key)?.length === 1) {
       target.push({ subjectId: anywhere.get(key)![0], key, created: false });
