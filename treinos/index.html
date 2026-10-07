@@ -4,6 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pulso do Treino</title>
+<!-- pwa -->
+<meta name="description" content="Importe o arquivo do treino (TCX, FIT, GPX ou CSV) e veja a frequência cardíaca, o tempo em cada zona e o histórico para comparar treinos.">
+<meta name="theme-color" content="#14181F">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icones/favicon-32.png">
+<link rel="icon" type="image/svg+xml" href="icones/icone.svg">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pulso">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Pulso do Treino">
+<meta property="og:description" content="Frequência cardíaca, tempo em cada zona e o histórico dos seus treinos para comparar.">
+<meta property="og:url" content="https://guiwemery-pixel.github.io/projetoresidencia/treinos/">
+<meta property="og:image" content="https://guiwemery-pixel.github.io/projetoresidencia/treinos/capa.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /pwa -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap">
@@ -265,11 +285,12 @@ details[open] > summary { margin-bottom: 10px; }
 <div class="app">
   <header class="topo">
     <div class="marca">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" style="fill:var(--ink)"/><path d="M4 18h6l3-8 4 13 3-9 2 4h6" style="fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round"/></svg>
+      <svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="marca-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F28C4A" stop-opacity=".42"/><stop offset="1" stop-color="#F28C4A" stop-opacity="0"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#14181F"/><path d="M64 292H168L204 226L246 350L292 118L336 292H448V448H64Z" fill="url(#marca-g)"/><path d="M64 292H168L204 226L246 350L292 118L336 292H448" fill="none" stroke="#F28C4A" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/><circle cx="292" cy="118" r="20" fill="#F2EEE6" stroke="#14181F" stroke-width="10"/></svg>
       <span>Pulso do Treino</span>
     </div>
     <div class="topo-acoes">
       <span id="selo" class="selo" data-tipo="carregando">Carregando…</span>
+      <button class="btn" id="instalar" hidden>Instalar app</button>
       <label class="btn btn-acento" for="arquivo">Importar treino</label>
       <input id="arquivo" class="oculto-visual" type="file" multiple>
     </div>
@@ -833,6 +854,7 @@ function idbTx(db, lojas, modo, fn) {
 }
 async function armazemLocal() {
   const db = await idbAbrir();
+  try { navigator.storage?.persist?.().catch(() => {}); } catch (e) { /* opcional */ }
   return {
     tipo: 'local',
     listar: () => idbTx(db, 'treinos', 'readonly', tx => tx.objectStore('treinos').getAll()),
@@ -1626,6 +1648,7 @@ function renderZonas() {
         <td data-faixa="${z}">${esc(faixaZona(z, Z.limites))}</td></tr>`).join('')}
     </tbody></table></div>
     <div class="botoes"><button class="btn btn-sm" id="z-padrao">Voltar ao padrão (50, 60, 70, 80 e 90%)</button></div></section>
+    ${comoApp()}
     <section class="card"><div class="card-topo"><div><p class="sobretitulo">Seus dados</p><h2>Backup do histórico</h2></div></div>
       <p class="texto">${Armazem?.tipo === 'nuvem' ? 'Os treinos estão guardados neste app, na sua conta do Claude, e aparecem em qualquer aparelho em que você abrir este link.' : Armazem?.tipo === 'local' ? 'Os treinos estão guardados neste navegador. Se você limpar os dados do navegador ou trocar de aparelho, eles somem: exporte um backup de vez em quando.' : 'Este navegador não permite guardar dados. Os treinos ficam só até fechar a página: exporte um backup.'}</p>
       <p class="texto">O backup é um arquivo .json com todos os treinos e as zonas. Para restaurar, use o botão Importar treino e escolha o arquivo do backup.</p>
@@ -1666,6 +1689,30 @@ function renderZonas() {
     E.series.clear(); E.cmp = []; E.corCmp.clear(); E.atual = null; E.confirmarApagar = false;
     toast('Histórico apagado.'); renderZonas(); atualizarSelo();
   });
+}
+
+// ================= aplicativo instalável =================
+let pedidoInstalacao = null;
+const ehSite = () => /^https?:$/.test(location.protocol) && !!$('link[rel="manifest"]');
+const instalado = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function comoApp() {
+  if (!ehSite() || instalado()) return '';
+  return `<section class="card"><div class="card-topo"><div><p class="sobretitulo">Na tela inicial</p><h2>Usar como aplicativo</h2></div></div>
+    <p class="texto">Instale o Pulso do Treino para abrir pelo ícone, em tela cheia e mesmo sem internet. Os treinos continuam guardados neste aparelho.</p>
+    <ul class="refs" style="font-size:14px;color:var(--ink-2)"><li>Android (Chrome): menu ⋮ › <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li><li>iPhone (Safari): botão Compartilhar › <b>Adicionar à Tela de Início</b>.</li><li>Computador (Chrome ou Edge): ícone de instalar na barra de endereço.</li></ul>
+    ${pedidoInstalacao ? '<div class="botoes"><button class="btn btn-acento" data-instalar>Instalar agora</button></div>' : ''}</section>`;
+}
+async function instalar() {
+  if (!pedidoInstalacao) return;
+  const p = pedidoInstalacao; pedidoInstalacao = null; $('#instalar').hidden = true;
+  p.prompt(); try { await p.userChoice; } catch (e) { /* recusado */ }
+}
+function ligarInstalacao() {
+  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); pedidoInstalacao = ev; $('#instalar').hidden = false; });
+  window.addEventListener('appinstalled', () => { pedidoInstalacao = null; $('#instalar').hidden = true; toast('Pulso do Treino instalado. O ícone está na tela inicial.'); });
+  $('#instalar').addEventListener('click', instalar);
+  document.addEventListener('click', ev => { if (ev.target.closest('[data-instalar]')) instalar(); });
+  if (ehSite() && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* segue sem modo offline */ });
 }
 
 // ================= navegação e eventos =================
@@ -1715,6 +1762,7 @@ function ligarEventos() {
 
 async function iniciar() {
   ligarEventos();
+  ligarInstalacao();
   const h = (location.hash || '').slice(1);
   if (['historico', 'comparar', 'zonas'].includes(h)) mostrarAba(h);
   try {
