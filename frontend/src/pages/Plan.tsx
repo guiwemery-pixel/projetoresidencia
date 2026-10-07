@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, CalendarPlus, Clock, Trash2, Upload } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Clock, Plus, Trash2, Upload } from 'lucide-react';
 import { api } from '../api/client';
 import type { PlanItem, PlanSummary } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
@@ -161,10 +161,16 @@ export default function PlanPage() {
     document.getElementById('semana-atual')?.scrollIntoView({ block: 'start' });
   }, [weeks]);
 
+  // Criar na plataforma (escolhendo os assuntos) ou importar o PDF do cursinho
   const importButton = (
-    <Link to="/cronograma/importar" className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
-      <Upload className="h-4 w-4" /> Importar cronograma
-    </Link>
+    <div className="flex flex-wrap gap-2">
+      <Link to="/cronograma/criar" className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+        <Plus className="h-4 w-4" /> Criar cronograma
+      </Link>
+      <Link to="/cronograma/importar" className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-subtle">
+        <Upload className="h-4 w-4" /> Importar do cursinho
+      </Link>
+    </div>
   );
 
   if (plans.isLoading) return <Loading />;
@@ -176,8 +182,8 @@ export default function PlanPage() {
 
       {!plans.data?.length ? (
         <EmptyState icon="🗓️" title="Nenhum cronograma ainda" action={importButton}>
-          Importe o PDF do cronograma do seu cursinho (ex.: “Módulo 01 – 13/01 · Hipertensão, Hérnias…”). Cada assunto entra na sua semana, aparece no calendário e, depois de
-          estudado, ganha revisões automáticas.
+          Monte o seu cronograma escolhendo os assuntos e o ritmo (ex.: 5 por semana, ou até a data da prova), ou importe o PDF do cronograma do seu cursinho. Cada assunto entra
+          no seu dia de estudo, aparece no calendário e, depois de estudado, ganha revisões automáticas.
         </EmptyState>
       ) : (
         <>
@@ -216,6 +222,12 @@ export default function PlanPage() {
                   <ProgressBar value={plan.data.total ? (plan.data.done / plan.data.total) * 100 : 0} label="Progresso do cronograma" />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
+                  <Link
+                    to={`/cronograma/criar?plano=${plan.data.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-subtle"
+                  >
+                    <Plus className="h-4 w-4" /> Acrescentar assuntos
+                  </Link>
                   <Button variant="secondary" size="sm" icon={<CalendarDays className="h-4 w-4" />} onClick={() => setDialog('days')}>
                     Dias de estudo
                   </Button>

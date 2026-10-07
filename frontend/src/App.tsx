@@ -25,6 +25,7 @@ const PrintWeekPage = lazy(() => import('./pages/PrintWeek'));
 const ImportPage = lazy(() => import('./pages/Import'));
 const PlanPage = lazy(() => import('./pages/Plan'));
 const PlanImportPage = lazy(() => import('./pages/PlanImport'));
+const PlanCreatePage = lazy(() => import('./pages/PlanCreate'));
 const FlashcardsPage = lazy(() => import('./pages/Flashcards'));
 const FlashcardsAppPage = lazy(() => import('./pages/FlashcardsApp'));
 const AdminPage = lazy(() => import('./pages/Admin'));
@@ -91,6 +92,7 @@ export function App() {
           ['calendario', <CalendarPage />],
           ['cronograma', <PlanPage />],
           ['cronograma/importar', <PlanImportPage />],
+          ['cronograma/criar', <PlanCreatePage />],
           ['metricas', <MetricsPage />],
           ['estudos', <StudiesPage />],
           ['importar', <ImportPage />],

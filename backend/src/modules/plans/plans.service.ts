@@ -6,6 +6,7 @@ import { addDays, diffDays } from '../scheduler/dates.js';
 import { getAreaMap } from '../taxonomy/taxonomy.service.js';
 import { DEFAULT_AREA, areaKey, cleanName, normName } from '../import/import.service.js';
 import { SIZE_WEIGHT, planWeek, type WeekItem } from './distribute.js';
+import { composeWeeks, weeksUntil, type ComposeOrder, type Pace } from './compose.js';
 
 // Cronograma: assuntos previstos por semana (ex.: o cronograma do cursinho).
 // Dentro da semana, cada assunto tem um dia previsto, distribuído pelos dias de
@@ -15,6 +16,8 @@ import { SIZE_WEIGHT, planWeek, type WeekItem } from './distribute.js';
 // conclui o item; excluir esse estudo o devolve para pendente.
 
 export interface PlanItemInput {
+  /** Assunto que já existe na conta (cronograma montado na plataforma); sem ele, procura pelo nome */
+  subjectId?: string | null;
   subject: string;
   area?: string | null;
   weekStart: string;
@@ -205,7 +208,14 @@ async function resolveSubjects(tx: Tx | typeof prisma, userId: string, items: Pl
   const newAreas: string[] = [];
   const toCreate = new Map<string, { areaId: string; name: string }>();
   const target: { subjectId: string | null; key: string; created: boolean }[] = [];
+  const owned = new Set(subjects.map((s) => s.id));
   for (const item of items) {
+    // Escolhido na lista de assuntos da pessoa: usa esse mesmo
+    if (item.subjectId) {
+      if (!owned.has(item.subjectId)) throw badRequest('Assunto não encontrado');
+      target.push({ subjectId: item.subjectId, key: item.subjectId, created: false });
+      continue;
+    }
     const name = cleanName(item.subject).slice(0, 160);
     const key = normName(name);
     // Sem área: aproveita um assunto de mesmo nome em qualquer área, se for único
@@ -384,6 +394,143 @@ export async function createPlan(userId: string, input: PlanInput, today: string
       });
       await distributeItems(tx, userId, today, schedule.weekdays, plan.id);
       return { id: plan.id, items: input.items.length, newSubjects: r.newSubjects, newAreas: [...new Set(r.newAreas)] };
+    },
+    { timeout: 60_000, maxWait: 10_000 },
+  );
+}
+
+// ── Montar um cronograma na plataforma (sem PDF) ─────────────────────────
+
+export type ComposeSubjectInput = { subjectId: string } | { name: string; area?: string | null };
+
+export interface ComposeInput {
+  name?: string;
+  /** Acrescentar a um cronograma que já existe (em vez de criar outro) */
+  planId?: string;
+  start: string;
+  pace: Pace;
+  order: ComposeOrder;
+  subjects: ComposeSubjectInput[];
+  schedule?: StudySchedule | null;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Os itens do cronograma montado: cada assunto na sua semana, com o rótulo da semana. */
+async function composeItems(userId: string, input: ComposeInput) {
+  if (!input.subjects.length) throw badRequest('Escolha pelo menos um assunto');
+  if (input.pace.kind === 'until' && input.pace.until < input.start) throw badRequest('A data final vem antes do início');
+  if (input.pace.kind === 'until' && weeksUntil(input.start, input.pace.until) > 260) throw badRequest('Período longo demais (até 5 anos)');
+  const plan = input.planId ? await prisma.studyPlan.findFirst({ where: { id: input.planId, userId }, select: { id: true } }) : null;
+  if (input.planId && !plan) throw notFound('Cronograma não encontrado');
+
+  const ids = input.subjects.flatMap((s) => ('subjectId' in s ? [s.subjectId] : []));
+  const [rows, areas, existing] = await Promise.all([
+    ids.length ? prisma.subject.findMany({ where: { userId, id: { in: ids } }, select: { id: true, name: true, areaId: true } }) : Promise.resolve([]),
+    prisma.area.findMany({ where: { userId }, select: { id: true, name: true, parentId: true } }),
+    plan
+      ? prisma.planItem.findMany({ where: { planId: plan.id }, select: { subjectId: true, status: true, weekStart: true, label: true } })
+      : Promise.resolve([]),
+  ]);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const areaById = new Map(areas.map((a) => [a.id, a]));
+  const topName = (areaId: string) => {
+    const a = areaById.get(areaId);
+    return a ? (a.parentId ? (areaById.get(a.parentId)?.name ?? a.name) : a.name) : null;
+  };
+  // Já pendente neste cronograma: não entra de novo
+  const pendingInPlan = new Set(existing.filter((i) => i.status === 'PENDING').map((i) => i.subjectId));
+
+  const seen = new Set<string>();
+  const list: { subjectId: string | null; name: string; area: string | null }[] = [];
+  let skipped = 0;
+  for (const s of input.subjects) {
+    if ('subjectId' in s) {
+      const row = byId.get(s.subjectId);
+      if (!row) throw badRequest('Assunto não encontrado');
+      if (seen.has(row.id) || pendingInPlan.has(row.id)) {
+        skipped++;
+        continue;
+      }
+      seen.add(row.id);
+      list.push({ subjectId: row.id, name: row.name, area: topName(row.areaId) });
+    } else {
+      const name = cleanName(s.name).slice(0, 160);
+      if (!name) continue;
+      const area = s.area ? cleanName(s.area) : null;
+      const key = `${areaKey(area ?? '')}|${normName(name)}`;
+      if (seen.has(key)) {
+        skipped++;
+        continue;
+      }
+      seen.add(key);
+      list.push({ subjectId: null, name, area });
+    }
+  }
+  if (!list.length) throw badRequest('Todos os assuntos escolhidos já estão neste cronograma');
+
+  const placed = composeWeeks(list, { start: input.start, pace: input.pace, order: input.order });
+  // Rótulo de cada semana: o que a semana já tinha no cronograma, ou "Semana NN" na ordem das semanas
+  const labelOf = new Map<string, string>();
+  for (const i of existing) if (i.label && !/b[oô]nus/i.test(i.label)) labelOf.set(fromDb(i.weekStart), i.label);
+  const allWeeks = [...new Set([...existing.map((i) => fromDb(i.weekStart)), ...placed.map((p) => p.weekStart)])].sort();
+  const label = (w: string) => labelOf.get(w) ?? `Semana ${pad2(allWeeks.indexOf(w) + 1)}`;
+  const items: PlanItemInput[] = placed.map((p) => ({
+    subjectId: p.subject.subjectId,
+    subject: p.subject.name,
+    area: p.subject.area,
+    weekStart: p.weekStart,
+    label: label(p.weekStart),
+  }));
+  return { items, skipped, planId: plan?.id ?? null };
+}
+
+/** Como fica o cronograma montado: as semanas com os assuntos, e o tempo por assunto pelos dias e horas. */
+export async function previewCompose(userId: string, input: ComposeInput, today: string) {
+  const { items, skipped } = await composeItems(userId, input);
+  const schedule = input.schedule ? cleanSchedule(input.schedule) : await userSchedule(prisma, userId);
+  const r = await resolveSubjects(prisma, userId, items, false);
+  const weeks = new Map<string, { weekStart: string; label: string; subjects: { name: string; area: string | null }[] }>();
+  for (const i of items) {
+    const w = weeks.get(i.weekStart) ?? { weekStart: i.weekStart, label: i.label ?? '', subjects: [] };
+    w.subjects.push({ name: i.subject, area: i.area ?? null });
+    weeks.set(i.weekStart, w);
+  }
+  const list = [...weeks.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  return {
+    items: items.length,
+    skipped,
+    newSubjects: r.newSubjects,
+    newAreas: [...new Set(r.newAreas)],
+    firstWeek: list[0].weekStart,
+    lastWeek: list[list.length - 1].weekStart,
+    weeks: list,
+    distribution: previewDistribution(items, schedule, today),
+  };
+}
+
+/** Cria o cronograma montado (ou acrescenta os assuntos a um que já existe) e distribui pelos dias de estudo. */
+export async function createComposed(userId: string, input: ComposeInput, today: string) {
+  const { items, planId } = await composeItems(userId, input);
+  if (!planId) return createPlan(userId, { name: input.name?.trim() || 'Meu cronograma', source: null, items, schedule: input.schedule }, today);
+  return prisma.$transaction(
+    async (tx) => {
+      const schedule = input.schedule ? await saveSchedule(tx, userId, input.schedule) : await userSchedule(tx, userId);
+      const r = await resolveSubjects(tx, userId, items, true);
+      const offset = await tx.planItem.count({ where: { planId } });
+      await tx.planItem.createMany({
+        data: items.map((item, i) => ({
+          userId,
+          planId,
+          subjectId: r.target[i].subjectId!,
+          weekStart: toDb(item.weekStart),
+          label: item.label ? cleanName(item.label).slice(0, 60) : null,
+          position: offset + i,
+          createdSubject: r.target[i].created,
+        })),
+      });
+      await distributeItems(tx, userId, today, schedule.weekdays, planId);
+      return { id: planId, items: items.length, newSubjects: r.newSubjects, newAreas: [...new Set(r.newAreas)] };
     },
     { timeout: 60_000, maxWait: 10_000 },
   );

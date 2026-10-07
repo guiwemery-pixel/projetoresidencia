@@ -19,6 +19,7 @@ const planSchema = z.object({
   items: z
     .array(
       z.object({
+        subjectId: z.string().min(1).max(40).nullish(),
         subject: z.string().trim().min(1).max(160),
         area: z.string().trim().max(120).nullish(),
         weekStart: dateString,
@@ -55,6 +56,31 @@ plansRouter.post('/preview', async (req, res) => {
 
 plansRouter.post('/', async (req, res) => {
   res.status(201).json(await svc.createPlan(currentUser(req).id, parse(planSchema, req.body), today(req)));
+});
+
+// Montar um cronograma na plataforma: assuntos escolhidos, ritmo e ordem
+const composeSchema = z.object({
+  name: z.string().trim().max(120).optional(),
+  planId: z.string().min(1).max(40).optional(),
+  start: dateString,
+  pace: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('perWeek'), perWeek: z.number().int().min(1, 'Pelo menos 1 assunto por semana').max(60) }),
+    z.object({ kind: z.literal('until'), until: dateString }),
+  ]),
+  order: z.enum(['interleave', 'sequence']),
+  subjects: z
+    .array(z.union([z.object({ subjectId: z.string().min(1).max(40) }), z.object({ name: z.string().trim().min(1).max(160), area: z.string().trim().max(120).nullish() })]))
+    .min(1, 'Escolha pelo menos um assunto')
+    .max(1000),
+  schedule: scheduleSchema.nullish(),
+});
+
+plansRouter.post('/compose/preview', async (req, res) => {
+  res.json(await svc.previewCompose(currentUser(req).id, parse(composeSchema, req.body), today(req)));
+});
+
+plansRouter.post('/compose', async (req, res) => {
+  res.status(201).json(await svc.createComposed(currentUser(req).id, parse(composeSchema, req.body), today(req)));
 });
 
 /** Dias e horas de estudo: salva e distribui os assuntos de cada semana por esses dias. */
