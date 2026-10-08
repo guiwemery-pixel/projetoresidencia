@@ -24,6 +24,8 @@
     weakIncludeQuick: false,
     // Revisão
     showPathInReview: true,
+    // Na revisão, depois de mostrar a resposta, Espaço vale esta nota (1 Errei … 5 Fácil)
+    spaceRating: 3,
     // Cronômetro de estudo (opcional): relógio no cabeçalho; o tempo vai para o "Registrar estudo"
     studyTimer: false,
     studyTimerAuto: true, // inicia ao começar uma revisão e pausa ao sair dela
