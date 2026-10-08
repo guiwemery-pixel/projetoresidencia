@@ -37,6 +37,7 @@ import { fmtRelative } from '../../lib/format';
 import { useStudyDialog } from '../study/StudyDialog';
 import { Avatar, IconButton, cx } from '../ui';
 import { OfflineBar } from './OfflineBar';
+import { EmailConfirmBar } from './EmailConfirmBar';
 
 const NAV = [
   { to: '/', label: 'Início', icon: Home, end: true },
@@ -278,6 +279,7 @@ export function AppLayout() {
         </header>
 
         <OfflineBar />
+        <EmailConfirmBar />
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 sm:px-6 lg:pb-10">
           <Outlet />
         </main>

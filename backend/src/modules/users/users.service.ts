@@ -1,6 +1,7 @@
 import type { User } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { isAdmin } from '../admin/admin.service.js';
+import { mailEnabled } from '../mail/mailer.js';
 import { readExplanation } from '../reviews/explanation-codec.js';
 import { TEMPLATES, applyTemplate, type TemplateKey } from '../taxonomy/templates/index.js';
 
@@ -10,6 +11,9 @@ export function toPrivateUser(user: User) {
     id: user.id,
     name: user.name,
     email: user.email,
+    emailVerified: !!user.emailVerifiedAt,
+    // Conta gratuita para sempre (nunca é cobrada)
+    freeAccess: user.freeAccess,
     avatar: user.avatar,
     timezone: user.timezone,
     domain: user.domain,
@@ -27,9 +31,12 @@ export function toPrivateUser(user: User) {
   };
 }
 
-/** Dados do próprio usuário para a sessão do site: inclui se ele administra o site. */
+/**
+ * Dados do próprio usuário para a sessão do site: inclui se ele administra o site e se
+ * falta confirmar o e-mail (só quando o site manda e-mails; aí aparece o aviso).
+ */
 export async function sessionUser(user: User) {
-  return { ...toPrivateUser(user), isAdmin: await isAdmin(user.email) };
+  return { ...toPrivateUser(user), isAdmin: await isAdmin(user.email), emailConfirmationPending: !user.emailVerifiedAt && mailEnabled() };
 }
 
 export async function getSettings(userId: string) {

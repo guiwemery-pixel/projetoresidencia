@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { parse } from '../../lib/validation.js';
 import { currentUser } from '../../middleware/auth.js';
-import { addEmails, overview, removeEmail, requireAdmin, setSignupMode } from './admin.service.js';
+import { addEmails, overview, removeEmail, requireAdmin, setFreeAccess, setSignupMode } from './admin.service.js';
 
 // Página "Administração" (/admin): só para administradores do site
 export const adminRouter = Router();
@@ -41,5 +41,12 @@ adminRouter.delete('/emails/:email', async (req, res) => {
 adminRouter.put('/signup', async (req, res) => {
   const { mode } = parse(z.object({ mode: z.enum(['open', 'invite']) }), req.body);
   await setSignupMode(mode);
+  res.json(await overview());
+});
+
+/** Conta gratuita para sempre: não é cobrada quando o site passar a cobrar. */
+adminRouter.put('/users/:email/free', async (req, res) => {
+  const { free } = parse(z.object({ free: z.boolean() }), req.body);
+  await setFreeAccess(req.params.email, free);
   res.json(await overview());
 });

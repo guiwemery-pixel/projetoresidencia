@@ -1,6 +1,7 @@
 import type { AccessRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { badRequest, forbidden } from '../../lib/errors.js';
+import { badRequest, forbidden, notFound } from '../../lib/errors.js';
+import { mailStatus } from '../mail/mailer.js';
 
 // Administração do site (página /admin): quem administra e quem pode criar conta.
 // - Administradores: os e-mails da variável PLATFORM_ADMIN_EMAILS (no Vercel) e os
@@ -65,7 +66,7 @@ export async function canRegister(emailRaw: string) {
 export async function overview() {
   const [rows, users, mode, bootstrap] = await Promise.all([
     prisma.accessEmail.findMany({ orderBy: [{ role: 'asc' }, { email: 'asc' }] }),
-    prisma.user.findMany({ orderBy: { createdAt: 'desc' }, select: { name: true, email: true, createdAt: true } }),
+    prisma.user.findMany({ orderBy: { createdAt: 'desc' }, select: { name: true, email: true, createdAt: true, freeAccess: true, emailVerifiedAt: true } }),
     signupMode(),
     bootstrapAdmin(),
   ]);
@@ -87,9 +88,10 @@ export async function overview() {
   const members = rows.filter((r) => r.role === 'MEMBER').map((r) => entry(r.email, 'MEMBER', 'site', r));
   return {
     signup: mode,
+    email: mailStatus(),
     admins,
     members,
-    users: users.map((u) => ({ name: u.name, email: u.email, createdAt: u.createdAt })),
+    users: users.map((u) => ({ name: u.name, email: u.email, createdAt: u.createdAt, freeAccess: u.freeAccess, emailVerified: !!u.emailVerifiedAt })),
   };
 }
 
@@ -108,6 +110,12 @@ export async function addEmails(text: string, role: AccessRole, note: string | n
     });
   }
   return emails.length;
+}
+
+/** Conta gratuita para sempre (nunca é cobrada) — ou tira a marca. */
+export async function setFreeAccess(emailRaw: string, free: boolean) {
+  const { count } = await prisma.user.updateMany({ where: { email: normalizeEmail(emailRaw) }, data: { freeAccess: free } });
+  if (!count) throw notFound('Não há conta com este e-mail.');
 }
 
 /** Tira o e-mail da lista. Nunca deixa o site sem administrador. */

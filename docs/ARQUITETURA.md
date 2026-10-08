@@ -43,7 +43,8 @@ Cada módulo em `backend/src/modules/<nome>` tem `*.service.ts` (regras de negó
 
 | Módulo | Responsabilidade |
 |---|---|
-| `auth` | Cadastro, login, logout, sessões (tokens opacos com hash no banco), hash de senha (bcrypt). |
+| `auth` | Cadastro, login, logout, sessões (tokens opacos com hash no banco), hash de senha (bcrypt). Links por e-mail (`email-links.service.ts`, tabela `email_tokens`): confirmar o e-mail (vale 3 dias; abrir de novo não dá erro) e **criar nova senha** (vale 1 hora, uma vez só; troca a senha, encerra todas as sessões, conta como e-mail confirmado e já entra). Rotas: `POST /auth/verify-email/send` (logado), `POST /auth/verify-email`, `POST /auth/forgot-password` (mesma resposta exista ou não a conta), `POST /auth/reset-password/check` e `POST /auth/reset-password`. Um link novo do mesmo tipo apaga os anteriores; pedidos com menos de 1 minuto de intervalo não mandam outro e-mail. Os links usam `APP_URL` (ou a origem do pedido). |
+| `mail` | Envio de e-mails pelo Resend, pela API HTTP (`mailer.ts`, sem SDK): com `RESEND_API_KEY` envia; sem ela, em produção fica desligado (o site esconde "Esqueci minha senha" e o aviso de confirmar), em desenvolvimento o e-mail sai no terminal e nos testes vai para a caixa `outbox`. `templates.ts`: confirmar e-mail, nova senha, senha alterada, **recibo** e **aviso de cobrança** (renovação, pagamento recusado, acesso pausado) — os dois últimos prontos para quando houver pagamento. |
 | `users` | Perfil, preferências de ritmo, privacidade, troca de senha, exportação, apagar progresso (`POST /me/reset`, com senha) e exclusão de conta. |
 | `groups` | Grupos, convites, papéis (dono/membro) e o **painel do grupo**. |
 | `taxonomy` | Área → Subárea → Assunto, mover/renomear/arquivar, templates por área do conhecimento. |
@@ -100,9 +101,12 @@ histórico do assunto é **reprocessado do zero** (o motor é determinístico), 
 4. **Sessões:** token aleatório de 256 bits em cookie `httpOnly`, `SameSite=Lax` e `Secure` em
    produção; o banco guarda apenas o SHA-256 do token. Troca de senha encerra as outras sessões.
 5. **Senhas:** bcrypt (custo 12); resposta de login com tempo equalizado para e-mails inexistentes.
+   **Esqueci minha senha:** link com token aleatório de 256 bits (o banco guarda só o hash), válido por
+   1 hora e uma única vez; a resposta é a mesma exista ou não a conta; a troca encerra todas as sessões
+   e manda um aviso de "senha alterada" para o e-mail da conta.
 6. **CSRF:** cookie `SameSite=Lax` + API só JSON + verificação de `Origin` em requisições que alteram dados.
 7. **Cabeçalhos:** `helmet` com Content-Security-Policy restritiva (sem scripts inline).
-8. **Força bruta:** limite de tentativas em login/cadastro e em códigos de convite.
+8. **Força bruta:** limite de tentativas em login/cadastro e em códigos de convite; pedidos que mandam e-mail têm limite próprio (10 por hora por endereço de rede) e intervalo mínimo de 1 minuto por conta.
 9. **Validação:** toda entrada passa por Zod; avatares só como imagem (PNG/JPEG/WebP) pequena ou link https.
 10. **LGPD:** exportação de todos os dados (JSON), apagar o próprio progresso sem excluir a conta e exclusão definitiva da conta pelo próprio usuário.
 
@@ -112,7 +116,8 @@ Tabelas principais (ver `backend/prisma/schema.prisma`):
 
 | Tabela | Conteúdo |
 |---|---|
-| `users`, `sessions` | Conta, preferências (fuso, ritmo, compartilhamento) e sessões ativas. |
+| `users`, `sessions` | Conta, preferências (fuso, ritmo, compartilhamento) e sessões ativas. `users.email_verified_at` (e-mail confirmado) e `users.free_access` (conta **gratuita para sempre**: nunca é cobrada — a migração `20261008130000_free_accounts` marcou todas as contas que já existiam; a Administração liga e desliga em *Contas no site*). |
+| `email_tokens` | Links enviados por e-mail (confirmar e-mail, nova senha): só o hash SHA-256 do token, o e-mail de destino, validade e quando foi usado. A faxina diária apaga os usados ou vencidos há mais de um dia. |
 | `groups`, `group_members` | Grupos e participação (N:N, com papel). |
 | `areas` | Árvore Área → Subárea (`parent_id`), por usuário. |
 | `subjects` | Assuntos (tamanho, tags, arquivado). |

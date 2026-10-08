@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { resolveDatabaseUrl } from './database-url.js';
 
+// Variável criada vazia no painel da hospedagem vale como não definida
+const blank = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3333),
@@ -29,6 +32,16 @@ const schema = z.object({
   // E-mails (separados por vírgula) que podem publicar os "Cards da plataforma" (ficam no R2).
   // Lida em modules/flashcards/platform.ts.
   PLATFORM_ADMIN_EMAILS: z.string().optional(),
+  // E-mails (confirmar cadastro, nova senha, avisos) pelo Resend. Sem a chave, em produção
+  // os e-mails ficam desligados; em desenvolvimento aparecem no terminal. Ver modules/mail.
+  RESEND_API_KEY: z.preprocess(blank, z.string().optional()),
+  // Remetente: "Nome <endereco@dominio-verificado-no-resend>"
+  EMAIL_FROM: z.preprocess(blank, z.string().default('Projeto Residente <onboarding@resend.dev>')),
+  // Para onde vão as respostas (ex.: e-mail de suporte). Opcional.
+  EMAIL_REPLY_TO: z.preprocess(blank, z.string().optional()),
+  // Endereço do site usado nos links dos e-mails (ex.: https://projetoresidente.com.br).
+  // Sem ele, usa o endereço de onde veio o pedido.
+  APP_URL: z.preprocess(blank, z.string().url('APP_URL deve ser um endereço completo, com https://').optional()),
 });
 
 // Aceita a URL do banco com outros nomes/prefixos (integrações do Vercel)

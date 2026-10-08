@@ -4,7 +4,7 @@ import { useAuth } from './hooks/useAuth';
 import { AppLayout } from './components/layout/AppLayout';
 import { StudyDialogProvider } from './components/study/StudyDialog';
 import { Loading } from './components/ui';
-import { LoginPage, RegisterPage } from './pages/Auth';
+import { ConfirmEmailPage, ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/Auth';
 import { DashboardPage } from './pages/Dashboard';
 import { CARDS_BASE, isFlashcardsHost } from './flashcards/standalone';
 
@@ -52,6 +52,10 @@ export function App() {
     <Routes>
       <Route path="/entrar" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/cadastro" element={<PublicOnly><RegisterPage /></PublicOnly>} />
+      <Route path="/esqueci-senha" element={<PublicOnly><ForgotPasswordPage /></PublicOnly>} />
+      {/* Links dos e-mails: abrem com ou sem login */}
+      <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
+      <Route path="/confirmar-email" element={<ConfirmEmailPage />} />
       {/* Versão só de flashcards: mesma conta, sem o menu do site (app instalável à parte) */}
       <Route
         path={`${CARDS_BASE}/*`}

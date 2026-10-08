@@ -21,7 +21,7 @@ GUILHERME
 
 | Módulo | Destaques |
 |---|---|
-| **Contas e grupos** | Cadastro/login com sessão segura, avatar, perfil. Página **Administração** (só administradores): cadastrar e-mails de administradores e de acesso liberado, e escolher se qualquer pessoa cria conta ou só os e-mails liberados. Grupos com código/link de convite, vários grupos por pessoa, administração (remover integrante, trocar código). Comparativos de 7 ou 30 dias: destaques, você em relação ao grupo, ritmo do grupo, quadro por integrante e como cada um estuda. |
+| **Contas e grupos** | Cadastro/login com sessão segura, avatar, perfil. **E-mails** pelo Resend: confirmação do e-mail no cadastro, **Esqueci minha senha** (link de 1 hora que encerra as sessões abertas e já entra) e aviso quando a senha muda; modelos de recibo e de aviso de cobrança prontos para quando houver pagamento. Contas **gratuitas para sempre**: todas as que existiam antes da cobrança, e as que a Administração liberar. Página **Administração** (só administradores): cadastrar e-mails de administradores e de acesso liberado, e escolher se qualquer pessoa cria conta ou só os e-mails liberados. Grupos com código/link de convite, vários grupos por pessoa, administração (remover integrante, trocar código). Comparativos de 7 ou 30 dias: destaques, você em relação ao grupo, ritmo do grupo, quadro por integrante e como cada um estuda. |
 | **Registro de estudos** | Área → Subárea → Assunto (cria na hora), **vários assuntos no mesmo registro** (ex.: 30 questões de pancreatite aguda, crônica e neoplasias de pâncreas — as questões e o tempo são divididos, ou informados por assunto, e cada assunto recebe a sua própria revisão), vários tipos na mesma sessão (Teoria + Questões…), X/Y com acertos, erros e % calculados, banca, prova, dificuldade, tempo, observações e autoavaliação 😄🙂😐😕😣. |
 | **Cronograma** | **Crie o seu** escolhendo os assuntos da plataforma (uma grande área inteira, subáreas ou assuntos soltos, e assuntos novos), o ritmo (N por semana ou **até uma data**, como a da prova) e a ordem (**intercalar as áreas** ou uma de cada vez), com prévia semana a semana; dá para **acrescentar assuntos** a um cronograma depois. Ou importe o PDF do cronograma do cursinho (ou cole o texto), escolhendo **para onde vai cada assunto** — qualquer grande área ou subárea da conta, inclusive as que você criou (todos de uma vez, uma semana inteira ou um a um): o site lê os módulos/semanas com a data de cada um, as aulas bônus e a área de cada assunto pela legenda de cores, e deixa você escolher quando começa o Módulo 01. Na importação o site pergunta **em quais dias você estuda e quantas horas por dia**: os assuntos de cada semana são **distribuídos de forma regular por esses dias**, na ordem do cronograma (ex.: 7 assuntos de segunda a sexta → 2, 2, 1, 1, 1), e as horas viram o **tempo sugerido** de cada assunto. Cada assunto aparece no seu dia (Cronograma, Revisões, Calendário, Início, folha impressa e Google Agenda); **Estudar** abre o registro já com o assunto e o tempo e, ao salvar, o item fica concluído e as revisões são agendadas. Dá para mudar os dias depois (**Dias de estudo**, que redistribui), mudar o dia de um assunto, pular, empurrar semanas e **excluir o cronograma**; no menu **⋯** de cada assunto (também no Calendário): editar o assunto, tirá-lo do cronograma ou excluí-lo. Semana que termina sem estudo deixa o assunto **atrasado**, como uma revisão. |
 | **Importar planilha** | Em Estudos ou Perfil: envie .xlsx ou .csv (uma linha por estudo, ou uma linha por assunto com revisões lado a lado, inclusive com cabeçalho em duas linhas como “1ª REVISÃO” sobre Data · Questões · Acertos). Escolhe a aba com o histórico, entende data realizada × programada, organiza siglas (“NEFRO 2”, “OBS1”) nas grandes áreas e traz também as notas das abas de **simulados** e de **provas por instituição e ano**. Colunas ajustáveis, prévia, reimportação sem duplicar e revisões recalculadas pelo algoritmo. O arquivo é lido no navegador; só os dados vão para a conta de quem importa. |
@@ -114,6 +114,7 @@ backend/
       progress/         indicador de progresso + resumo público (fronteira de privacidade)
       flashcards/       cópia dos flashcards na conta (sincronização entre aparelhos, resumo, busca)
       metrics/ goals/ mock-exams/ exams/ notifications/ insights/ search/ dashboard/
+      mail/             envio de e-mails (Resend) e modelos (confirmar e-mail, nova senha, recibo, cobrança)
       auth/ users/ groups/
   tests/                testes de integração
 frontend/
@@ -132,3 +133,8 @@ docs/                   arquitetura, algoritmo e flashcards
 Importação de questões, IA para análise de desempenho e geração de questões,
 ranking opcional, tags avançadas, notificações push (PWA), IA dos flashcards pelo servidor.
 Veja em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#preparado-para-crescer) onde cada uma se encaixa.
+
+## Licença
+
+Software proprietário — todos os direitos reservados. Veja [`LICENSE`](LICENSE).
+Segurança do repositório e troca de chaves: [`docs/SEGURANCA.md`](docs/SEGURANCA.md).

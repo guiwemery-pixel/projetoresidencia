@@ -20,6 +20,12 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** Abriu o link de confirmação enviado ao e-mail */
+  emailVerified?: boolean;
+  /** Falta confirmar o e-mail e o site manda e-mails: mostra o aviso para confirmar */
+  emailConfirmationPending?: boolean;
+  /** Conta gratuita para sempre: nunca é cobrada */
+  freeAccess?: boolean;
   avatar: string | null;
   timezone: string;
   domain: string;

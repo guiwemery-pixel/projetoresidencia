@@ -28,6 +28,22 @@ describe('administração', () => {
     expect(res.body.users.map((u: { email: string }) => u.email).sort()).toEqual([owner.email, other.email].sort());
   });
 
+  it('conta gratuita para sempre: contas novas começam sem a marca; a Administração libera e tira', async () => {
+    const owner = await signup('Dona');
+    const other = await signup('Outra');
+    expect(other.user).toMatchObject({ freeAccess: false });
+    // Só administradores
+    expect((await other.agent.put(`/api/admin/users/${other.email}/free`).send({ free: true })).status).toBe(403);
+
+    const res = await owner.agent.put(`/api/admin/users/${other.email.toUpperCase()}/free`).send({ free: true });
+    expect(res.status).toBe(200);
+    const row = (r: typeof res) => r.body.users.find((u: { email: string }) => u.email === other.email);
+    expect(row(res)).toMatchObject({ freeAccess: true, emailVerified: false });
+    expect((await other.agent.get('/api/auth/me')).body.user.freeAccess).toBe(true);
+    expect(row(await owner.agent.put(`/api/admin/users/${other.email}/free`).send({ free: false }))).toMatchObject({ freeAccess: false });
+    expect((await owner.agent.put('/api/admin/users/ninguem@teste.com/free').send({ free: true })).status).toBe(404);
+  });
+
   it('cadastra administradores pelo site (vários de uma vez) e eles publicam os cards da plataforma', async () => {
     const owner = await signup('Dona');
     const other = await signup('Outra');
@@ -68,7 +84,7 @@ describe('administração', () => {
     const old = await signup('Antiga');
     const mode = await owner.agent.put('/api/admin/signup').send({ mode: 'invite' });
     expect(mode.body.signup).toBe('invite');
-    expect((await request(app).get('/api/auth/signup')).body).toEqual({ mode: 'invite' });
+    expect((await request(app).get('/api/auth/signup')).body).toMatchObject({ mode: 'invite' });
 
     const blocked = await request(app).post('/api/auth/register').send({ name: 'Nova', email: 'nova@teste.com', password: 'senha-segura-123' });
     expect(blocked.status).toBe(403);

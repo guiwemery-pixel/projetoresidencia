@@ -9,7 +9,8 @@ import { requeueOverdue } from '../plans/requeue.service.js';
 import { todayIn } from '../../lib/dates.js';
 
 // Faxina do banco para ocupar menos espaço, sem mudar nada do que se vê no app:
-// - apaga sessões de login vencidas (já seriam recusadas de qualquer forma);
+// - apaga sessões de login vencidas (já seriam recusadas de qualquer forma) e os links
+//   de e-mail (confirmar, nova senha) já usados ou vencidos;
 // - converte explicações do "Por quê?" gravadas no formato antigo (JSON) para o
 //   comprimido (ver reviews/explanation-codec.ts);
 // - descarta marcas de exclusão antigas dos flashcards e, com o R2 configurado,
@@ -22,6 +23,13 @@ export async function deleteExpiredSessions(userId?: string) {
   const { count } = await prisma.session.deleteMany({
     where: { ...(userId ? { userId } : {}), expiresAt: { lt: new Date() } },
   });
+  return count;
+}
+
+/** Links de e-mail (confirmar, nova senha) usados ou vencidos há mais de um dia. */
+export async function deleteOldEmailTokens() {
+  const dayAgo = new Date(Date.now() - 86_400_000);
+  const { count } = await prisma.emailToken.deleteMany({ where: { OR: [{ expiresAt: { lt: dayAgo } }, { usedAt: { lt: dayAgo } }] } });
   return count;
 }
 
@@ -123,10 +131,11 @@ export async function tidyUpUser(userId: string) {
 /** Faxina geral (job diário). */
 export async function runMaintenance() {
   const expiredSessions = await deleteExpiredSessions();
+  const oldEmailLinks = await deleteOldEmailTokens();
   const { converted } = await compactLegacyExplanations();
   const flashcardUsersPurged = await purgeOldTombstones();
   const { migrated: flashcardImagesMoved } = await migrateMediaToBlobStore();
   const { upgraded: subjectsRecalculated } = await upgradeAlgorithm({ timeBudgetMs: 25_000 });
   const { moved: reviewsMoved, requeued: subjectsRequeued } = await upkeepAllUsers();
-  return { expiredSessions, convertedExplanations: converted, flashcardUsersPurged, flashcardImagesMoved, subjectsRecalculated, reviewsMoved, subjectsRequeued };
+  return { expiredSessions, oldEmailLinks, convertedExplanations: converted, flashcardUsersPurged, flashcardImagesMoved, subjectsRecalculated, reviewsMoved, subjectsRequeued };
 }

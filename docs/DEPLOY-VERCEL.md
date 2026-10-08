@@ -33,6 +33,8 @@ O projeto já vem configurado para o Vercel (`vercel.json`):
    *(Opcional, recomendado)* **Imagens dos flashcards no Cloudflare R2** — veja a seção abaixo.
    *(Opcional)* **Cards da plataforma** (baralhos para todos os usuários, guardados no R2) — veja
    [a seção](#cards-da-plataforma).
+   *(Recomendado)* **E-mails** (confirmar o cadastro e “Esqueci minha senha”) — veja
+   [a seção](#e-mails-resend). Sem isso, quem esquecer a senha não consegue entrar.
 5. **Publicar de novo:** aba *Deployments* → no último deploy, menu *⋯* → *Redeploy*.
 6. **Usar:** abra o endereço `https://<seu-projeto>.vercel.app`, crie sua conta, crie o grupo
    (aba *Grupo*) e envie o link de convite aos amigos.
@@ -92,6 +94,38 @@ Imagens enviadas antes continuam funcionando e são levadas para o R2 aos poucos
 (até 200 por dia). Apagar todos os flashcards, restaurar um backup ou excluir a conta apaga também as
 imagens da pessoa no R2.
 
+## E-mails (Resend)
+
+O site manda e-mails para: **confirmar o e-mail** no cadastro, **criar nova senha** (“Esqueci minha
+senha”, na tela de entrar), avisar quando a senha muda e, quando houver pagamento, recibos e avisos de
+cobrança. O envio é pelo **Resend** (<https://resend.com>), que tem plano gratuito (confira o limite
+atual de e-mails por mês e por dia em <https://resend.com/pricing>). Sem configurar, os e-mails ficam
+desligados: a tela de entrar não mostra “Esqueci minha senha” e ninguém recebe o aviso de confirmar.
+
+1. **Domínio próprio.** Para mandar e-mails a qualquer pessoa é preciso um domínio seu (ex.:
+   `projetoresidente.com.br`, registrado no Registro.br). Endereços `*.vercel.app` não servem: o
+   Resend precisa de registros no DNS do domínio. Sem domínio, dá para testar com o remetente
+   `onboarding@resend.dev`, mas ele **só entrega para o e-mail dono da conta do Resend**.
+2. Crie a conta no Resend → **Domains → Add Domain** → digite o domínio → copie os registros (TXT/MX)
+   que ele mostra para o DNS do domínio (no Registro.br: *Editar zona*) → **Verify**. Pode levar de
+   alguns minutos a algumas horas.
+3. **API Keys → Create API Key** → permissão *Sending access* (só envio), restrita ao domínio. Copie a
+   chave (começa com `re_`; aparece uma vez só).
+4. No Vercel, *Settings → Environment Variables* (todos os ambientes):
+
+   | Variável | Valor |
+   |---|---|
+   | `RESEND_API_KEY` | a chave do passo 3 |
+   | `EMAIL_FROM` | o remetente, com o domínio verificado: `Projeto Residente <nao-responda@seudominio.com.br>` |
+   | `EMAIL_REPLY_TO` | *(opcional)* para onde vão as respostas (ex.: o e-mail de suporte) |
+   | `APP_URL` | o endereço do site, com `https://` (ex.: `https://projetoresidente.com.br`): os links dos e-mails apontam para ele |
+
+5. **Redeploy.** Em **Administração → E-mails do site** deve aparecer “Ligados”. Teste: saia da conta,
+   clique em “Esqueci minha senha” e confira se o e-mail chega (veja também o spam).
+
+Contas que já existiam aparecem com o aviso “Confirme seu e-mail” no alto do site, com o botão
+**Enviar link**. O aviso não bloqueia nada: só garante que a pessoa consiga recuperar a senha.
+
 ## Administração (quem administra e quem pode criar conta)
 
 Menu lateral → **Administração** (aparece só para administradores):
@@ -102,7 +136,9 @@ Menu lateral → **Administração** (aparece só para administradores):
 - **Quem pode criar conta**: *Qualquer pessoa* (padrão) ou *Só e-mails liberados* — aí só quem
   está na lista de acesso liberado (e os administradores) cria conta; a tela de cadastro avisa.
   Quem já tem conta continua entrando normalmente.
-- **Contas no site**: nome e e-mail de quem criou conta (os estudos de cada um continuam privados).
+- **Contas no site**: nome e e-mail de quem criou conta (os estudos de cada um continuam privados) e
+  a caixinha **Gratuita**: conta gratuita para sempre, que nunca será cobrada. Todas as contas que já
+  existiam antes desta opção vêm marcadas; contas novas começam sem a marca.
 
 Primeiro acesso: enquanto nenhum administrador foi cadastrado (nem na variável
 `PLATFORM_ADMIN_EMAILS`), a **conta mais antiga do site** é a administradora. O site nunca fica sem

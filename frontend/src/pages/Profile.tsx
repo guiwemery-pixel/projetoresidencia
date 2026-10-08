@@ -265,7 +265,13 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-3">
             <Input label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <Input label="E-mail" value={user.email} disabled />
+            <Input
+              label="E-mail"
+              value={user.email}
+              disabled
+              hint={user.emailVerified ? 'Confirmado.' : user.emailConfirmationPending ? 'Ainda não confirmado: use o aviso no alto da página para receber o link.' : undefined}
+            />
+            {user.freeAccess && <p className="rounded-xl bg-good-wash px-3 py-2 text-sm text-good-text">Conta gratuita: o seu acesso não será cobrado.</p>}
             <Input label="Fuso horário" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} hint="Define o que é “hoje” para revisões e metas." />
           </div>
         </Card>

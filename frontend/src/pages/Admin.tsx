@@ -21,9 +21,10 @@ interface Entry {
 }
 interface Overview {
   signup: 'open' | 'invite';
+  email?: { mode: 'resend' | 'terminal' | 'off'; from: string; testSender: boolean; appUrl: string | null };
   admins: Entry[];
   members: Entry[];
-  users: { name: string; email: string; createdAt: string }[];
+  users: { name: string; email: string; createdAt: string; freeAccess?: boolean; emailVerified?: boolean }[];
 }
 
 const KEY = ['admin'] as const;
@@ -33,6 +34,34 @@ const SOURCE: Record<Entry['source'], string> = {
   site: 'cadastrado aqui',
   first: 'primeira conta do site (até cadastrar um administrador)',
 };
+
+/** Envio de e-mails (confirmar cadastro, nova senha): ligado ou não, e o que falta configurar. */
+function EmailStatus({ status }: { status: NonNullable<Overview['email']> }) {
+  const on = status.mode === 'resend';
+  return (
+    <Card title="E-mails do site" subtitle="Confirmação do cadastro, “Esqueci minha senha” e avisos de segurança.">
+      <p className="text-sm text-ink">
+        {on ? (
+          <>
+            <span className="font-medium text-good-text">Ligados</span> pelo Resend. Remetente: <span className="break-all">{status.from}</span>
+          </>
+        ) : status.mode === 'terminal' ? (
+          'Modo de desenvolvimento: os e-mails aparecem no terminal do servidor, não são enviados.'
+        ) : (
+          <>
+            <span className="font-medium text-crit-text">Desligados.</span> Sem eles, quem esquecer a senha não consegue entrar. Configure a variável RESEND_API_KEY no Vercel (veja docs/DEPLOY-VERCEL.md).
+          </>
+        )}
+      </p>
+      {on && status.testSender && (
+        <p className="mt-2 rounded-xl bg-warn-wash px-3 py-2 text-xs text-ink2">
+          O remetente de teste do Resend só entrega para o e-mail dono da conta do Resend. Para mandar a todos os usuários, verifique o domínio do site no Resend e defina EMAIL_FROM (ex.: Projeto Residente &lt;nao-responda@seudominio.com.br&gt;).
+        </p>
+      )}
+      {on && !status.appUrl && <p className="mt-2 text-xs text-muted">Dica: defina APP_URL com o endereço do site para os links dos e-mails apontarem sempre para ele.</p>}
+    </Card>
+  );
+}
 
 function EmailList({ entries, onRemove, me }: { entries: Entry[]; onRemove: (e: Entry) => void; me: string }) {
   if (!entries.length) return <p className="text-sm text-muted">Ninguém cadastrado.</p>;
@@ -94,6 +123,23 @@ export default function AdminPage() {
       setRemoving(null);
     },
   });
+  const free = useMutation({
+    mutationFn: ({ email, free }: { email: string; free: boolean }) => api.put<Overview>(`/admin/users/${encodeURIComponent(email)}/free`, { free }),
+    onSuccess: (o, v) => {
+      qc.setQueryData(KEY, o);
+      toast.success(v.free ? `${v.email}: conta gratuita para sempre.` : `${v.email}: deixou de ser gratuita.`);
+    },
+    onError: (err) => {
+      qc.invalidateQueries({ queryKey: KEY });
+      toast.error(err instanceof Error ? err.message : 'Não foi possível mudar.');
+    },
+  });
+  // A caixinha muda na hora do clique; se o servidor recusar, volta
+  const toggleFree = (email: string, value: boolean) => {
+    qc.cancelQueries({ queryKey: KEY });
+    qc.setQueryData<Overview>(KEY, (o) => o && { ...o, users: o.users.map((u) => (u.email === email ? { ...u, freeAccess: value } : u)) });
+    free.mutate({ email, free: value });
+  };
   const signup = useMutation({
     mutationFn: (mode: Overview['signup']) => api.put<Overview>('/admin/signup', { mode }),
     onSuccess: done,
@@ -165,7 +211,9 @@ export default function AdminPage() {
             {signup.error && <ErrorState error={signup.error} />}
           </Card>
 
-          <div className="grid gap-5 lg:grid-cols-2">
+          {data.email && <EmailStatus status={data.email} />}
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <Card title={<span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-accent" /> Administradores ({data.admins.length})</span>}>
               <EmailList entries={data.admins} onRemove={setRemoving} me={user.email} />
             </Card>
@@ -176,6 +224,7 @@ export default function AdminPage() {
 
           <Card
             title={`Contas no site (${data.users.length})`}
+            subtitle={`${data.users.filter((u) => u.freeAccess).length} gratuitas para sempre: não serão cobradas quando o site passar a cobrar.`}
             action={
               <Button size="sm" variant="ghost" onClick={() => setShowUsers((v) => !v)}>
                 {showUsers ? 'Esconder' : 'Mostrar'}
@@ -186,9 +235,22 @@ export default function AdminPage() {
               <ul className="divide-y divide-line">
                 {data.users.map((u) => (
                   <li key={u.email} className="flex items-center gap-3 py-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate text-ink">{u.name}</span>
-                    <span className="min-w-0 truncate text-ink2">{u.email}</span>
-                    <span className="hidden shrink-0 text-xs text-muted sm:inline">{fmtRelative(u.createdAt)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-ink">{u.name}</p>
+                      <p className="truncate text-xs text-ink2">
+                        {u.email} <span className="text-muted">· {fmtRelative(u.createdAt)}</span>
+                      </p>
+                    </div>
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-ink2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[var(--accent)]"
+                        checked={!!u.freeAccess}
+                        onChange={(e) => toggleFree(u.email, e.target.checked)}
+                        aria-label={`Conta gratuita: ${u.email}`}
+                      />
+                      Gratuita
+                    </label>
                   </li>
                 ))}
               </ul>

@@ -7,6 +7,7 @@ import { parse } from '../../lib/validation.js';
 import { currentUser, today } from '../../middleware/auth.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import { SESSION_COOKIE, destroyOtherSessions, sessionCookieOptions } from '../auth/session.js';
+import { notifyPasswordChanged, siteUrl } from '../auth/email-links.service.js';
 import { computeProgress } from '../progress/progress.service.js';
 import { exportUserData, resetProgress, sessionUser } from './users.service.js';
 import { removeUserMedia } from '../flashcards/flashcards.service.js';
@@ -84,8 +85,9 @@ usersRouter.post('/password', async (req, res) => {
   if (!(await verifyPassword(currentPassword, user.passwordHash))) throw unauthorized('Senha atual incorreta');
   if (currentPassword === newPassword) throw badRequest('A nova senha deve ser diferente da atual');
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(newPassword) } });
-  // Encerra as outras sessões (outros dispositivos)
+  // Encerra as outras sessões (outros dispositivos) e avisa por e-mail
   await destroyOtherSessions(user.id, req.sessionId);
+  await notifyPasswordChanged(user, siteUrl(req));
   res.status(204).end();
 });
 
