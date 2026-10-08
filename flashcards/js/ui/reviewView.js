@@ -112,6 +112,9 @@
     el.appendChild(box);
   }
 
+  /** Resposta que a tecla Espaço dá depois de mostrar o verso (Configurações › Revisão; padrão 3, "Quase"). */
+  const spaceRating = () => U.clamp(Math.round(Number(FC.settings.get('spaceRating'))) || 3, 1, 5);
+
   FC.views.review = {
     title: 'Revisão',
     render(ctx) {
@@ -136,7 +139,7 @@
       const foot = h(
         'div',
         { class: 'study-foot' },
-        h('div', { class: 'keys' }, h('span', null, h('kbd', { text: 'Espaço' }), ' mostrar'), h('span', null, h('kbd', { text: '1–5' }), ' avaliar'), h('span', null, h('kbd', { text: 'Z' }), ' desfazer'), h('span', null, h('kbd', { text: 'E' }), ' editar')),
+        h('div', { class: 'keys' }, h('span', null, h('kbd', { text: 'Espaço' }), ' mostrar · depois ' + FC.scheduler.RATING_BY_VALUE[spaceRating()].label), h('span', null, h('kbd', { text: '1–5' }), ' avaliar'), h('span', null, h('kbd', { text: 'Z' }), ' desfazer'), h('span', null, h('kbd', { text: 'E' }), ' editar')),
         h('span', { class: 'tiny' }),
       );
       const wrap = h('div', { class: 'study' }, top, stage, foot);
@@ -205,7 +208,7 @@
         const bar = h(
           'div',
           { class: 'rating-bar', role: 'group', 'aria-label': 'Como foi?' },
-          preview.map((p) => h('button', { type: 'button', class: 'rate r' + p.rating, onclick: () => rate(p.rating), 'aria-label': p.label + ', próxima revisão em ' + p.text }, h('span', { class: 'name', text: p.label }), h('span', { class: 'ivl', text: p.text }), h('span', { class: 'key', text: String(p.rating) }))),
+          preview.map((p) => h('button', { type: 'button', class: 'rate r' + p.rating, onclick: () => rate(p.rating), title: 'Tecla ' + p.rating + (p.rating === spaceRating() ? ' ou Espaço' : ''), 'aria-label': p.label + ', próxima revisão em ' + p.text }, h('span', { class: 'name', text: p.label }), h('span', { class: 'ivl', text: p.text }), h('span', { class: 'key', text: String(p.rating) }))),
         );
         stage.querySelector('.show-answer').replaceWith(bar);
         bar.querySelector('.rate.r4').focus({ preventScroll: true });
@@ -301,6 +304,8 @@
       }
 
       const onKey = (e) => {
+        // Segurar Espaço não pode mostrar e já responder
+        if (e.repeat && e.key === ' ') return e.preventDefault();
         if (FC.ui.anyModalOpen()) return;
         const t = e.target;
         if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
@@ -315,7 +320,10 @@
           if (!revealed && current) {
             e.preventDefault();
             reveal();
-          } else if (e.key === ' ') e.preventDefault();
+          } else if (e.key === ' ') {
+            e.preventDefault();
+            if (revealed && current) rate(spaceRating());
+          }
         } else if (/^[1-5]$/.test(e.key) && revealed) {
           e.preventDefault();
           rate(Number(e.key));

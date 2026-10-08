@@ -33,6 +33,11 @@
       const s = FC.settings.get();
 
       const showPath = FC.ui.checkbox('Mostrar área, assunto e tema no topo do card durante a revisão', s.showPathInReview, (v) => FC.settings.set({ showPathInReview: v }));
+      const spaceKey = FC.ui.select(
+        FC.scheduler.RATINGS.map((r) => ({ value: r.value, label: r.value + ' · ' + r.label })),
+        s.spaceRating,
+        { onchange: async (e) => (await FC.settings.set({ spaceRating: Number(e.target.value) }), FC.ui.toast('Salvo.')) },
+      );
 
       // Cronômetro de estudo (ver js/timer.js)
       const timerOn = FC.ui.checkbox('Usar o cronômetro de estudo (relógio no topo dos flashcards)', s.studyTimer, (v) => FC.settings.set({ studyTimer: v }).then(() => ctx.rerender()));
@@ -278,7 +283,12 @@
         h(
           'div',
           { class: 'stack loose' },
-          section('Revisão', 'O tema claro/escuro segue o do Projeto Residente (botão no topo do site).', showPath.el),
+          section(
+            'Revisão',
+            'O tema claro/escuro segue o do Projeto Residente (botão no topo do site).',
+            showPath.el,
+            h('div', { class: 'form-grid' }, FC.ui.field('Tecla Espaço depois de mostrar a resposta', spaceKey, 'Espaço mostra a resposta; apertando de novo, vale esta resposta (como a tecla do número).')),
+          ),
           section(
             'Cronômetro de estudo',
             'Opcional. Cronômetro (conta para cima) ou timer (contagem regressiva), com iniciar, pausar, retomar e zerar. O tempo marcado vai para o "Registrar estudo" — e assim entra no seu tempo estudado do Projeto Residente.',

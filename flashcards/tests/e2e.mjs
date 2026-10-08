@@ -454,6 +454,32 @@ try {
     assert.equal(await page.locator('.fc-timer').isHidden(), true);
   }
 
+  step('Espaço depois de mostrar a resposta vale "Quase" (3), ou a nota escolhida nas Configurações');
+  {
+    const spaceTwice = async () => {
+      await go('/revisar');
+      await page.waitForSelector('.show-answer .btn');
+      const n = await evalFC(() => FC.store.logs.length);
+      await page.keyboard.press('Space');
+      await page.waitForSelector('.rating-bar');
+      await page.keyboard.press('Space');
+      await page.waitForFunction((n) => FC.store.logs.length === n + 1, n);
+      const rating = await evalFC(() => FC.store.logs[FC.store.logs.length - 1].rating);
+      await page.keyboard.press('z');
+      await page.waitForFunction((n) => FC.store.logs.length === n, n);
+      return rating;
+    };
+    assert.equal(await spaceTwice(), 3, 'padrão: Quase');
+    assert.match(await page.textContent('.study-foot .keys'), /mostrar · depois Quase/);
+    await go('/configuracoes');
+    await page.getByLabel('Tecla Espaço depois de mostrar a resposta').selectOption('5');
+    await page.waitForFunction(() => FC.settings.get('spaceRating') === 5);
+    assert.equal(await spaceTwice(), 5, 'nota escolhida nas Configurações');
+    assert.match(await page.textContent('.study-foot .keys'), /depois Fácil/);
+    await evalFC(() => FC.settings.set({ spaceRating: 3 }));
+    await go('/');
+  }
+
   step('"Errei" numa revisão: o card volta em 1 min, na mesma sessão');
   {
     // Card em revisão, vencido, com 20 dias de estabilidade; a etiqueta isola a sessão

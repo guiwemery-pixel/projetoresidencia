@@ -342,6 +342,9 @@ normal com um estado de memória coerente. O dia de estudo vira às 4h (ajustáv
 **Revisão normal** mostra só o que o scheduler liberou: aprendizagem vencida → revisões
 vencidas (limite diário) → cards novos (limite diário), respeitando suspensões e baralhos
 arquivados/suspensos. "Z" desfaz a última resposta (restaura o card e apaga o registro).
+Teclado: **Espaço** mostra a resposta e, apertado de novo, responde **Quase (3)** — a nota da
+segunda tecla Espaço é escolhida em Configurações › Revisão (1 a 5); 1–5 respondem direto.
+Segurar o Espaço não responde sozinho.
 
 **Cards novos liberados:** no Início, embaixo de "Hoje você tem", a linha "Liberando N cards
 novos por dia · **Alterar**" abre a escolha: **Todo dia** muda o limite diário (o mesmo de
