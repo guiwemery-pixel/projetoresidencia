@@ -2,6 +2,7 @@
   "name": "central-de-estudos",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "Plataforma colaborativa de estudos com revisão espaçada adaptativa",
   "workspaces": [
     "backend",

@@ -1,0 +1,20 @@
+Copyright (c) 2026 Projeto Residente. Todos os direitos reservados.
+
+Este software (código-fonte, código compilado, telas, textos, imagens,
+algoritmos e documentação) é propriedade exclusiva do titular do Projeto
+Residente e está protegido pela Lei de Direitos Autorais (Lei nº 9.610/1998)
+e pela Lei de Programa de Computador (Lei nº 9.609/1998).
+
+Sem autorização prévia e por escrito do titular, é proibido:
+
+- copiar, reproduzir ou distribuir este software, no todo ou em parte;
+- modificar, adaptar, traduzir ou criar obras derivadas;
+- vender, alugar, sublicenciar ou oferecer como serviço a terceiros;
+- fazer engenharia reversa, salvo nos casos permitidos por lei.
+
+O acesso a este repositório não concede nenhuma licença de uso. O uso da
+plataforma pelos assinantes é regido pelos Termos de Uso publicados no site.
+
+Bibliotecas de terceiros usadas por este software (listadas nos arquivos
+package.json e incluídas em frontend/public) continuam regidas pelas suas
+próprias licenças.
